@@ -1,0 +1,94 @@
+name: Build
+
+# Every push and PR on this fork: the definition of done from docs/testing.md, then an optimised
+# dev-channel app packaged under the commit it was built from, so the tested commit and the
+# downloadable build are one artifact.
+on:
+  push:
+    branches-ignore: [gh-pages]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode 26
+        run: |
+          XCODE_PATH="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n1)"
+          if [ -z "$XCODE_PATH" ]; then
+            echo "::error::No Xcode 26.x found on this runner. Installed Xcodes:"
+            ls /Applications | grep -i xcode || true
+            exit 1
+          fi
+          echo "Using $XCODE_PATH"
+          echo "DEVELOPER_DIR=$XCODE_PATH/Contents/Developer" >> "$GITHUB_ENV"
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Harnesses
+        run: ./Scripts/run-tests.sh
+
+      - name: Lint
+        run: ./Scripts/lint.sh
+
+      - name: Pure-layer purity
+        run: |
+          if grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Tinycast/Features/*/Model/; then
+            echo "::error::AppKit or SwiftUI imported under Features/*/Model/"
+            exit 1
+          fi
+
+      - name: Debug build
+        run: |
+          set -o pipefail
+          xcodebuild build -project Tinycast.xcodeproj -scheme Tinycast -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/DebugData" CODE_SIGNING_ALLOWED=NO 2>&1 \
+            | tee "$RUNNER_TEMP/debug.log" | grep -E 'warning:|error:|BUILD' || true
+          grep -q 'BUILD SUCCEEDED' "$RUNNER_TEMP/debug.log"
+          WARNINGS="$(grep -E '^/.*: warning:' "$RUNNER_TEMP/debug.log" | sort -u | wc -l | tr -d ' ')"
+          echo "Debug build: $WARNINGS unique warnings" >> "$GITHUB_STEP_SUMMARY"
+
+      # Release-optimised, but on the dev channel's name and bundle id, so it runs beside an
+      # installed Tinycast without sharing its prefs, data, TCC grants or login item.
+      - name: Release build (dev channel)
+        run: |
+          set -o pipefail
+          xcodebuild build -project Tinycast.xcodeproj -scheme Tinycast -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/ReleaseData" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- OTHER_CODE_SIGN_FLAGS="--timestamp=none" \
+            PRODUCT_NAME="Tinycast Dev" PRODUCT_BUNDLE_IDENTIFIER=com.tinycast.app.dev \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" 2>&1 \
+            | tee "$RUNNER_TEMP/release.log" | grep -E 'error:|BUILD' || true
+          grep -q 'BUILD SUCCEEDED' "$RUNNER_TEMP/release.log"
+
+      - name: Package
+        id: package
+        run: |
+          APP="$RUNNER_TEMP/ReleaseData/Build/Products/Release/Tinycast Dev.app"
+          codesign --verify --deep --strict "$APP"
+          SHORT="${GITHUB_SHA::7}"
+          mkdir -p dist
+          printf 'commit %s\nref %s\nrun %s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$GITHUB_RUN_ID" \
+            > dist/BUILD_INFO.txt
+          ditto -c -k --keepParent --sequesterRsrc "$APP" "dist/Tinycast-Dev-${SHORT}.zip"
+          du -h "dist/Tinycast-Dev-${SHORT}.zip" >> "$GITHUB_STEP_SUMMARY"
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Tinycast-Dev-${{ steps.package.outputs.short }}
+          path: dist/
+          retention-days: 90
