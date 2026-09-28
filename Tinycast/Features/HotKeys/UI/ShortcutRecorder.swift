@@ -44,8 +44,9 @@ struct ShortcutRecorder: View {
             // Rows are lazy: a recording row scrolled away must release the session.
             .onDisappear { if isRecording { hotKeys.recordingAction = nil } }
             // A reused table row can hand this field another action while the old one records.
-            .onChange(of: action) { old, _ in
+            .onChange(of: action) { old, new in
                 if hotKeys.recordingAction == old { hotKeys.recordingAction = nil }
+                hotKeys.retryRegistration(for: new)
             }
             // Opening Settings is when the reader looks, so a chord freed since then goes live.
             .onAppear { hotKeys.retryRegistration(for: action) }

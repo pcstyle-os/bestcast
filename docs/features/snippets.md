@@ -314,7 +314,9 @@ we did not write is `.rejected`, because events would then edit a document we ca
 
 **Rule 4** keeps the same permission, consent, Secure Event Input, target-app and cancellation gates.
 The fallback deletes the keyword first, waits for deletion to settle, then inserts the expansion.
-Short single-line expansions of at most 100 characters use Unicode keyboard events.
+Short single-line expansions of at most 100 characters use Unicode keyboard events. Like the
+deletions they carry no modifier flags: an event from the session source inherits whatever the reader
+still holds, and text under ⌘ or a held Hyper chord reads as a shortcut rather than text.
 
 **A Unicode keystroke carries at most four UTF-16 units.** Blink stores one key event's text in a
 fixed `WebKeyboardEvent::kTextLengthCap` array, so a Chromium target — Brave, Chrome, Electron, VS
