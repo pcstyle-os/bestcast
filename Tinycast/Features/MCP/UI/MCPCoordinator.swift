@@ -202,6 +202,13 @@ final class MCPCoordinator {
         }
     }
 
+    func confirmRemoval(of server: MCPServer) async -> Bool {
+        await core.confirm(
+            title: "Remove \(server.title)?",
+            message: "Its tools stop being offered, and its stored credentials are deleted.",
+            symbol: "wrench.and.screwdriver", confirmTitle: "Remove")
+    }
+
     /// Escape refuses this one call: a dialog can grant a server, only Settings can withhold one.
     private func ask(_ server: MCPServer, tool: String) async -> MCPTrustChoice {
         let choices: [MCPTrustChoice] = [.always, .thisChat, .refuse]

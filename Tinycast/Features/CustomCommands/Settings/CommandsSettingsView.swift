@@ -6,7 +6,6 @@ struct CommandsSettingsView: View {
     @Environment(AppCore.self) private var core
     @Environment(AppSettings.self) private var settings
     @State private var editor: EditorTarget?
-    @State private var pendingDeletion: CustomCommand?
 
     var body: some View {
         @Bindable var settings = settings
@@ -41,7 +40,7 @@ struct CommandsSettingsView: View {
                                         $0, id: command.id)
                                 }),
                             onEdit: { editor = EditorTarget(command: command) },
-                            onDelete: { pendingDeletion = command })
+                            onDelete: { Task { await confirmDeletion(of: command) } })
                     }
                 }
                 Button {
@@ -67,15 +66,16 @@ struct CommandsSettingsView: View {
         .settingsEditorPanel(item: $editor) { target in
             CustomCommandEditorPanel(command: target.command)
         }
-        .alert(item: $pendingDeletion) { command in
-            Alert(
-                title: Text("Delete “\(command.name)”?"),
-                message: Text("Its global shortcut and launcher references will also be removed."),
-                primaryButton: .destructive(Text("Delete")) {
-                    core.customCommandCoordinator.deleteCustomCommand(id: command.id)
-                },
-                secondaryButton: .cancel())
-        }
+    }
+
+    private func confirmDeletion(of command: CustomCommand) async {
+        guard
+            await core.confirm(
+                title: "Delete “\(command.name)”?",
+                message: "Its global shortcut and launcher references will also be removed.",
+                symbol: command.symbol, confirmTitle: "Delete")
+        else { return }
+        core.customCommandCoordinator.deleteCustomCommand(id: command.id)
     }
 
     private var sortedCommands: [CustomCommand] {

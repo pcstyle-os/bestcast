@@ -12,7 +12,6 @@ struct AISettingsView: View {
     @State private var keyStatuses: [UUID: Bool] = [:]
     @State private var keyError = false
     @State private var editor: AIConnectionEditorTarget?
-    @State private var pendingRemoval: AIConnection?
 
     private let keyStore = KeychainSecretStore.aiAPIKeys
 
@@ -219,18 +218,6 @@ struct AISettingsView: View {
                 target: target,
                 onSave: saveConnection,
                 onCancel: { editor = nil })
-        }
-        .confirmationDialog(
-            pendingRemoval.map { "Remove “\($0.title)”?" } ?? "Remove connection?",
-            isPresented: removalPresented,
-            titleVisibility: .visible
-        ) {
-            Button("Remove Connection", role: .destructive) {
-                if let pendingRemoval { removeConnection(pendingRemoval) }
-            }
-            Button("Cancel", role: .cancel) { pendingRemoval = nil }
-        } message: {
-            Text("Its saved API key will also be deleted from Keychain.")
         }
         .onAppear {
             loadKeyStatuses()
@@ -449,7 +436,7 @@ struct AISettingsView: View {
                         connection: connection,
                         hasStoredKey: keyStatuses[connection.id] == true,
                         onEdit: { edit(connection) },
-                        onRemove: { pendingRemoval = connection })
+                        onRemove: { Task { await confirmRemoval(of: connection) } })
                 }
             }
             Button {
@@ -473,12 +460,6 @@ struct AISettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var removalPresented: Binding<Bool> {
-        Binding(
-            get: { pendingRemoval != nil },
-            set: { if !$0 { pendingRemoval = nil } })
     }
 
     private func syncSelection() {
@@ -554,11 +535,20 @@ struct AISettingsView: View {
         }
     }
 
+    private func confirmRemoval(of connection: AIConnection) async {
+        guard
+            await core.confirm(
+                title: "Remove “\(connection.title)”?",
+                message: "Its saved API key will also be deleted from Keychain.",
+                symbol: "key", confirmTitle: "Remove Connection")
+        else { return }
+        removeConnection(connection)
+    }
+
     private func removeConnection(_ connection: AIConnection) {
         do {
             try keyStore.removeSecret(for: connection.id)
             settings.removeConnection(id: connection.id)
-            pendingRemoval = nil
             loadKeyStatuses()
         } catch {
             keyError = true

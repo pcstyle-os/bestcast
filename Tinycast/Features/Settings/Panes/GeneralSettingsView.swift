@@ -5,7 +5,6 @@ struct GeneralSettingsView: View {
     @Environment(AppSettings.self) private var settings
     private var hyperTap: HyperKeyTap { core.hyperKeyTap }
     private var launcherRanking: LauncherRankingStore { core.launcherRanking }
-    @State private var confirmingRankingReset = false
     @State private var inputSources: [InputSourceSwitcher.Option] = []
 
     /// The Hyper modifier chord as prose glyphs, tracking the Include Shift toggle.
@@ -180,7 +179,7 @@ struct GeneralSettingsView: View {
                 }
                 LabeledContent {
                     Button("Reset…", role: .destructive) {
-                        confirmingRankingReset = true
+                        Task { await confirmRankingReset() }
                     }
                     .disabled(launcherRanking.isEmpty)
                 } label: {
@@ -193,18 +192,6 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .settingsScrollTarget(.general)
-        .confirmationDialog(
-            "Reset learned launcher ranking?",
-            isPresented: $confirmingRankingReset,
-            titleVisibility: .visible
-        ) {
-            Button("Reset Ranking", role: .destructive) {
-                launcherRanking.resetAll()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Tinycast will relearn your preferred results as you use the launcher.")
-        }
         .onAppear(perform: refreshInputSources)
         .onReceive(
             DistributedNotificationCenter.default().publisher(
@@ -212,6 +199,16 @@ struct GeneralSettingsView: View {
         ) { _ in
             refreshInputSources()
         }
+    }
+
+    private func confirmRankingReset() async {
+        guard
+            await core.confirm(
+                title: "Reset learned launcher ranking?",
+                message: "Tinycast will relearn your preferred results as you use the launcher.",
+                symbol: "arrow.counterclockwise", confirmTitle: "Reset Ranking")
+        else { return }
+        launcherRanking.resetAll()
     }
 
     private func refreshInputSources() {

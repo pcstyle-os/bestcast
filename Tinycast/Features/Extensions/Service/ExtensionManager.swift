@@ -880,17 +880,14 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             NSWorkspace.shared.open(target)
             return
         }
-        let panel = NSAlert()
-        panel.messageText = "Open With"
-        panel.informativeText = target.lastPathComponent
-        for candidate in candidates.prefix(4) {
-            panel.addButton(withTitle: candidate.deletingPathExtension().lastPathComponent)
-        }
-        panel.addButton(withTitle: "Cancel")
-        let response = panel.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
-        guard response >= 0, response < min(candidates.count, 4) else { return }
+        let apps = Array(candidates.prefix(4))
+        guard
+            let index = await coordinator?.chooseOpenWith(
+                fileName: target.lastPathComponent,
+                titles: apps.map { $0.deletingPathExtension().lastPathComponent })
+        else { return }
         NSWorkspace.shared.open(
-            [target], withApplicationAt: candidates[Int(response)],
+            [target], withApplicationAt: apps[index],
             configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
     }
 
