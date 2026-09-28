@@ -754,6 +754,21 @@ struct DoubleTapDetectorTests {
         _ = bitless.modifier(flags: 0x8_0000, at: 0)
         expect(bitless.rewriter.isHolding, "a press missing its device bit still reads as a press")
 
+        let leftOptionHeld: UInt64 = 0x8_0000 | 0x20 | nonCoalesced
+        var twinHeld = HyperKeys(.rightOption)
+        _ = twinHeld.modifier(flags: rightOptionDown | 0x20, at: 0)
+        twinHeld.rewriter.cancelHold()
+        expect(
+            twinHeld.modifier(flags: leftOptionHeld, at: 60) == rewrite(leftOptionHeld)
+                && !twinHeld.rewriter.isHolding,
+            "a release under a held Left Option reads as a release: the left bit owns the mask")
+
+        var reinstalled = HyperKeys(.rightOption)
+        expect(
+            reinstalled.modifier(flags: nonCoalesced, at: 0) == rewrite(nonCoalesced)
+                && !reinstalled.rewriter.isHolding,
+            "a fresh tap whose first event is a release of a key held since before it starts no hold")
+
         var caps = HyperKeys(.capsLock, quickPress: .escape)
         _ = caps.key(kVK_F18, at: 0)
         caps.rewriter.cancelHold()

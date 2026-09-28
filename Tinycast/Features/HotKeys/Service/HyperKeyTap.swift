@@ -205,6 +205,7 @@ final class HyperKeyTap: HealthCheckable {
     @ObservationIgnored private var settings: AppSettings?
     @ObservationIgnored private var tapThread: HyperKeyTapThread?
     @ObservationIgnored private var sessionTokens: [NotificationToken] = []
+    @ObservationIgnored private var sessionActive = true
     @ObservationIgnored private var hidConnect: io_connect_t = IO_OBJECT_NULL
 
     @ObservationIgnored weak var healthTicker: HealthTicker?
@@ -323,7 +324,7 @@ final class HyperKeyTap: HealthCheckable {
 
     /// One-second watchdog while a key is configured. See docs/features/hotkeys.md#lifecycle.
     func healthCheck() {
-        guard key != .none else { return }
+        guard key != .none, sessionActive else { return }
         if tapThread == nil {
             installTapIfNeeded()
         } else if !Permissions.isAccessibilityTrusted() {
@@ -335,10 +336,12 @@ final class HyperKeyTap: HealthCheckable {
     }
 
     private func sessionDidResign() {
+        sessionActive = false
         tapThread?.suspend()
     }
 
     private func sessionDidBecomeActive() {
+        sessionActive = true
         if let tapThread {
             tapThread.revive()
         } else {

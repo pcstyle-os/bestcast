@@ -51,8 +51,8 @@ struct HyperKeyRewriter: Sendable {
     private(set) var isHolding = false
     private var holdStartedAt: ContinuousClock.Instant?
     private var otherKeyPressed = false
-    /// After a cancel, toggling can't tell which way the key moves next, but its own flags can.
-    private var resyncsOnNextTransition = false
+    /// Fresh or after a cancel, toggling can't tell which way the key moves next; its flags can.
+    private var resyncsOnNextTransition = true
 
     init(configuration: Configuration = Configuration()) {
         self.configuration = configuration
@@ -141,9 +141,11 @@ struct HyperKeyRewriter: Sendable {
 
     private func isReleaseAfterCancel(_ flagsRaw: UInt64) -> Bool {
         guard resyncsOnNextTransition, let ownFlag = configuration.key.ownFlag,
-            let deviceBit = Self.ownDeviceBit(of: configuration.key)
+            let deviceBit = Self.ownDeviceBit(of: configuration.key), flagsRaw & deviceBit == 0
         else { return false }
-        return flagsRaw & (ownFlag.rawValue | deviceBit) == 0
+        // A set left-twin device bit proves sides are reported, so the shared mask is the twin's.
+        let leftTwinBit = Self.deviceBits(for: ownFlag) & ~deviceBit
+        return flagsRaw & ownFlag.rawValue == 0 || flagsRaw & leftTwinBit != 0
     }
 
     // MARK: - Hold state machine

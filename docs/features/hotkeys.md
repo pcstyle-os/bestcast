@@ -192,10 +192,11 @@ A disabled tap is where a release goes missing, so **every re-enable drops the h
 callback revives the tap on `tapDisabledByTimeout`/`tapDisabledByUserInput` or the watchdog finds it
 off — and so do a session switch and a teardown. Hyper cannot stay stuck down across the gap. Dropping
 it creates the opposite hazard: if the key is still physically held, its release would toggle a fresh
-hold on and invert the machine for good. So the first transition after a drop resyncs from the event
-itself: when neither the key's own generic flag nor its right-side device bit is set, it is a release
-and passes stripped without starting a hold. Only that one event reads flags; toggling resumes after
-it. An F18 Caps Lock needs none of this, since keyDown/keyUp already say which way they went.
+hold on and invert the machine for good. So the first transition after a drop — or after a fresh tap
+is installed — resyncs from the event itself: when the key's right-side device bit is clear and its
+generic flag is either clear too or accounted for by the left twin's device bit, it is a release and
+passes stripped without starting a hold. Only that one event reads flags; toggling resumes after it.
+An F18 Caps Lock needs none of this, since keyDown/keyUp already say which way they went.
 `hotkey-test` drives both halves — a release lost while disabled, and a key held across the gap.
 
 Quick Press is decided on the tap thread but fired on the main actor through a `Task`, so posting the
@@ -271,9 +272,9 @@ Like every keyboard tap it needs the **Accessibility** grant and never prompts f
 watchdog runs while a key is configured: it retries installation until the grant lands, notices
 revocation, and revives a tap the system disabled on timeout or user input, dropping any hold as it
 does (see [toggle semantics](#press-tracking-uses-toggle-semantics)). On
-fast user switching another session owns the keyboard, so half-held state is dropped and rewriting
-stops until this session is active again. The HID remap outlives the process, so
-`applicationWillTerminate` hands the key back to the system before exiting.
+fast user switching another session owns the keyboard, so half-held state is dropped, rewriting
+stops and the watchdog stands down until this session is active again. The HID remap outlives the
+process, so `applicationWillTerminate` hands the key back to the system before exiting.
 
 ## Recorder
 
