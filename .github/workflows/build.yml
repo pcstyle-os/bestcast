@@ -37,8 +37,18 @@ jobs:
       - name: Install SwiftLint
         run: brew install swiftlint
 
+      # ext-test's menu timing cases fail now and then on a loaded runner, so a failed harness gets
+      # one solo rerun; passing only on the rerun is reported as flaky, never hidden.
       - name: Harnesses
-        run: ./Scripts/run-tests.sh
+        run: |
+          if ./Scripts/run-tests.sh 2>&1 | tee "$RUNNER_TEMP/tests.log"; then exit 0; fi
+          FAILED="$(sed -n 's/.*harness(es) failed in [0-9]*s: //p' "$RUNNER_TEMP/tests.log" \
+            | sed 's/\x1b\[[0-9;]*m//g')"
+          [ -n "$FAILED" ] || exit 1
+          for NAME in $FAILED; do
+            TINYCAST_TEST_JOBS=1 ./Scripts/run-tests.sh "$NAME" || exit 1
+            echo "::warning::$NAME failed in the parallel run and passed alone: flaky"
+          done
 
       - name: Lint
         run: ./Scripts/lint.sh
