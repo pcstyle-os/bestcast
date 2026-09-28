@@ -217,20 +217,28 @@ final class ModifierTapMonitor: HealthCheckable {
                 userInfo: Unmanaged.passUnretained(self).toOpaque())
         else {
             // Even a listen-only tap needs Accessibility; the health timer retries until granted.
-            if !loggedTapFailure {
-                NSLog("Tinycast: Failed to create modifier event tap")
-                loggedTapFailure = true
-            }
-            needsAccessibility = true
+            reportTapFailure()
+            return
+        }
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0) else {
+            CFMachPortInvalidate(port)
+            reportTapFailure()
             return
         }
         loggedTapFailure = false
         tapPort = port
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
         runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
         needsAccessibility = false
+    }
+
+    private func reportTapFailure() {
+        if !loggedTapFailure {
+            NSLog("Tinycast: Failed to create modifier event tap")
+            loggedTapFailure = true
+        }
+        needsAccessibility = true
     }
 
     private func tearDownTap() {

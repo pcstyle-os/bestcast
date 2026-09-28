@@ -8,6 +8,7 @@
 - `HotKeyCenter` — the Carbon `RegisterEventHotKey` layer, pausable.
 - `DoubleTapModifier` / `DoubleTapDetector` — the double-tap recognizer.
 - `GlobeTapDetector` / `ModifierTapMonitor` — Globe recognition and the shared modifier-only tap.
+- `HyperKeyRewriter` / `HyperKeyTap` — the Hyper Key's pure event decisions and its modifying tap.
 
 `HotKeyManager` owns them all: persistence, conflict lookup, and dispatch. Every action reads and
 writes one `HotKeyBinding`, so the four cases share persistence, conflict detection, the recorder and
@@ -35,8 +36,10 @@ the keycap rendering — only the _engine_ differs.
   injected as a parameter. Every `CGEvent` call lives in
   `Service/ModifierTapMonitor.swift`, which is listen-only, installs *only* while a modifier-only
   shortcut is bound, and never prompts for Accessibility.
+- **The Hyper tap's callback never touches the main actor.** It runs on its own thread, and every
+  decision it makes is `HyperKeyRewriter`'s, which is pure and clock-injected for `hotkey-test`.
 - **`KeyShortcut.hyperChord(includesShift:)` is the only spelling of the Hyper chord**, read by both the
-  ✦ collapse and the re-point below. `HyperKeyTap` composes its own flags because it also needs the
+  ✦ collapse and the re-point below. `HyperKeyRewriter` composes its own flags because it also needs the
   left-side device bits, which no display path wants.
 
 ## Persistence
@@ -183,10 +186,21 @@ is installed.
 
 `flagsChanged` does not describe its own direction, so a modifier-style Hyper key is tracked by
 toggling. The obvious alternative — querying `CGEventSource` key state — **races the release**,
-inverting the state machine and breaking Quick Press. A missed release therefore lingers until the
-next press, or until the system disables the tap and the callback re-enables it, which drops the
-hold; the watchdog does not clear one. Work that posts events or touches IOKit is deferred to the
-next runloop turn rather than run inside the tap callback, where it would risk re-entrancy.
+inverting the state machine and breaking Quick Press.
+
+A disabled tap is where a release goes missing, so **every re-enable drops the hold** — whether the
+callback revives the tap on `tapDisabledByTimeout`/`tapDisabledByUserInput` or the watchdog finds it
+off — and so do a session switch and a teardown. Hyper cannot stay stuck down across the gap. Dropping
+it creates the opposite hazard: if the key is still physically held, its release would toggle a fresh
+hold on and invert the machine for good. So the first transition after a drop — or after a fresh tap
+is installed — resyncs from the event itself: when the key's right-side device bit is clear and its
+generic flag is either clear too or accounted for by the left twin's device bit, it is a release and
+passes stripped without starting a hold. Only that one event reads flags; toggling resumes after it.
+An F18 Caps Lock needs none of this, since keyDown/keyUp already say which way they went.
+`hotkey-test` drives both halves — a release lost while disabled, and a key held across the gap.
+
+Quick Press is decided on the tap thread but fired on the main actor through a `Task`, so posting the
+Escape or touching IOKit never runs inside the callback, where it would risk re-entrancy.
 
 The flags OR'd into every rewritten event are the generic ⌃⌥(⇧)⌘ masks **plus the left-side device
 bits** (`NX_DEVICE…KEYMASK`, from `IOLLEvent.h`). Some consumers distinguish sides, and generic-only
@@ -196,7 +210,15 @@ device bits. Events the tap posts carry a `"TYCT"` marker in `.eventSourceUserDa
 `HotKeyCenter` uses, so the tap never reacts to its own synthetics. Events the rest of Tinycast
 posts — a paste's ⌘V or ⌘C, a snippet's backspaces and typed text — carry `Paster.tinycastEventTag`
 and pass through untouched as well: each sets its own flags, and a held Hyper would otherwise turn
-⌘V into ⌃⌥⇧⌘V. Another process's synthetic events are rewritten like real ones while Hyper is held.
+⌘V into ⌃⌥⇧⌘V. Another process's synthetic events are rewritten like real ones while Hyper is held:
+a dictation or autocomplete tool's phrase typed under a held Hyper arrives as chords, and counts as a
+combo, so the release fires no Quick Press.
+
+**The two tags stay separate on purpose.** The snippet keyword listener skips only
+`Paster.tinycastEventTag`, which marks delivery Tinycast performs on its own. A Quick Press Escape is
+the reader's own Escape by other means, so under `"TYCT"` it resets the keyword buffer and cancels a
+pending automatic expansion exactly as the physical key would; under the shared tag, `ab`⎋`c` would
+expand an `abc` keyword. `snippets-test` pins that difference.
 
 A Quick Press key is posted with **`flags` cleared explicitly**, like every other synthetic in the app.
 A keyboard event built from `.combinedSessionState` inherits the source's modifiers, and the release
@@ -226,14 +248,33 @@ keycaps. `retargetingHyper` is idempotent, which is what makes a settings import
 corruption. Nothing is re-pointed while the Hyper key is `.none` — and the Settings row is disabled
 there, so the toggle cannot move without a chord to mean.
 
+### The tap runs on its own thread
+
+A modifying tap holds each keystroke until its callback answers, system-wide. On the main run loop,
+any main-actor stall — a heavy view update, a synchronous IO path — therefore delayed every key the
+reader typed in any app while a Hyper key was configured, and a long enough stall got the tap disabled
+by timeout. So `HyperKeyTap` creates the port on main and hands its run loop source to a dedicated
+`Thread` (`com.tinycast.hyper-key-tap`, user-interactive QoS) that runs its own `CFRunLoop`. It is a
+thread, not an actor: the callback shares two things with the main actor, each behind a `Mutex` — the
+`HyperKeyRewriter`, locked only for the pure decision, and the tap's CF handles, which both sides
+enable, query and tear down through thread-safe tap calls. Settings reach it as a whole
+`HyperKeyRewriter.Configuration` pushed whenever Hyper Key, Include Shift or Quick Press moves, and
+Quick Press leaves it through a `Task` onto main. Teardown invalidates the port and stops that run
+loop, and the thread's block owns the callback's context until the loop has returned, so a callback
+already in flight never outlives what it points at.
+
+`ModifierTapMonitor` and the snippet keyword listener stay on main. Both are **listen-only**, so the
+system never waits on them to deliver a keystroke, and everything they feed is main-actor state.
+
 ### Lifecycle
 
 Like every keyboard tap it needs the **Accessibility** grant and never prompts for it. A one-second
 watchdog runs while a key is configured: it retries installation until the grant lands, notices
-revocation, and revives a tap the system disabled on timeout or user input. On
-fast user switching another session owns the keyboard, so half-held state is dropped and rewriting
-stops until this session is active again. The HID remap outlives the process, so
-`applicationWillTerminate` hands the key back to the system before exiting.
+revocation, and revives a tap the system disabled on timeout or user input, dropping any hold as it
+does (see [toggle semantics](#press-tracking-uses-toggle-semantics)). On
+fast user switching another session owns the keyboard, so half-held state is dropped, rewriting
+stops and the watchdog stands down until this session is active again. The HID remap outlives the
+process, so `applicationWillTerminate` hands the key back to the system before exiting.
 
 ## Recorder
 

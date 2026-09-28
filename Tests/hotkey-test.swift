@@ -70,6 +70,10 @@ struct DoubleTapDetectorTests {
         repeats()
         resetting()
         registrationIssues()
+        hyperRewriting()
+        hyperQuickPress()
+        hyperSynthetics()
+        hyperCancelledHold()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -608,5 +612,210 @@ struct DoubleTapDetectorTests {
         stuck.tap(.command, at: 0.10)
         stuck.tap(.command, at: 0.25)
         expect(stuck.fired, [.command], "reset clears a half-held press")
+    }
+
+    // MARK: - Hyper Key rewriting
+
+    /// ⌃⌥⇧⌘ plus the left-side device bits, and the same without ⇧.
+    private static let hyperWithShift: UInt64 = 0x1E_0000 | 0x2B
+    private static let hyperWithoutShift: UInt64 = 0x1C_0000 | 0x29
+    /// Real events carry the non-coalesced bit; keeping it proves unrelated bits survive a rewrite.
+    private static let nonCoalesced: UInt64 = 0x100
+    private static let rightOptionDown: UInt64 = 0x8_0000 | 0x40 | nonCoalesced
+
+    private static func rewrite(
+        _ flags: UInt64, keyCode: Int? = nil, asFlagsChanged: Bool = false
+    ) -> HyperKeyRewriter.Outcome {
+        HyperKeyRewriter.Outcome(
+            .rewrite(flags: flags, keyCode: keyCode.map(Int64.init), asFlagsChanged: asFlagsChanged))
+    }
+
+    static func hyperRewriting() {
+        var keys = HyperKeys(.rightOption)
+        expect(
+            keys.key(kVK_ANSI_K, at: 0) == HyperKeyRewriter.Outcome(.pass),
+            "a key typed with Hyper up passes untouched")
+        expect(
+            keys.modifier(flags: rightOptionDown, at: 10)
+                == rewrite(rightOptionDown | hyperWithShift),
+            "Right Option down becomes the whole chord, its own bits kept inside the set")
+        expect(
+            keys.key(kVK_ANSI_K, flags: nonCoalesced, at: 60)
+                == rewrite(nonCoalesced | hyperWithShift),
+            "a key typed while Hyper is held carries the chord")
+        expect(
+            keys.modifier(flags: nonCoalesced, at: 90) == rewrite(nonCoalesced),
+            "Right Option up drops the chord")
+        expect(!keys.rewriter.isHolding, "the release ends the hold")
+
+        var shift = HyperKeys(.rightShift, includesShift: false)
+        expect(
+            shift.modifier(flags: 0x2_0000 | 0x4 | nonCoalesced, at: 0)
+                == rewrite(nonCoalesced | hyperWithoutShift),
+            "a Right Shift outside the set has its generic mask and device bit scrubbed")
+
+        var caps = HyperKeys(.capsLock)
+        expect(
+            caps.key(kVK_F18, flags: 0x80_0000, at: 0)
+                == rewrite(hyperWithShift, keyCode: kVK_Control, asFlagsChanged: true),
+            "F18 down becomes a Control flagsChanged with fn scrubbed")
+        expect(
+            caps.key(kVK_F18, flags: 0x80_0000, at: 40, autorepeat: true)
+                == HyperKeyRewriter.Outcome(.suppress),
+            "F18 autorepeat is swallowed")
+        expect(
+            caps.key(kVK_F18, type: .keyUp, flags: 0x80_0000, at: 400)
+                == rewrite(0, keyCode: kVK_Control, asFlagsChanged: true),
+            "F18 up becomes the Control release")
+
+        var early = HyperKeys(.capsLock)
+        expect(
+            early.modifier(keyCode: kVK_CapsLock, flags: 0x1_0000, at: 0)
+                == rewrite(hyperWithShift, keyCode: kVK_Control),
+            "before the remap lands, Caps Lock rides the modifier path without its latch bit")
+    }
+
+    static func hyperQuickPress() {
+        func lonePress(heldFor milliseconds: Int, typing: Bool = false) -> HyperKeyRewriter.QuickPress? {
+            var keys = HyperKeys(.capsLock, quickPress: .escape)
+            _ = keys.key(kVK_F18, at: 1_000)
+            if typing { _ = keys.key(kVK_ANSI_J, at: 1_000 + milliseconds / 2) }
+            return keys.key(kVK_F18, type: .keyUp, at: 1_000 + milliseconds).quickPress
+        }
+        let escape = HyperKeyRewriter.QuickPress(action: .escape, key: .capsLock)
+        expect(lonePress(heldFor: 249) == escape, "a lone press inside 250 ms fires Quick Press")
+        expect(lonePress(heldFor: 250) == nil, "a press held 250 ms is a hold, not a tap")
+        expect(lonePress(heldFor: 30, typing: true) == nil, "a key typed under Hyper makes a combo")
+
+        var silent = HyperKeys(.capsLock, quickPress: .none)
+        _ = silent.key(kVK_F18, at: 0)
+        expect(
+            silent.key(kVK_F18, type: .keyUp, at: 20).quickPress == nil,
+            "Quick Press set to nothing reports nothing to fire")
+    }
+
+    /// Right Option as Hyper while Tinycast and a dictation tool both inject a phrase.
+    static func hyperSynthetics() {
+        var keys = HyperKeys(.rightOption, quickPress: .escape)
+        _ = keys.modifier(flags: rightOptionDown, at: 0)
+        let tinycast = (0..<5).map { index in
+            keys.key(kVK_ANSI_A, flags: nonCoalesced, at: 10 + index, synthetic: true)
+        }
+        expect(
+            tinycast.allSatisfy { $0 == HyperKeyRewriter.Outcome(.pass) },
+            "Tinycast's own injected phrase passes with the flags it was posted with")
+        expect(
+            keys.modifier(flags: nonCoalesced, at: 120).quickPress
+                == HyperKeyRewriter.QuickPress(action: .escape, key: .rightOption),
+            "Tinycast's own keystrokes do not turn a lone press into a combo")
+
+        _ = keys.modifier(flags: rightOptionDown, at: 500)
+        let dictated = (0..<3).map { index in
+            keys.key(kVK_ANSI_A, flags: nonCoalesced, at: 510 + index)
+        }
+        expect(
+            dictated.allSatisfy { $0 == rewrite(nonCoalesced | hyperWithShift) },
+            "another tool's untagged phrase is rewritten like typing while Hyper is held")
+        expect(
+            keys.modifier(flags: nonCoalesced, at: 560).quickPress == nil,
+            "an injected phrase under Hyper makes the press a combo, so nothing fires")
+    }
+
+    static func hyperCancelledHold() {
+        var heldThrough = HyperKeys(.rightOption)
+        _ = heldThrough.modifier(flags: rightOptionDown, at: 0)
+        heldThrough.rewriter.cancelHold()
+        expect(!heldThrough.rewriter.isHolding, "re-enabling a disabled tap drops the hold")
+        expect(
+            heldThrough.key(kVK_ANSI_K, flags: nonCoalesced, at: 30) == HyperKeyRewriter.Outcome(.pass),
+            "a key typed after the drop no longer carries the chord")
+        expect(
+            heldThrough.modifier(flags: nonCoalesced, at: 60) == rewrite(nonCoalesced),
+            "the release of a key held across the gap reads as a release, not a new press")
+        expect(
+            !heldThrough.rewriter.isHolding
+                && heldThrough.key(kVK_ANSI_K, at: 90) == HyperKeyRewriter.Outcome(.pass),
+            "so Hyper is not left stuck down after it")
+        _ = heldThrough.modifier(flags: rightOptionDown, at: 400)
+        expect(
+            heldThrough.key(kVK_ANSI_K, at: 420) == rewrite(hyperWithShift),
+            "the next real press holds Hyper again")
+
+        var releasedInGap = HyperKeys(.rightOption)
+        _ = releasedInGap.modifier(flags: rightOptionDown, at: 0)
+        releasedInGap.rewriter.cancelHold()
+        expect(
+            releasedInGap.modifier(flags: rightOptionDown, at: 700)
+                == rewrite(rightOptionDown | hyperWithShift),
+            "when the release was lost while disabled, the next press still reads as a press")
+
+        var bitless = HyperKeys(.rightOption)
+        bitless.rewriter.cancelHold()
+        _ = bitless.modifier(flags: 0x8_0000, at: 0)
+        expect(bitless.rewriter.isHolding, "a press missing its device bit still reads as a press")
+
+        let leftOptionHeld: UInt64 = 0x8_0000 | 0x20 | nonCoalesced
+        var twinHeld = HyperKeys(.rightOption)
+        _ = twinHeld.modifier(flags: rightOptionDown | 0x20, at: 0)
+        twinHeld.rewriter.cancelHold()
+        expect(
+            twinHeld.modifier(flags: leftOptionHeld, at: 60) == rewrite(leftOptionHeld)
+                && !twinHeld.rewriter.isHolding,
+            "a release under a held Left Option reads as a release: the left bit owns the mask")
+
+        var reinstalled = HyperKeys(.rightOption)
+        expect(
+            reinstalled.modifier(flags: nonCoalesced, at: 0) == rewrite(nonCoalesced)
+                && !reinstalled.rewriter.isHolding,
+            "a fresh tap whose first event is a release of a key held since before it starts no hold")
+
+        var caps = HyperKeys(.capsLock, quickPress: .escape)
+        _ = caps.key(kVK_F18, at: 0)
+        caps.rewriter.cancelHold()
+        let release = caps.key(kVK_F18, type: .keyUp, at: 50)
+        expect(
+            release == rewrite(0, keyCode: kVK_Control, asFlagsChanged: true),
+            "an F18 release after a drop still converts, and fires no Quick Press")
+
+        var moved = HyperKeys(.rightOption)
+        _ = moved.modifier(flags: rightOptionDown, at: 0)
+        moved.rewriter.configure(.init(key: .rightOption, includesShift: false, quickPress: .none))
+        expect(
+            moved.key(kVK_ANSI_K, at: 20) == rewrite(hyperWithoutShift),
+            "Include Shift moving mid-hold keeps the hold and drops ⇧ from the chord")
+        moved.rewriter.configure(.init(key: .rightCommand, includesShift: false, quickPress: .none))
+        expect(!moved.rewriter.isHolding, "choosing another key drops the hold")
+    }
+}
+
+/// Feeds `HyperKeyRewriter` one event at a time on a virtual clock, in milliseconds.
+private struct HyperKeys {
+    var rewriter: HyperKeyRewriter
+    private let origin = ContinuousClock.now
+
+    init(
+        _ key: HyperKeyPhysicalKey, includesShift: Bool = true,
+        quickPress: HyperKeyQuickPress = .none
+    ) {
+        rewriter = HyperKeyRewriter(
+            configuration: .init(key: key, includesShift: includesShift, quickPress: quickPress))
+    }
+
+    mutating func key(
+        _ keyCode: Int, type: CGEventType = .keyDown, flags: UInt64 = 0, at milliseconds: Int,
+        autorepeat: Bool = false, synthetic: Bool = false
+    ) -> HyperKeyRewriter.Outcome {
+        rewriter.decide(
+            type: type, keyCode: keyCode, flagsRaw: flags, isAutorepeat: autorepeat,
+            isSynthetic: synthetic, at: origin + .milliseconds(milliseconds))
+    }
+
+    /// A `flagsChanged` from the configured key itself unless another code is given.
+    mutating func modifier(
+        keyCode: Int? = nil, flags: UInt64, at milliseconds: Int
+    ) -> HyperKeyRewriter.Outcome {
+        key(
+            keyCode ?? rewriter.configuration.key.keyCode ?? 0, type: .flagsChanged, flags: flags,
+            at: milliseconds)
     }
 }
