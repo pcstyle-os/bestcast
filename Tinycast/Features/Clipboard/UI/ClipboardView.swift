@@ -70,6 +70,11 @@ struct ClipboardList: View {
                             .contentShape(Rectangle())
                             // The light catcher: `.contextMenu` stalls.
                             .onRightClick { onActions(item) }
+                            .accessibilityAction {
+                                onSelect(item)
+                                onActivate()
+                            }
+                            .accessibilityAction(named: "Show Actions") { onActions(item) }
                             .onRowClick(
                                 select: { onSelect(item) },
                                 activate: {
@@ -126,7 +131,7 @@ enum DateBucket: Int {
     }
 }
 
-private struct ClipboardRow: View {
+struct ClipboardRow: View {
 
     @Environment(\.metrics) private var metrics
     let item: ClipboardItem
@@ -149,7 +154,7 @@ private struct ClipboardRow: View {
     var body: some View {
         HStack(spacing: metrics.spacing.lg) {
             thumbnail(item.colorValue)
-            Text(previewText)
+            Text(Self.title(for: item))
                 .font(metrics.typography.menuRow)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -171,9 +176,19 @@ private struct ClipboardRow: View {
                 .fill(fill)
         )
         .armedHover($hovered)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.title(for: item))
+        .accessibilityValue(spokenDetail)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
-    private var previewText: String {
+    private var spokenDetail: String {
+        let queued = queuePosition.map(QueueBadge.spokenLabel(for:))
+        let parts = [item.kind == .file ? "File" : nil, item.isPinned ? "Pinned" : nil, queued]
+        return parts.compactMap { $0 }.joined(separator: ", ")
+    }
+
+    static func title(for item: ClipboardItem) -> String {
         switch item.kind {
         // Cap before trimming: never walk a multi-MB clipboard string per row.
         case .text:
@@ -261,8 +276,9 @@ private struct QueueBadge: View {
         )
         .font(metrics.typography.menuRow)
         .foregroundStyle(Theme.Colors.primaryAction)
-        .accessibilityLabel("Queued to paste, number \(position)")
     }
+
+    static func spokenLabel(for position: Int) -> String { "Queued to paste, number \(position)" }
 }
 
 /// ImageIO for a blob we hold; QuickLook for a referenced file, which may be any type.

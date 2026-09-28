@@ -39,6 +39,9 @@ struct ClipboardTests {
         pasteQueueNumbersCloseOverADelete()
         pasteQueueToggles()
         pasteAllJoinsTheText()
+        pacerAdmitsOnePressAtATime()
+        quickPressesPasteEachEntryOnce()
+        aHeldKeyNeverRunsAhead()
         itemLookupReachesPastTheWindow()
         await reCopiedImagesShareOneBlob()
 
@@ -870,6 +873,58 @@ struct ClipboardTests {
         expect(images.joinedText(resolve: resolver(e)) == nil, "an image-only queue has no text")
     }
 
+    static func pacerAdmitsOnePressAtATime() {
+        var pacer = PasteQueue.Pacer()
+        expect(pacer.press() == .paste, "an idle press pastes at once")
+        expect(pacer.press() == .wait, "a press during that paste waits its turn")
+        expect(pacer.press() == .ignore, "and one behind a waiting press is the key repeating")
+        expect(pacer.finish(), "the landed paste hands over to the waiting press")
+        expect(pacer.press() == .wait, "which frees the waiting slot for the next press")
+        expect(pacer.finish(), "that press runs in its turn")
+        expect(!pacer.finish(), "and the last landing leaves nothing to run")
+        expect(pacer == PasteQueue.Pacer(), "so the pacer is idle again")
+        expect(pacer.press() == .paste, "and the next press pastes at once")
+    }
+
+    /// The real race: a second press before the first ⌘V must not overwrite the first entry.
+    static func quickPressesPasteEachEntryOnce() {
+        let e = queueEntries
+        let order = [4, 1, 2, 0, 5, 3].map { e[$0].id }
+        let paced = PacedRun(marking: order, entries: e, paced: true)
+        paced.press(at: [0, 30])
+        expect(paced.reads == Array(order.prefix(2)), "two quick presses paste two entries in order")
+        expect(paced.reads == paced.writes, "each ⌘V reads the entry its own press wrote")
+        expect(paced.queue.pending.first == order[2], "and the run is two entries further on")
+
+        let unpaced = PacedRun(marking: order, entries: e, paced: false)
+        unpaced.press(at: [0, 30])
+        expect(
+            unpaced.reads == [order[1], order[1]],
+            "unpaced, the second write lands before the first ⌘V: one entry twice, one lost")
+
+        let spaced = PacedRun(marking: order, entries: e, paced: true)
+        spaced.press(at: [0, 100, 330, 1_000, 1_010, 1_400, 1_500])
+        expect(spaced.reads == order, "presses in and out of a paste take the whole run in order")
+        expect(spaced.messages.last == "Pasted 6 of 6 · Queue finished", "and the last says so")
+        expect(spaced.nothingQueued == 1, "a press past the end finds nothing queued")
+    }
+
+    /// Auto-repeat fires faster than a paste lands; one waiting press is all a held key gets.
+    static func aHeldKeyNeverRunsAhead() {
+        let e = queueEntries
+        let order = e.map(\.id).reversed().map { $0 }
+        let run = PacedRun(marking: order, entries: e, paced: true)
+        let release = 800
+        let repeats = Array(stride(from: 500, through: release, by: 33))
+        run.press(at: [0] + repeats)
+        expect(run.reads == Array(order.prefix(4)), "a held key pastes one entry per paste cycle")
+        expect(run.reads == run.writes, "each one read as written")
+        expect(
+            run.turnStarts.last.map { $0 <= release + PacedRun.cycle } == true,
+            "and nothing starts later than one cycle after the key comes up")
+        expect(run.queue.pending.count == 2, "leaving the rest of the run queued")
+    }
+
     /// The queue resolves by id, and a marked row can come from a search past the window.
     static func itemLookupReachesPastTheWindow() {
         withStore { store, _ in
@@ -890,6 +945,72 @@ struct ClipboardTests {
             expect(store.item(withID: resident.id) == resident, "a resident row is found")
             store.remove(resident)
             expect(store.item(withID: resident.id) == nil, "a deleted row is not")
+        }
+    }
+
+    /// A fake clock in ms: each turn writes, posts ⌘V, lets the target read, then lands.
+    @MainActor
+    final class PacedRun {
+        static let activationDelay = 80
+        static let readAllowance = 150
+        static let readLatency = 40
+        static let cycle = activationDelay + readAllowance
+
+        private(set) var queue = PasteQueue()
+        private var pacer = PasteQueue.Pacer()
+        private let resolve: (ClipboardItem.ID) -> ClipboardItem?
+        private let paced: Bool
+        private var events: [(time: Int, order: Int, run: () -> Void)] = []
+        private var scheduled = 0
+        private var board: ClipboardItem.ID?
+        private(set) var writes: [ClipboardItem.ID] = []
+        private(set) var reads: [ClipboardItem.ID] = []
+        private(set) var messages: [String] = []
+        private(set) var turnStarts: [Int] = []
+        private(set) var nothingQueued = 0
+
+        init(marking order: [ClipboardItem.ID], entries: [ClipboardItem], paced: Bool) {
+            for id in order { queue.toggle(id) }
+            resolve = ClipboardTests.resolver(entries)
+            self.paced = paced
+        }
+
+        func press(at times: [Int]) {
+            for time in times {
+                schedule(time) { [self] in
+                    guard paced else { return turn(at: time) }
+                    if pacer.press() == .paste { turn(at: time) }
+                }
+            }
+            while let next = events.indices.min(by: {
+                (events[$0].time, events[$0].order) < (events[$1].time, events[$1].order)
+            }) {
+                events.remove(at: next).run()
+            }
+        }
+
+        private func turn(at time: Int) {
+            turnStarts.append(time)
+            guard let step = queue.advance(resolve: resolve) else {
+                nothingQueued += 1
+                return land(at: time)
+            }
+            board = step.item.id
+            writes.append(step.item.id)
+            messages.append(step.message)
+            schedule(time + Self.activationDelay + Self.readLatency) { [self] in
+                if let board { reads.append(board) }
+            }
+            schedule(time + Self.cycle) { [self] in land(at: time + Self.cycle) }
+        }
+
+        private func land(at time: Int) {
+            if paced, pacer.finish() { turn(at: time) }
+        }
+
+        private func schedule(_ time: Int, _ run: @escaping () -> Void) {
+            events.append((time, scheduled, run))
+            scheduled += 1
         }
     }
 

@@ -30,6 +30,8 @@ struct ClipboardScreen: PaletteScreen {
         return ClipboardActionsMenu.content(item: item, core: core, target: vm.pasteTarget)
     }
 
+    func spokenTitle(at selection: Int) -> String? { item(at: selection).map(ClipboardRow.title(for:)) }
+
     func activate(at selection: Int) {
         guard let item = item(at: selection) else { return }
         core.clipboardCoordinator.activate(item)

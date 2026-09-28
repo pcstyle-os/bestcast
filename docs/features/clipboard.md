@@ -50,6 +50,11 @@
   A delete from the palette drops the entry at once, so every badge still names its paste's number.
   The queue is in memory on `ClipboardCoordinator`: it outlives the palette hiding between
   presses, never a relaunch, and switching the feature off clears it.
+- **A run pastes one entry at a time, and `PasteQueue.Pacer` alone decides when a press runs.**
+  Each paste writes the pasteboard and posts ⌘V after `activationDelay`, so a write that lands
+  before that ⌘V pastes the wrong entry. A press while one is in flight waits its turn; a press
+  while one is already waiting is the hotkey auto-repeating and is dropped, so a held key never
+  runs ahead of the pastes.
 - **An image is kept in the representation the app offered**, in the order PNG, JPEG, HEIC, TIFF;
   only a TIFF-only board is re-encoded, to lossless PNG. Its blob is named by content —
   `<digest>-<8 random hex>.<ext>` — so a re-copy of a resident image promotes that row instead of
@@ -92,7 +97,8 @@ itself no longer drains the pasteboard into history either.
 Existing clips survive being switched off, since a history is captured rather than authored and
 nothing else can put it back. **Clear history stays live with the feature off** —
 `ClipboardCoordinator.clearHistory()` reopens the file, clears the unpinned rows and closes it again — so a reader
-who turns the feature off can still erase what it kept.
+who turns the feature off can still erase what it kept. Settings ▸ Clipboard ▸ Clear… asks through
+`deleteAllClips()`, the same Tinycast dialog as ⌃⇧X, so no surface clears without confirming.
 
 ## Store
 
@@ -222,10 +228,20 @@ older than the newest 1000 rows costs one more blob, never a table scan per capt
 before this naming keep their UUID names and simply never match. The digest lives in the file name
 because a new column would be a migration, which this store does not carry.
 
-`Paster.write` puts the blob on the pasteboard under its own type and nothing else. AppKit derives
-`public.tiff` from PNG, JPEG and HEIC for any reader that asks, so an eager TIFF would only cost a
-decode and tens of megabytes per paste; `pasteboard-test` checks that a written JPEG still reads as
-TIFF and is never labelled PNG.
+`Paster.write` puts the blob on the pasteboard under its own type, first, so a reader that takes
+JPEG or HEIC gets the bytes as kept. A JPEG or HEIC blob also **promises** `public.png` through an
+`NSPasteboardItemDataProvider` that encodes only when a reader asks: a PNG-only reader still gets an
+image, as it did when every blob was PNG, and a reader that never asks costs nothing. The encode runs
+in the provider callback on the main thread — 0.35 to 0.7 s for a 12 MP image, measured on synthetic
+photos — and `NSImage(pasteboard:)` asks for PNG first, so an AppKit reader pays it too. So does
+anything that reads every type an item lists: `PasteboardSnapshot`, behind a long snippet's lease and
+a quick action's copy, forces the encode and restores the PNG eagerly, and quitting Tinycast while
+the promise stands fulfils it. The pasteboard retains the provider until
+`pasteboardFinishedWithDataProvider`, so nothing else has to. TIFF is
+never declared: AppKit derives `public.tiff` from the blob for any reader that asks, so an eager or
+promised TIFF would only cost a decode and tens of megabytes in Tinycast. `pasteboard-test` checks
+that a written JPEG reads back as `public.jpeg` byte for byte, as a PNG of the same pixels — after
+the writer's own references are gone — and as TIFF.
 
 Measured with synthetic images pushed through the capture decision, before and after (MB on disk):
 
@@ -259,6 +275,15 @@ pending entries' `plainText` joined with newlines — a file as its path, an ima
 marked paste, and clears the queue. Marking a row again unmarks it; marking one already pasted in
 this run queues it again at the end. `clipboard-test` drives `PasteQueue` over deliberately uneven
 entries — edge whitespace, a tab and newline, unicode, a file and an image in the middle.
+
+Presses are strictly serial. `Paster.pasteQueued` returns only after its ⌘V is posted and a further
+`readAllowance` has passed, since the target reads the pasteboard when it handles the keystroke,
+not when it is posted. A press that lands inside that window waits and runs next; one that lands
+while a press already waits is a held key repeating, and is dropped. So two quick presses paste two
+entries in order, and a held key pastes one entry per paste cycle and stops within one entry of
+release. The cost is that a third tap inside one cycle (about 230 ms) is dropped too: it cannot be
+told from a repeat. `clipboard-test` drives `PasteQueue.Pacer` on a fake clock against a simulated
+pasteboard, and shows the unpaced race pasting one entry twice.
 
 ## Copy Text from an image
 
@@ -419,8 +444,8 @@ visible change.
 
 Paste and Keep Window Open (⌥↵) does not promote any entry. The rows hold still under the
 selection, so ↓ then ⌥↵ pastes a run of entries in order. `Paster.write` therefore only writes the
-pasteboard; `paste` and `copy` promote after it, and `pasteInPlace` does not. A queued run passes
-`promoting: false` for the same reason.
+pasteboard; `paste` and `copy` promote after it, and `pasteInPlace` does not. A queued run pastes
+through `pasteQueued`, which does not promote either, for the same reason.
 
 The ten palette slots shared with launcher favorites address this visible Pinned block too. A slot
 uses the current query and type filter, so its first entry is the first visible pin; a missing slot is

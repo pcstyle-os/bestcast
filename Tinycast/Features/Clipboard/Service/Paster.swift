@@ -12,18 +12,33 @@ enum Paster {
     /// Shorter: no activation to wait on, only the pasteboard write reaching the target's process.
     private static let directPostDelay: TimeInterval = 0.05
 
+    /// The target reads the pasteboard when it handles ⌘V, which trails the post.
+    private static let readAllowance: TimeInterval = 0.15
+
     /// Write the item and paste it into `previousApp`, activating it so ⌘V lands there.
     @MainActor @discardableResult
     static func paste(
-        _ item: ClipboardItem, store: ClipboardStore, previousApp: NSRunningApplication?,
-        promoting: Bool = true
+        _ item: ClipboardItem, store: ClipboardStore, previousApp: NSRunningApplication?
     ) -> Bool {
         guard write(item, store: store) else { return false }
-        if promoting { store.promote(item) }
+        store.promote(item)
         previousApp?.activate()
         DispatchQueue.main.asyncAfter(deadline: .now() + activationDelay) {
             postCommandV()
         }
+        return true
+    }
+
+    /// A queued run's paste, unpromoted; returns only once the target has had time to read it.
+    @MainActor
+    static func pasteQueued(
+        _ item: ClipboardItem, store: ClipboardStore, previousApp: NSRunningApplication?
+    ) async -> Bool {
+        guard write(item, store: store) else { return false }
+        previousApp?.activate()
+        try? await Task.sleep(for: .seconds(activationDelay))
+        postCommandV()
+        try? await Task.sleep(for: .seconds(readAllowance))
         return true
     }
 
@@ -131,10 +146,8 @@ enum Paster {
             else {
                 return false
             }
-            let type = imageType(of: url)
             pb.clearContents()
-            pb.declareTypes([type, ClipboardManager.internalType], owner: nil)
-            pb.setData(data, forType: type)
+            return pb.writeObjects([imageItem(data, type: imageType(of: url))])
         case .file:
             guard let url = store.fileURL(for: item),
                 FileManager.default.fileExists(atPath: url.path)
@@ -149,12 +162,45 @@ enum Paster {
         return true
     }
 
-    /// The blob's own type, alone: AppKit derives TIFF from any image type for readers that ask.
+    /// The blob's own type; AppKit derives TIFF from any image type for readers that ask.
     private static func imageType(of url: URL) -> NSPasteboard.PasteboardType {
         let type = UTType(filenameExtension: url.pathExtension).flatMap {
             $0.conforms(to: .image) ? $0 : nil
         }
         return NSPasteboard.PasteboardType((type ?? .png).identifier)
+    }
+
+    /// The blob first, so a reader taking it gets it as kept; anything else is promised a PNG.
+    @MainActor
+    private static func imageItem(
+        _ data: Data, type: NSPasteboard.PasteboardType
+    ) -> NSPasteboardItem {
+        let item = NSPasteboardItem()
+        item.setData(data, forType: type)
+        item.setData(Data(), forType: ClipboardManager.internalType)
+        if type != .png { item.setDataProvider(PNGPromise(data), forTypes: [.png]) }
+        return item
+    }
+
+    /// Encodes only when a reader asks; the pasteboard retains it until done with the promise.
+    private final class PNGPromise: NSObject, NSPasteboardItemDataProvider, Sendable {
+        private let data: Data
+
+        init(_ data: Data) { self.data = data }
+
+        nonisolated func pasteboard(
+            _ pasteboard: NSPasteboard?, item: NSPasteboardItem,
+            provideDataForType type: NSPasteboard.PasteboardType
+        ) {
+            let png = NSMutableData()
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                let destination = CGImageDestinationCreateWithData(
+                    png, UTType.png.identifier as CFString, 1, nil)
+            else { return }
+            CGImageDestinationAddImageFromSource(destination, source, 0, nil)
+            guard CGImageDestinationFinalize(destination) else { return }
+            item.setData(png as Data, forType: type)
+        }
     }
 
     /// Synthesize ⌘V, to `pid` alone when given, else through the system tap.
