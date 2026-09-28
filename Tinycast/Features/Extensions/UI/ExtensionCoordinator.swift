@@ -270,6 +270,17 @@ final class ExtensionCoordinator {
         core.showMessage(message)
     }
 
+    /// The index into `titles` the user picked; nil when they cancelled.
+    func chooseOpenWith(fileName: String, titles: [String]) async -> Int? {
+        NSApp.activate(ignoringOtherApps: true)
+        let index = await core.choose(
+            title: "Open With", message: fileName, symbol: "arrow.up.forward.app",
+            options: titles.map { DialogAction(title: $0) }
+                + [DialogAction(title: "Cancel", role: .cancel)],
+            defaultIndex: 0)
+        return titles.indices.contains(index) ? index : nil
+    }
+
     /// The dialog outranks the palette, so a view command keeps its screen behind it.
     func confirmExtensionAlert(_ alert: ExtensionAlert) async -> Bool {
         NSApp.activate(ignoringOtherApps: true)

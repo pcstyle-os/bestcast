@@ -6,7 +6,6 @@ struct SnippetsSettingsView: View {
     @Environment(AppSettings.self) private var settings
 
     @State private var editor: SnippetEditRequest?
-    @State private var pendingDeletion: StoredSnippet?
 
     var body: some View {
         @Bindable var settings = settings
@@ -60,16 +59,6 @@ struct SnippetsSettingsView: View {
             editor = request
             core.pendingSnippetEdit = nil
         }
-        .alert(item: $pendingDeletion) { record in
-            Alert(
-                title: Text("Delete “\(record.snippet.name)”?"),
-                message: Text(
-                    "This removes \(record.fileURL.lastPathComponent) from your snippets folder."),
-                primaryButton: .destructive(Text("Delete")) {
-                    delete(record)
-                },
-                secondaryButton: .cancel())
-        }
     }
 
     private var library: some View {
@@ -82,7 +71,7 @@ struct SnippetsSettingsView: View {
                     SnippetSettingsRow(
                         record: record,
                         onEdit: { editor = SnippetEditRequest(record: record) },
-                        onDelete: { pendingDeletion = record })
+                        onDelete: { Task { await confirmDeletion(of: record) } })
                 }
             }
 
@@ -168,8 +157,14 @@ struct SnippetsSettingsView: View {
             "\(first.fileURL.lastPathComponent): \(first.message) Plus \(snippetsStore.issues.count - 1) more."
     }
 
-    private func delete(_ record: StoredSnippet) {
-        Task { try? await snippetsStore.delete(id: record.id) }
+    private func confirmDeletion(of record: StoredSnippet) async {
+        guard
+            await core.confirm(
+                title: "Delete “\(record.snippet.name)”?",
+                message: "This removes \(record.fileURL.lastPathComponent) from your snippets folder.",
+                symbol: "text.quote", confirmTitle: "Delete")
+        else { return }
+        try? await snippetsStore.delete(id: record.id)
     }
 }
 

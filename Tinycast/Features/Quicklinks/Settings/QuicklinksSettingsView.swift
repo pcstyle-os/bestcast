@@ -7,7 +7,6 @@ struct QuicklinksSettingsView: View {
     @Environment(AppSettings.self) private var settings
     @State private var query = ""
     @State private var editor: QuicklinkEditRequest?
-    @State private var pendingDeletion: Quicklink?
 
     var body: some View {
         @Bindable var settings = settings
@@ -40,17 +39,16 @@ struct QuicklinksSettingsView: View {
             editor = request
             core.pendingQuicklinkEdit = nil
         }
-        .alert(item: $pendingDeletion) { quicklink in
-            Alert(
-                title: Text("Delete “\(quicklink.name)”?"),
-                message: Text("Its global shortcut and launcher references will also be removed."),
-                primaryButton: .destructive(Text("Delete")) {
-                    Task {
-                        await core.quicklinkCoordinator.deleteQuicklink(id: quicklink.id, confirming: false)
-                    }
-                },
-                secondaryButton: .cancel())
-        }
+    }
+
+    private func confirmDeletion(of quicklink: Quicklink) async {
+        guard
+            await core.confirm(
+                title: "Delete “\(quicklink.name)”?",
+                message: "Its global shortcut and launcher references will also be removed.",
+                symbol: quicklink.iconSymbol ?? Quicklink.sfSymbol, confirmTitle: "Delete")
+        else { return }
+        await core.quicklinkCoordinator.deleteQuicklink(id: quicklink.id, confirming: false)
     }
 
     // MARK: - Sections
@@ -88,7 +86,7 @@ struct QuicklinksSettingsView: View {
                                 core.quicklinkCoordinator.setQuicklinkEnabled($0, id: quicklink.id)
                             }),
                         onEdit: { editor = QuicklinkEditRequest(quicklink: quicklink) },
-                        onDelete: { pendingDeletion = quicklink })
+                        onDelete: { Task { await confirmDeletion(of: quicklink) } })
                 }
             }
             Button {
