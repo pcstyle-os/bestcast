@@ -51,7 +51,9 @@ Single ASCII words return immediately: a bare app name, constant or date keyword
    `today + 3 weeks`)
 2. **Time zones** (`CalcTimeZone`, e.g. `time in Tokyo`, `5pm ldn in sf`) — before tokenizing,
    because a zone phrase is words rather than calculator input
-3. Tokenize, then preserve the complete prefix of a trailing binary operator
+3. Tokenize, then preserve the complete prefix of a trailing binary operator, then close any group
+   still open at the end — `(3+4` answers as `(3+4)`, and the echo shows the closers it added. A
+   stray `)` is a typo rather than a debt, so `3*4)` stays silent
 4. Base conversion
 5. **Typed quantity arithmetic** (`10kg + 500g`, `$10 + €5`, `5m * 4m`,
    `100km / 2h to km/h`, `(1hr + 30min) to timespan`)
@@ -67,8 +69,8 @@ there is no second arithmetic parser or fallback evaluation of a completed scala
 
 `CalcTokenizer` scans Unicode scalars, retaining canonical-equivalent accented currency names.
 `CalcOperator` owns operator identity, binding power and spelling; `CalcMath` owns the function and
-constant catalog. Spoken roots use the typed parser too: `square root of 25m2` is `5 m`,
-and `cube root of -8m3` is `-2 m`.
+constant catalog; `√` and `∛` tokenize as `sqrt` and `cbrt`, so `√16` and `2√16` answer. Spoken
+roots use the typed parser too: `square root of 25m2` is `5 m`, and `cube root of -8m3` is `-2 m`.
 Dimensionless results can feed base conversion too: `2m / 2m to hex` is `0x1`.
 `CalcNumberBase` owns radix names and prefixes for both tokens and results. A conversion target is
 checked before evaluating its source, so an ordinary unit conversion never attempts radix arithmetic.

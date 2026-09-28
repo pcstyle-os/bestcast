@@ -188,6 +188,10 @@ enum CalcTokenizer {
                 }
             case "→":
                 tokens.append(.arrow)
+            case "√":
+                tokens.append(.ident("sqrt"))
+            case "∛":
+                tokens.append(.ident("cbrt"))
             case "=":
                 // Tolerate a trailing "=" ("2+2="); anywhere else it's not calculator input.
                 guard i == chars.count - 1 else { return nil }
