@@ -918,6 +918,24 @@ struct ExtensionTests {
             url: URL(string: "tinycast://extensions/linear/linear/create-issue")!)
         check("deeplink mirrors raycast:// as tinycast://", tiny == canonical)
 
+        let built = ExtensionDeepLink.url(
+            manifestName: "linear", author: "linear", commandName: "create-issue")
+        check(
+            "a built deeplink reads back as the command it names",
+            built.flatMap(ExtensionDeepLink.parse) == canonical,
+            String(describing: built))
+        let scoped = ExtensionDeepLink.url(manifestName: "acme/tools", author: "someone", commandName: "go")
+        check(
+            "a scoped manifest name is its own owner",
+            scoped?.absoluteString == "tinycast://extensions/acme/tools/go",
+            String(describing: scoped))
+        let spaced = ExtensionDeepLink.url(manifestName: "demo", author: "", commandName: "a b")
+        check(
+            "a built deeplink escapes its segments",
+            spaced.flatMap(ExtensionDeepLink.parse)?.commandName == "a b"
+                && spaced.flatMap(ExtensionDeepLink.parse)?.ownerOrAuthor == nil,
+            String(describing: spaced))
+
         let bare = ExtensionDeepLink.parse(url: URL(string: "raycast://extensions/demo/search")!)
         check(
             "deeplink without an owner parses",

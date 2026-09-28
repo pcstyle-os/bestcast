@@ -179,7 +179,8 @@ struct ShortcutRecorder: View {
     }
 }
 
-private struct ShortcutRecorderHitRegion: NSViewRepresentable {
+/// Where a click keeps the recording going; anywhere else, the session's mouse monitor ends it.
+struct ShortcutRecorderHitRegion: NSViewRepresentable {
     let capture: ShortcutCaptureSession
 
     func makeNSView(context: Context) -> PassiveView {

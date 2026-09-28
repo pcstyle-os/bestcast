@@ -196,8 +196,28 @@ struct AppEntry: Identifiable, Hashable, Sendable {
             return Quicklink.id(fromEntryID: id).map { .quicklink(id: $0) }
         case .appleShortcut:
             return AppleShortcut.id(fromEntryID: id).map { .appleShortcut(id: $0) }
-        case .snippet, .extensionCommand, .meeting:
+        case .extensionCommand:
+            return .extensionCommand(entryID: id)
+        case .snippet, .meeting:
             return nil
+        }
+    }
+
+    /// The pane Configure Command opens: the one that lists this row, or its category's pane.
+    var settingsPane: SettingsTab {
+        if let settingsOwner { return settingsOwner }
+        switch kind {
+        case .application: return .applications
+        case .systemSettings: return .systemSettings
+        case .command, .customCommand: return .commands
+        case .quickAction: return .quickActions
+        case .snippet: return .snippets
+        case .systemAction: return .systemActions
+        case .windowCommand, .windowLayout, .windowRoom: return .windowManagement
+        case .quicklink: return .quicklinks
+        case .appleShortcut: return .appleShortcuts
+        case .extensionCommand: return .extensions
+        case .meeting: return .calendar
         }
     }
 
@@ -205,6 +225,9 @@ struct AppEntry: Identifiable, Hashable, Sendable {
     var canRevealInFinder: Bool { kind.descriptor.canRevealInFinder }
 
     var canHideFromSearch: Bool { kind.descriptor.canHideFromSearch }
+
+    /// The two kinds with an enabled switch of their own, which is what a disable turns off.
+    var canDisable: Bool { kind == .customCommand || kind == .quicklink }
 
     var canDragOut: Bool { kind.descriptor.canDragOut }
 
@@ -749,12 +772,9 @@ final class AppIndex {
                 && !($0.bundleID?.hasPrefix(Self.ownBundlePrefix) ?? false)
         }
         return LauncherSuggestions.select(from: eligible, now: usage.now) { entry in
-            // `hotKeyAction` is nil for an extension command, whose shortcut is keyed by entry ID.
-            let action: HotKeyAction? =
-                entry.kind == .extensionCommand ? .extensionCommand(entryID: entry.id) : entry.hotKeyAction
-            return LauncherSuggestions.Traits(
+            LauncherSuggestions.Traits(
                 signals: signals(for: entry, usage: usage), installedAt: entry.installedAt,
-                hasHotKey: action.flatMap(hotKeys.binding(for:)) != nil,
+                hasHotKey: entry.hotKeyAction.flatMap(hotKeys.binding(for:)) != nil,
                 priority: CommandCatalog.command(for: entry)?.suggestionPriority)
         }
     }

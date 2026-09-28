@@ -60,6 +60,9 @@ enum DialogAccessory {
     case volume(VolumeState)
     case eventDraft(EventDraftState)
     case snippetArguments(SnippetArgumentsState)
+    case text(DialogTextState)
+    /// Recording starts once the panel is key, since any window resigning key ends it.
+    case hotKey(HotKeyAction, HotKeyManager)
 
     /// Whether ←/→/↑/↓ belong to the control rather than to whatever has focus inside it.
     var claimsArrowKeys: Bool {

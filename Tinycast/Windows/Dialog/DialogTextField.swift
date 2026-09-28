@@ -7,6 +7,34 @@ extension View {
     }
 }
 
+/// One line of text a dialog asks for; reference semantics let the caller read it back.
+@MainActor
+@Observable
+final class DialogTextState {
+    let prompt: String
+    var text: String
+
+    init(prompt: String, text: String) {
+        self.prompt = prompt
+        self.text = text
+    }
+}
+
+/// The single field a text dialog shows, focused so typing starts at once.
+struct DialogTextInput: View {
+    let state: DialogTextState
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        @Bindable var state = state
+        TextField("", text: $state.text, prompt: Text(state.prompt))
+            .focused($isFocused)
+            .dialogTextField()
+            .accessibilityLabel(state.prompt)
+            .onAppear { isFocused = true }
+    }
+}
+
 private struct DialogTextField: ViewModifier {
     @Environment(\.metrics) private var metrics
 

@@ -106,6 +106,36 @@ final class DialogController: NSObject, NSWindowDelegate {
         return state.values
     }
 
+    /// A blank answer is a real one, clearing the alias; nil means the dialog was cancelled.
+    func editAlias(for name: String, current: String?) async -> String? {
+        let state = DialogTextState(prompt: "Alias", text: current ?? "")
+        let request = DialogRequest(
+            title: current == nil ? "Add Alias" : "Edit Alias",
+            message: "A short word that finds \(name) first. Leave it empty to remove it.",
+            symbol: "character.cursor.ibeam", tone: .neutral,
+            actions: [
+                DialogAction(title: "Save"),
+                DialogAction(title: "Cancel", role: .cancel)
+            ],
+            defaultIndex: 0, cancelIndex: 1, accessory: .text(state))
+        guard await present(request) == 0 else { return nil }
+        return state.text
+    }
+
+    /// The session binds, clears or cancels on its own; the dialog only frames it and waits.
+    func recordHotKey(for action: HotKeyAction, name: String, hotKeys: HotKeyManager) async {
+        let current = hotKeys.binding(for: action).map { $0.keycaps.joined() }
+        let request = DialogRequest(
+            title: current == nil ? "Record Hotkey" : "Change Hotkey",
+            message: current.map { "\(name) runs on \($0). Press Delete to remove it." }
+                ?? "Press the shortcut that runs \(name).",
+            symbol: "keyboard", tone: .neutral,
+            actions: [DialogAction(title: "Cancel", role: .cancel)],
+            defaultIndex: 0, cancelIndex: 0, accessory: .hotKey(action, hotKeys))
+        _ = await present(request)
+        if hotKeys.recordingAction == action { hotKeys.recordingAction = nil }
+    }
+
     private func present(_ request: DialogRequest) async -> Int {
         // Keyed on the continuation, so a panel still fading can't swallow the next.
         guard continuation == nil else { return request.cancelIndex }
@@ -114,7 +144,7 @@ final class DialogController: NSObject, NSWindowDelegate {
             onPresentationChanged(true)
             let width =
                 switch request.accessory {
-                case nil, .volume: metrics.size.dialogCompactWidth
+                case nil, .volume, .text, .hotKey: metrics.size.dialogCompactWidth
                 case .eventDraft, .snippetArguments: metrics.size.dialogWidth
                 }
             let focus = DialogView.ButtonFocus()
@@ -160,6 +190,13 @@ final class DialogController: NSObject, NSWindowDelegate {
             place(panel)
             show(panel)
             announce(request)
+            if case .hotKey(let action, let hotKeys) = request.accessory {
+                // A turn later, so the key change `show` caused can't end the recording it starts.
+                Task { [weak self] in
+                    guard self?.panel === panel else { return }
+                    hotKeys.recordingAction = action
+                }
+            }
         }
     }
 
