@@ -20,9 +20,15 @@ extension DialogTone {
 
 /// Tinycast's Liquid Glass dialog, compact unless a native control needs more room.
 struct DialogView: View {
+    /// Where ⇥ has landed: SwiftUI buttons join the key loop only under Keyboard Navigation.
+    @MainActor @Observable final class ButtonFocus {
+        var index: Int?
+    }
+
     @Environment(\.metrics) private var metrics
     let request: DialogRequest
     let width: CGFloat
+    let focus: ButtonFocus
     let onChoose: (Int) -> Void
 
     var body: some View {
@@ -83,25 +89,16 @@ struct DialogView: View {
     }
 
     private func actionButtons(singleLine: Bool) -> some View {
-        ForEach(visualOrder, id: \.self) { index in
+        ForEach(request.visualOrder, id: \.self) { index in
             DialogButton(
                 action: request.actions[index],
                 isDefault: index == request.defaultIndex,
+                isFocused: index == focus.index,
                 keyCap: keyCap(for: index),
                 singleLine: singleLine,
                 onActivate: { onChoose(index) }
             )
         }
-    }
-
-    /// Cancel leads a horizontal pair; a vertical choice keeps the caller's semantic order.
-    private var visualOrder: [Int] {
-        guard request.actions.count < 3 else { return Array(request.actions.indices) }
-        return request.actions.indices.sorted { rank(of: $0) < rank(of: $1) }
-    }
-
-    private func rank(of index: Int) -> Int {
-        request.actions[index].role == .cancel ? 0 : 1
     }
 
     /// Only the two keys the panel handles are advertised, so a tooltip can't drift.
@@ -138,6 +135,7 @@ private struct DialogSymbol: View {
 private struct DialogButton: View {
     let action: DialogAction
     let isDefault: Bool
+    let isFocused: Bool
     let keyCap: String?
     var singleLine = false
     let onActivate: () -> Void
@@ -148,7 +146,7 @@ private struct DialogButton: View {
                 .fixedSize(horizontal: singleLine, vertical: false)
                 .multilineTextAlignment(.center)
         }
-        .buttonStyle(.modalAction(role))
+        .buttonStyle(.modalAction(role, showsFocus: isFocused))
         .tooltip(keyCap: keyCap)
     }
 

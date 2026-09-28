@@ -32,6 +32,8 @@ struct SnippetsScreen: PaletteScreen {
         return SnippetActionsMenu.content(record: record, core: core)
     }
 
+    func spokenTitle(at selection: Int) -> String? { record(at: selection)?.snippet.name }
+
     func activate(at selection: Int) {
         guard let record = record(at: selection) else { return }
         core.snippetCoordinator.expandSnippetFromPalette(id: record.id)

@@ -104,6 +104,8 @@ struct PopoverMenu: View {
         }
     }
 
+    /// What VoiceOver calls the menu; `header` names its subject, not the menu itself.
+    let name: String
     var header: String?
     let items: [PopoverMenuItem]
     @Binding var selection: Int
@@ -129,6 +131,8 @@ struct PopoverMenu: View {
             attachment: attachment, radius: metrics.radius.menuPanel,
             attachedRadius: metrics.size.menuButton / 2)
         surfaceContent
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(name)
             .frame(width: width ?? metrics.size.actionMenuWidth)
             .glassEffect(.regular, in: shape)
     }
@@ -212,6 +216,7 @@ struct PopoverMenu: View {
             .padding(.horizontal, metrics.spacing.lg)
             .padding(.top, metrics.spacing.xs)
             .padding(.bottom, metrics.spacing.xs / 2)
+            .accessibilityAddTraits(.isHeader)
     }
 
     /// The title and rows move as one surface, while row IDs still drive keyboard reveal.
@@ -324,6 +329,7 @@ struct PopoverMenu: View {
             .padding(.horizontal, metrics.spacing.md)
             .padding(.top, isFirst ? 0 : metrics.spacing.md)
             .padding(.bottom, metrics.spacing.xxs)
+            .accessibilityAddTraits(.isHeader)
     }
 
     /// Armed only once the pointer has moved of its own accord, so a scroll past it lights nothing.
@@ -416,6 +422,10 @@ private struct PopoverMenuRow: View {
         }
         .buttonStyle(.plain)
         .disabled(!item.isSelectable)
+        .accessibilityLabel(item.title)
+        .accessibilityValue(item.isLoading ? "Loading" : item.detail ?? "")
+        .accessibilityHint(item.shortcut.map { KeyCapChip.spokenChord($0.map(String.init)) } ?? "")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

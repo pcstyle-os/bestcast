@@ -50,7 +50,8 @@ nothing about MCP. `AIChatCoordinator.send` is the one place the two meet.
   default; the first call of a conversation goes through Tinycast's own three-way dialog. **Always
   Allow** persists `.always`, **Allow This Chat** grants for that `ChatSession.id` alone, and **Don't
   Allow** — which is what Escape does — refuses that one call and lets the next ask again. Escape is
-  never allowed to persist a decision, and `.never` is set on the server's row in Settings.
+  never allowed to persist a decision, and `.never` is set on the server's row in Settings. Return
+  takes Allow This Chat; Always Allow is ⇥ then Space, as any dialog's third button is.
   `MCPTrustPolicy` is the whole rule and it is pure.
 - **A refused or failed call is content, never a thrown error.** It comes back as an `AIToolResult`
   the model can read and work around, so a declined tool ends in an honest sentence rather than a

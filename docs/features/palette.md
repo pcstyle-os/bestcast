@@ -80,7 +80,8 @@ move a highlight rather than VoiceOver's cursor, so `RootPaletteView` posts the 
 `spokenTitle` as an announcement whenever it changes while the palette is shown and VoiceOver is
 running — never while hidden, where a pop to root would otherwise speak. The default is `nil`, which
 stays silent; the launcher, quicklinks, file search, calculator history, emoji, uninstall,
-schedule, menu search and window switcher answer it. Each row still exposes itself as one element — a
+schedule, menu search, window switcher, snippets and chat history answer it, and Quick AI answers
+with the conversation's title. Each row still exposes itself as one element — a
 label, a value for what it shows beside the title, the selected trait, a default action and, where
 the screen has a ⌘K menu, a `Show Actions` action — for a reader who walks the list with the
 VoiceOver cursor.
@@ -458,6 +459,14 @@ The panel is a second SwiftUI hierarchy, so it observes nothing of `RootPaletteV
 `syncMenuPanel` pushes a rebuilt tree on every `openMenu` or `menuSelection` change, and
 `paletteEnvironment` injects the same stores into both hierarchies so they cannot drift.
 `WindowReader` reports the palette's `NSWindow`, which the menu's frame is placed against.
+
+**VoiceOver hears a menu the way it hears the list.** Its search field keeps focus while ↑/↓ move
+the highlight, so `syncMenuPanel` announces `PaletteMenuContent.spokenTitle` when the highlighted
+row changes, and the menu's `name` before it on open ("Actions, Paste Snippet"). The name is also the
+panel's window title. `PopoverMenu` is one named container: each row a button labelled with its
+title, its shortcut as the hint in the footer's "Command-K" spelling, the selected trait on the
+highlight and the disabled state on a row it cannot land on; section titles and the header are
+headings. An extension's menus supply no name or spoken titles, so they stay silent.
 
 `PaletteMenuContent` may supply its own host-layer clip path and motion.
 The hosting layer scales inside a canvas sized for the largest frame, anchored to the button or

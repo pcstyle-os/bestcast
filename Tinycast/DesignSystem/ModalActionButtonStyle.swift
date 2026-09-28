@@ -5,17 +5,22 @@ struct ModalActionButtonStyle: ButtonStyle {
 
     let role: Role
     var fillsWidth = true
+    /// A focus the host tracks itself, for a surface whose buttons never take AppKit focus.
+    var showsFocus = false
 
     func makeBody(configuration: Configuration) -> some View {
-        ButtonBody(configuration: configuration, role: role, fillsWidth: fillsWidth)
+        ButtonBody(
+            configuration: configuration, role: role, fillsWidth: fillsWidth, showsFocus: showsFocus)
     }
 
     private struct ButtonBody: View {
         @Environment(\.isEnabled) private var isEnabled
+        @Environment(\.isFocused) private var isFocused
         @Environment(\.metrics) private var metrics
         let configuration: ButtonStyleConfiguration
         let role: Role
         let fillsWidth: Bool
+        let showsFocus: Bool
         @State private var hovered = false
 
         var body: some View {
@@ -27,6 +32,13 @@ struct ModalActionButtonStyle: ButtonStyle {
                 .frame(height: metrics.size.dialogButtonHeight)
                 .contentShape(Capsule())
                 .background(Capsule().fill(fill))
+                .overlay {
+                    if showsFocus || isFocused {
+                        Capsule()
+                            .strokeBorder(Theme.Colors.focusRing, lineWidth: Theme.Size.focusRing)
+                            .padding(-Theme.Size.focusRing)
+                    }
+                }
                 .opacity(isEnabled ? 1 : 0.45)
                 .onHover { hovered = $0 }
         }
@@ -67,8 +79,8 @@ struct ModalActionButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == ModalActionButtonStyle {
     static func modalAction(
-        _ role: ModalActionButtonStyle.Role, fillsWidth: Bool = true
+        _ role: ModalActionButtonStyle.Role, fillsWidth: Bool = true, showsFocus: Bool = false
     ) -> ModalActionButtonStyle {
-        ModalActionButtonStyle(role: role, fillsWidth: fillsWidth)
+        ModalActionButtonStyle(role: role, fillsWidth: fillsWidth, showsFocus: showsFocus)
     }
 }

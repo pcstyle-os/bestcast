@@ -32,6 +32,27 @@ struct DialogRequest {
     var cancelIndex: Int
     /// The caller reads the result back out of the state object it passed in.
     var accessory: DialogAccessory?
+
+    /// Cancel leads a horizontal pair; a vertical choice keeps the caller's semantic order.
+    var visualOrder: [Int] {
+        guard actions.count < 3 else { return Array(actions.indices) }
+        return actions.indices.sorted { rank(of: $0) < rank(of: $1) }
+    }
+
+    /// Where ⇥ lands from `index`, walking the buttons as drawn and wrapping at either end.
+    func tabStop(after index: Int?, backwards: Bool) -> Int? {
+        let order = visualOrder
+        guard let first = order.first, let last = order.last else { return nil }
+        guard let index, let position = order.firstIndex(of: index) else {
+            return backwards ? last : first
+        }
+        let step = backwards ? order.count - 1 : 1
+        return order[(position + step) % order.count]
+    }
+
+    private func rank(of index: Int) -> Int {
+        actions[index].role == .cancel ? 0 : 1
+    }
 }
 
 /// A dialog carries at most one control, so the cases are exclusive by construction.

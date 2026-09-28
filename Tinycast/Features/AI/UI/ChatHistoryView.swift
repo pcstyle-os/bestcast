@@ -64,6 +64,11 @@ struct ChatHistoryList: View {
                                 }
                             )
                             .onRightClick { onActions(conversation) }
+                            .accessibilityAction {
+                                onSelect(conversation)
+                                onActivate()
+                            }
+                            .accessibilityAction(named: "Show Actions") { onActions(conversation) }
                         }
                     }
                 }
@@ -127,6 +132,12 @@ private struct ChatHistoryRow: View {
             RoundedRectangle(cornerRadius: metrics.radius.row, style: .continuous).fill(fill)
         )
         .armedHover($hovered)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(conversation.displayTitle)
+        .accessibilityValue(
+            [conversation.preview, conversation.updatedAt.formatted(date: .omitted, time: .shortened)]
+                .filter { !$0.isEmpty }.joined(separator: ", "))
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

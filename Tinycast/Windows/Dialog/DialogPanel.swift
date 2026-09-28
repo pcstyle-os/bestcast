@@ -9,11 +9,17 @@ final class DialogPanel: NSPanel {
         case confirm
         case increment
         case decrement
+        case focusNext
+        case focusPrevious
+        case activateFocused
     }
 
-    var onKey: ((Key) -> Void)?
+    /// False when the dialog had no use for the key, which then goes on to AppKit.
+    var onKey: ((Key) -> Bool)?
     /// Arrows are a control's keys, not the panel's; a text field needs them for its caret.
     var handlesArrowKeys = false
+    /// Under Keyboard Navigation the key loop already reaches these controls, so ⇥ stays AppKit's.
+    var hostsControls = false
 
     init(content: NSView, cornerRadius: CGFloat) {
         super.init(
@@ -42,24 +48,33 @@ final class DialogPanel: NSPanel {
     }
 
     override func sendEvent(_ event: NSEvent) {
-        guard event.type == .keyDown, let onKey else {
+        guard event.type == .keyDown, let onKey, let key = key(for: event), onKey(key) else {
             super.sendEvent(event)
             return
         }
+        // One ring at a time: a button AppKit focused under Keyboard Navigation would draw another.
+        if key == .focusNext || key == .focusPrevious { makeFirstResponder(nil) }
+    }
+
+    private func key(for event: NSEvent) -> Key? {
+        // A field's own ⇥ and space belong to it: its key loop and its text.
+        let isEditingText = firstResponder is NSText
         switch Int(event.keyCode) {
-        case kVK_Escape:
-            onKey(.cancel)
-        case kVK_Return, kVK_ANSI_KeypadEnter:
-            onKey(.confirm)
-        case kVK_LeftArrow where handlesArrowKeys,
-            kVK_DownArrow where handlesArrowKeys:
-            onKey(.decrement)
-        case kVK_RightArrow where handlesArrowKeys,
-            kVK_UpArrow where handlesArrowKeys:
-            onKey(.increment)
-        default:
-            super.sendEvent(event)
+        case kVK_Escape: return .cancel
+        case kVK_Return, kVK_ANSI_KeypadEnter: return .confirm
+        case kVK_LeftArrow where handlesArrowKeys, kVK_DownArrow where handlesArrowKeys:
+            return .decrement
+        case kVK_RightArrow where handlesArrowKeys, kVK_UpArrow where handlesArrowKeys:
+            return .increment
+        case kVK_Tab where !isEditingText && !keyLoopOwnsTab:
+            return event.modifierFlags.contains(.shift) ? .focusPrevious : .focusNext
+        case kVK_Space where !isEditingText: return .activateFocused
+        default: return nil
         }
+    }
+
+    private var keyLoopOwnsTab: Bool {
+        hostsControls && NSApp.isFullKeyboardAccessEnabled
     }
 
     override var canBecomeKey: Bool { true }

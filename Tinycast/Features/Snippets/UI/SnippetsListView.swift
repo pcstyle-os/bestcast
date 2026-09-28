@@ -30,6 +30,11 @@ struct SnippetsList: View {
                                 }
                             )
                             .onRightClick { onActions(record) }
+                            .accessibilityAction {
+                                onSelect(record)
+                                onActivate()
+                            }
+                            .accessibilityAction(named: "Show Actions") { onActions(record) }
                     }
                 }
                 .padding(.horizontal, metrics.spacing.md)
@@ -59,6 +64,11 @@ private struct SnippetRow: View {
         return .clear
     }
 
+    private var spokenKeyword: String {
+        guard let keyword = record.snippet.keyword, !keyword.isEmpty else { return "" }
+        return "keyword \(keyword)"
+    }
+
     var body: some View {
         HStack(spacing: metrics.spacing.lg) {
             RoundedRectangle(cornerRadius: metrics.radius.thumbnail, style: .continuous)
@@ -86,6 +96,10 @@ private struct SnippetRow: View {
             RoundedRectangle(cornerRadius: metrics.radius.row, style: .continuous).fill(fill)
         )
         .armedHover($hovered)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(record.snippet.name)
+        .accessibilityValue(spokenKeyword)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

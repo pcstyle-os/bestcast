@@ -151,6 +151,8 @@ enum Theme {
         /// The chat window's drop outline and the length of its dashes.
         static let dropHintStroke: CGFloat = 2
         static let dropHintDash: CGFloat = 6
+        /// A keyboard focus ring, drawn just outside the control it circles.
+        static let focusRing: CGFloat = 3
         /// The uninstall list's leading checkbox / lock glyph.
         static let checkbox: CGFloat = 16
         static let clipboardListWidth: CGFloat = 290
@@ -497,6 +499,8 @@ enum Theme {
         static let windowSurface = Color(nsColor: .windowBackgroundColor)
         /// Where a dropped file will land: the chat window's dashed outline.
         static let dropTarget = Color.accentColor
+        /// The system's own keyboard focus colour, so a drawn ring matches every native one.
+        static let focusRing = Color(nsColor: .keyboardFocusIndicatorColor)
         /// Progress tint: the message pill's spinner while the work behind it is still running.
         static let progress = Color.blue
         /// The command output window's page: a flat surface the log sits directly on.

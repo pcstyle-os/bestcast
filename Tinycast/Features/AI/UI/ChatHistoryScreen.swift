@@ -23,6 +23,8 @@ struct ChatHistoryScreen: PaletteScreen {
             conversation: conversation, coordinator: coordinator)
     }
 
+    func spokenTitle(at selection: Int) -> String? { conversation(at: selection)?.displayTitle }
+
     func activate(at selection: Int) {
         guard let conversation = conversation(at: selection) else { return }
         coordinator.openChat(id: conversation.id)

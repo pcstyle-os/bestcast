@@ -35,6 +35,8 @@ struct RootPaletteView: View {
     @State private var selectionIsRunning = false
     /// Highlighted row of whichever menu is open; each open path sets where it starts.
     @State private var menuSelection = 0
+    /// The last menu row VoiceOver was told about, so a re-laid menu does not repeat it.
+    @State private var spokenMenuTitle: String?
     /// The argument field whose choices are up, so `menuContent` can rebuild the same menu.
     @State private var argumentOptionsField: String?
     @State private var menuPanel = MenuPanelController()
@@ -228,29 +230,34 @@ struct RootPaletteView: View {
         case .app:
             let filtered = appMenuContent.matching(ActionMenuSearchQuery(vm.menuQuery))
             return PaletteMenuContent(
-                popover: filtered.content, selection: $menuSelection,
+                name: "\(Bundle.main.appDisplayName) Menu", popover: filtered.content,
+                selection: $menuSelection,
                 search: PopoverMenu.Search(
                     placeholder: "Search for actions…", placement: .bottom),
                 onActivate: activateMenuItem, preferredSelection: filtered.bestMatch)
         case .clipboardFilter:
             return headerMenu(
-                clipboardFilterContent, width: metrics.size.clipboardFilterMenuWidth)
+                "Type", clipboardFilterContent, width: metrics.size.clipboardFilterMenuWidth)
         case .fileSearchFilter:
-            return headerMenu(fileSearchFilterContent, width: metrics.size.fileSearchFilterMenuWidth)
+            return headerMenu(
+                "Type", fileSearchFilterContent, width: metrics.size.fileSearchFilterMenuWidth)
         case .emojiCategory:
-            return headerMenu(emojiCategoryContent, width: metrics.size.emojiCategoryMenuWidth)
+            return headerMenu(
+                "Category", emojiCategoryContent, width: metrics.size.emojiCategoryMenuWidth)
         case .aiModel:
             return headerMenu(
-                AIModelMenu.models(coordinator: core.aiChatCoordinator, chat: quickAI),
+                "Model", AIModelMenu.models(coordinator: core.aiChatCoordinator, chat: quickAI),
                 width: metrics.size.menuWidth)
         case .aiReasoning:
             return headerMenu(
+                "Reasoning",
                 AIModelMenu.reasoning(
                     coordinator: core.aiChatCoordinator, chat: quickAI),
                 width: metrics.size.menuWidth)
         case .aiAttachments:
             guard !quickAI.pendingAttachments.isEmpty else { return nil }
             return headerMenu(
+                "Attachments",
                 AIModelMenu.attachments(
                     coordinator: core.aiChatCoordinator, chat: quickAI),
                 width: metrics.size.menuWidth)
@@ -258,7 +265,7 @@ struct RootPaletteView: View {
             guard let field = argumentOptionsField,
                 let popover = headerAccessory?.optionsMenu(field)
             else { return nil }
-            return headerMenu(popover, width: metrics.size.menuWidth)
+            return headerMenu("Options", popover, width: metrics.size.menuWidth)
         case .extensionAccessory:
             return extensionCommandScreen?.searchAccessoryMenu(
                 searchQuery: ActionMenuSearchQuery(vm.menuQuery),
@@ -1055,11 +1062,11 @@ struct RootPaletteView: View {
 
     /// Every header menu states its own width, so resizing one never moves another.
     private func headerMenu(
-        _ popover: PopoverMenuContent, width: CGFloat
+        _ name: String, _ popover: PopoverMenuContent, width: CGFloat
     ) -> PaletteMenuContent {
         let filtered = popover.matching(ActionMenuSearchQuery(vm.menuQuery))
         return PaletteMenuContent(
-            popover: filtered.content, selection: $menuSelection, width: width,
+            name: name, popover: filtered.content, selection: $menuSelection, width: width,
             search: PopoverMenu.Search(placeholder: "Search…", placement: .top),
             onActivate: activateMenuItem, preferredSelection: filtered.bestMatch)
     }
@@ -1103,7 +1110,7 @@ struct RootPaletteView: View {
         let view = content.view(corner)
         if presenting, let hostWindow {
             menuPanel.show(
-                view, corner: corner, parent: hostWindow, core: core,
+                view, title: content.name ?? "", corner: corner, parent: hostWindow, core: core,
                 clipPath: content.clipPath, motion: content.motion,
                 onKeyDown: handleMenuPanelKey, onDismiss: closeMenus)
         } else {
@@ -1111,6 +1118,18 @@ struct RootPaletteView: View {
                 view, corner: corner, core: core, clipPath: content.clipPath,
                 motion: content.motion)
         }
+        announceMenuHighlight(in: content, opening: presenting)
+    }
+
+    /// The menu's search field keeps focus while ↑/↓ move its highlight, as the palette's does.
+    private func announceMenuHighlight(in content: PaletteMenuContent, opening: Bool) {
+        let title = content.spokenTitle(menuSelection)
+        let changed = opening || title != spokenMenuTitle
+        spokenMenuTitle = title
+        guard changed, NSWorkspace.shared.isVoiceOverEnabled else { return }
+        let spoken = (opening ? [content.name, title] : [title]).compactMap { $0 }
+        guard !spoken.isEmpty else { return }
+        AccessibilityNotification.Announcement(spoken.joined(separator: ", ")).post()
     }
 
     private func handleMenuPanelKey(_ event: NSEvent) -> Bool {

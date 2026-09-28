@@ -47,6 +47,10 @@ typealias MenuPanelClipPath =
     let view: (MenuPanelCorner) -> AnyView
     /// Bounds-checked by the caller against `rowCount`, so a row index is always one this menu has.
     let activate: (Int) -> Void
+    /// The menu's window title, and what VoiceOver hears as it opens.
+    let name: String?
+    /// What VoiceOver says when the highlight lands on a row, or nil to stay silent.
+    let spokenTitle: (Int) -> String?
 
     init(
         rowCount: Int, preferredSelection: Int? = nil,
@@ -54,7 +58,9 @@ typealias MenuPanelClipPath =
         activate: @escaping (Int) -> Void,
         isSelectable: @escaping (Int) -> Bool = { _ in true },
         clipPath: @escaping MenuPanelClipPath,
-        motion: MenuPanelMotion
+        motion: MenuPanelMotion,
+        name: String? = nil,
+        spokenTitle: @escaping (Int) -> String? = { _ in nil }
     ) {
         self.rowCount = rowCount
         self.preferredSelection = preferredSelection
@@ -63,31 +69,39 @@ typealias MenuPanelClipPath =
         self.isSelectable = isSelectable
         self.clipPath = clipPath
         self.motion = motion
+        self.name = name
+        self.spokenTitle = spokenTitle
     }
 
     init(
-        popover: PopoverMenuContent, selection: Binding<Int>, width: CGFloat? = nil,
-        search: PopoverMenu.Search, onActivate: @escaping (Int) -> Void,
+        name: String, popover: PopoverMenuContent, selection: Binding<Int>,
+        width: CGFloat? = nil, search: PopoverMenu.Search, onActivate: @escaping (Int) -> Void,
         preferredSelection: Int? = nil
     ) {
+        let items = popover.items
         self.init(
-            rowCount: popover.items.count, preferredSelection: preferredSelection,
+            rowCount: items.count, preferredSelection: preferredSelection,
             view: { corner in
                 AnyView(
                     PopoverMenu(
-                        header: popover.header, items: popover.items, selection: selection,
+                        name: name, header: popover.header, items: items, selection: selection,
                         width: width, onActivate: onActivate,
                         attachment: corner.popoverAttachment, search: search))
             },
-            activate: { popover.items[$0].action() },
-            isSelectable: { popover.items[$0].isSelectable },
+            activate: { items[$0].action() },
+            isSelectable: { items[$0].isSelectable },
             clipPath: { bounds, metrics, corner in
                 PopoverMenu.SurfaceShape(
                     attachment: corner.popoverAttachment, radius: metrics.radius.menuPanel,
                     attachedRadius: metrics.size.menuButton / 2
                 ).path(in: bounds).cgPath
             },
-            motion: .palette)
+            motion: .palette,
+            name: name,
+            spokenTitle: { index in
+                guard !items.isEmpty else { return "No Results" }
+                return items.indices.contains(index) ? items[index].title : nil
+            })
     }
 }
 
@@ -169,7 +183,7 @@ extension PaletteScreen {
         guard let content = actions(at: selection) else { return nil }
         let filtered = content.matching(searchQuery)
         return PaletteMenuContent(
-            popover: filtered.content, selection: menuSelection,
+            name: "Actions", popover: filtered.content, selection: menuSelection,
             search: PopoverMenu.Search(
                 placeholder: "Search for actions…", placement: .bottom),
             onActivate: onActivate, preferredSelection: filtered.bestMatch)
