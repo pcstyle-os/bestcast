@@ -39,7 +39,7 @@ the keycap rendering — only the _engine_ differs.
 - **The Hyper tap's callback never touches the main actor.** It runs on its own thread, and every
   decision it makes is `HyperKeyRewriter`'s, which is pure and clock-injected for `hotkey-test`.
 - **`KeyShortcut.hyperChord(includesShift:)` is the only spelling of the Hyper chord**, read by both the
-  ✦ collapse and the re-point below. `HyperKeyTap` composes its own flags because it also needs the
+  ✦ collapse and the re-point below. `HyperKeyRewriter` composes its own flags because it also needs the
   left-side device bits, which no display path wants.
 
 ## Persistence
@@ -254,8 +254,9 @@ any main-actor stall — a heavy view update, a synchronous IO path — therefor
 reader typed in any app while a Hyper key was configured, and a long enough stall got the tap disabled
 by timeout. So `HyperKeyTap` creates the port on main and hands its run loop source to a dedicated
 `Thread` (`com.tinycast.hyper-key-tap`, user-interactive QoS) that runs its own `CFRunLoop`. It is a
-thread, not an actor: the callback shares exactly one thing with the main actor, a
-`Mutex<HyperKeyRewriter>`, held only for the pure decision. Settings reach it as a whole
+thread, not an actor: the callback shares two things with the main actor, each behind a `Mutex` — the
+`HyperKeyRewriter`, locked only for the pure decision, and the tap's CF handles, which both sides
+enable, query and tear down through thread-safe tap calls. Settings reach it as a whole
 `HyperKeyRewriter.Configuration` pushed whenever Hyper Key, Include Shift or Quick Press moves, and
 Quick Press leaves it through a `Task` onto main. Teardown invalidates the port and stops that run
 loop, and the thread's block owns the callback's context until the loop has returned, so a callback
