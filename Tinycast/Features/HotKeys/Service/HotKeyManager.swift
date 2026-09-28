@@ -250,7 +250,8 @@ final class HotKeyManager {
         return actions
     }
 
-    private func displayName(of action: HotKeyAction) -> String {
+    /// The action as its command row spells it, for the conflict callout and VoiceOver alike.
+    func displayName(of action: HotKeyAction) -> String {
         switch action {
         case .togglePalette:
             return "App Launcher"

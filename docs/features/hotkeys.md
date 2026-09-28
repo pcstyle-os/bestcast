@@ -237,9 +237,13 @@ stops until this session is active again. The HID remap outlives the process, so
 
 ## Recorder
 
-The settings recorder (`Features/HotKeys/UI/ShortcutRecorder.swift`) is deliberately **not** a focusable
-control: the active recorder is `HotKeyManager.recordingAction` state, and keys are captured by local
-NSEvent monitors while both engines are paused. It records combos, double-tapped modifiers and single
+The settings recorder (`Features/HotKeys/UI/ShortcutRecorder.swift`) is deliberately **not** a text
+control that takes the keys it records: the active recorder is `HotKeyManager.recordingAction` state,
+and keys are captured by local NSEvent monitors while both engines are paused. It is focusable only for
+activation, like a button under Keyboard Navigation: Space or Return starts and stops recording, and
+Delete clears the binding. To VoiceOver it is one button named "<action> Hotkey", whose value spells
+the binding ("Option-Space", or "Not set") followed by any reason it is not live, with Retry Hotkey,
+Open Accessibility Settings and Clear Hotkey as named actions where they apply. It records combos, double-tapped modifiers and single
 or double Globe taps by feeding its `.flagsChanged` / `.keyDown` monitors into the same pure detectors
 as the global monitor, so recording needs no event tap and no permission.
 

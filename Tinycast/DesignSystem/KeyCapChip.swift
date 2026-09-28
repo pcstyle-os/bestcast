@@ -54,4 +54,19 @@ struct KeyCapChip: View {
                 }
             }
     }
+
+    /// Caps as VoiceOver should say them, in the footer's "Command-K" spelling.
+    static func spokenChord(_ caps: [String]) -> String {
+        caps.map { spokenNames[$0] ?? $0 }.joined(separator: "-")
+    }
+
+    private static let spokenNames: [String: String] = [
+        "🌐︎": "Globe", "🌐": "Globe", "⌃": "Control", "⌥": "Option", "⇧": "Shift", "⌘": "Command",
+        "✦": "Hyper", "↵": "Return", "⌤": "Enter", "⇥": "Tab", "⌫": "Delete",
+        "⌦": "Forward Delete", "⎋": "Escape", "←": "Left Arrow", "→": "Right Arrow",
+        "↑": "Up Arrow", "↓": "Down Arrow", "↖": "Home", "↘": "End", "⇞": "Page Up",
+        "⇟": "Page Down", ",": "Comma", ".": "Period", "+": "Plus", "-": "Minus", "/": "Slash",
+        ";": "Semicolon", "'": "Quote", "=": "Equals", "[": "Left Bracket", "]": "Right Bracket",
+        "\\": "Backslash", "`": "Grave Accent"
+    ]
 }

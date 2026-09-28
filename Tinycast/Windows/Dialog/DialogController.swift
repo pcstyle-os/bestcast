@@ -117,9 +117,10 @@ final class DialogController: NSObject, NSWindowDelegate {
                 case nil, .volume: metrics.size.dialogCompactWidth
                 case .eventDraft, .snippetArguments: metrics.size.dialogWidth
                 }
+            let focus = DialogView.ButtonFocus()
             let content = hostingView(
                 DialogView(
-                    request: request, width: width,
+                    request: request, width: width, focus: focus,
                     onChoose: { [weak self] index in
                         guard Self.accepts(index, for: request) else { return }
                         self?.finish(index)
@@ -132,18 +133,27 @@ final class DialogController: NSObject, NSWindowDelegate {
             panel.handlesArrowKeys = request.accessory?.claimsArrowKeys ?? false
             panel.delegate = self
             panel.onKey = { [weak self] key in
-                guard let self else { return }
+                guard let self else { return false }
                 switch key {
                 case .cancel:
                     finish(request.cancelIndex)
                 case .confirm:
-                    guard Self.accepts(request.defaultIndex, for: request) else { return }
+                    guard Self.accepts(request.defaultIndex, for: request) else { return true }
                     finish(request.defaultIndex)
                 case .increment, .decrement:
                     // Keying the slider lands on the same values Volume Up/Down produce.
-                    guard case .volume(let volume) = request.accessory else { return }
+                    guard case .volume(let volume) = request.accessory else { return true }
                     volume.level = VolumeLevel.stepped(volume.level, up: key == .increment)
+                case .focusNext, .focusPrevious:
+                    let index = request.tabStop(after: focus.index, backwards: key == .focusPrevious)
+                    focus.index = index
+                    if let index { announce(button: request.actions[index].title) }
+                case .activateFocused:
+                    guard let index = focus.index else { return false }
+                    guard Self.accepts(index, for: request) else { return true }
+                    finish(index)
                 }
+                return true
             }
             self.panel = panel
             place(panel)
@@ -176,6 +186,12 @@ final class DialogController: NSObject, NSWindowDelegate {
         guard NSWorkspace.shared.isVoiceOverEnabled else { return }
         let spoken = [request.title, request.message].compactMap { $0 }.joined(separator: ". ")
         AccessibilityNotification.Announcement(spoken).post()
+    }
+
+    /// ⇥ moves a ring VoiceOver cannot see, for the same reason the question is read out.
+    private func announce(button title: String) {
+        guard NSWorkspace.shared.isVoiceOverEnabled else { return }
+        AccessibilityNotification.Announcement("\(title), button").post()
     }
 
     /// A refused primary action leaves the dialog up, as a greyed-out button would.
@@ -226,6 +242,6 @@ final class DialogController: NSObject, NSWindowDelegate {
     /// Click-away resolves as a dismissal rather than leaving an orphaned dialog behind.
     func windowDidResignKey(_ notification: Notification) {
         guard let panel, notification.object as? NSWindow === panel else { return }
-        panel.onKey?(.cancel)
+        _ = panel.onKey?(.cancel)
     }
 }

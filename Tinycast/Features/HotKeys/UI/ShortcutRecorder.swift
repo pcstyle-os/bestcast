@@ -35,7 +35,19 @@ struct ShortcutRecorder: View {
             // An over-long binding truncates rather than resizing the field.
             .clipShape(shape)
             .contentShape(shape)
-            .onTapGesture { hotKeys.recordingAction = isRecording ? nil : action }
+            .onTapGesture(perform: toggleRecording)
+            // Only under Keyboard Navigation, as a button is; recording still runs on the monitors.
+            .focusable(interactions: .activate)
+            .contentShape(.focusEffect, shape)
+            .onKeyPress(keys: [.space, .return]) { _ in
+                toggleRecording()
+                return .handled
+            }
+            .onKeyPress(keys: [.delete, .deleteForward]) { _ in
+                guard hotKeys.binding(for: action) != nil else { return .ignored }
+                hotKeys.setBinding(nil, for: action)
+                return .handled
+            }
             .onHover { hovered = $0 }
             // Hand the callout this field's bounds while it's the open one.
             .anchorPreference(key: ShortcutRecorderAnchorKey.self, value: .bounds) {
@@ -51,6 +63,53 @@ struct ShortcutRecorder: View {
             // Opening Settings is when the reader looks, so a chord freed since then goes live.
             .onAppear { hotKeys.retryRegistration(for: action) }
             .animation(.easeOut(duration: 0.12), value: hovered)
+            // One element: the triangle and the hover-only clear button become its named actions.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(hotKeys.displayName(of: action)) Hotkey")
+            .accessibilityValue(spokenValue)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { toggleRecording() }
+            .accessibilityActions {
+                if hotKeys.registrationIssue(for: action) != nil {
+                    Button("Retry Hotkey") { hotKeys.retryRegistration(for: action) }
+                }
+                if needsAccessibilityGrant {
+                    Button("Open Accessibility Settings") { Permissions.openAccessibilitySettings() }
+                }
+                if hotKeys.binding(for: action) != nil {
+                    Button("Clear Hotkey") { hotKeys.setBinding(nil, for: action) }
+                }
+            }
+    }
+
+    private func toggleRecording() {
+        hotKeys.recordingAction = isRecording ? nil : action
+    }
+
+    private var needsAccessibilityGrant: Bool {
+        hotKeys.binding(for: action)?.usesModifierTapMonitor == true
+            && modifierTapMonitor.needsAccessibility
+    }
+
+    /// The binding in words, then whatever keeps it from firing — what the triangle's tooltip says.
+    private var spokenValue: String {
+        if isRecording { return "Listening" }
+        guard let binding = hotKeys.binding(for: action) else { return "Not set" }
+        let keys = Self.spokenName(of: binding)
+        if needsAccessibilityGrant {
+            return "\(keys). Modifier-only hotkeys need Accessibility access."
+        }
+        guard let issue = hotKeys.registrationIssue(for: action) else { return keys }
+        return "\(keys). \(issue.message)"
+    }
+
+    private static func spokenName(of binding: HotKeyBinding) -> String {
+        switch binding {
+        case .combo(let shortcut): KeyCapChip.spokenChord(shortcut.keycaps)
+        case .doubleTap(let modifier): "Double-tap " + KeyCapChip.spokenChord([modifier.glyph])
+        case .globe: "Globe"
+        case .doubleGlobe: "Double-tap Globe"
+        }
     }
 
     @ViewBuilder
@@ -68,7 +127,7 @@ struct ShortcutRecorder: View {
     private func boundLabel(_ binding: HotKeyBinding) -> some View {
         HStack(spacing: Theme.Spacing.xs) {
             // A modifier-only binding is dead without the grant, so say so where the binding is.
-            if binding.usesModifierTapMonitor, modifierTapMonitor.needsAccessibility {
+            if needsAccessibilityGrant {
                 Button {
                     Permissions.openAccessibilitySettings()
                 } label: {
@@ -76,7 +135,6 @@ struct ShortcutRecorder: View {
                         .foregroundStyle(.orange)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Open Accessibility settings")
                 .help("Modifier-only hotkeys need Accessibility access. Click to grant it.")
             } else if let issue = hotKeys.registrationIssue(for: action) {
                 Button {
@@ -86,8 +144,6 @@ struct ShortcutRecorder: View {
                         .foregroundStyle(.orange)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Retry shortcut")
-                .accessibilityHint(issue.message)
                 .help(issue.message)
             }
             ForEach(Array(binding.keycaps.enumerated()), id: \.offset) { _, cap in

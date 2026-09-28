@@ -80,6 +80,9 @@ struct AIScreen: PaletteScreen {
         return PopoverMenuContent(header: chatCoordinator.title(of: chat), items: items)
     }
 
+    /// The one row is the conversation, so landing here says which chat the composer continues.
+    func spokenTitle(at selection: Int) -> String? { chatCoordinator.title(of: chat) }
+
     /// Return and the pill are the same action; an empty composer sends nothing.
     func activate(at selection: Int) {
         if chat.isStreaming {

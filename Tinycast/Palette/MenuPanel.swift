@@ -75,8 +75,8 @@ final class MenuPanelController {
     private(set) var isClosing = false
 
     func show(
-        _ content: AnyView, corner: MenuPanelCorner, parent: NSWindow, core: AppCore,
-        clipPath: @escaping MenuPanelClipPath, motion: MenuPanelMotion,
+        _ content: AnyView, title: String, corner: MenuPanelCorner, parent: NSWindow,
+        core: AppCore, clipPath: @escaping MenuPanelClipPath, motion: MenuPanelMotion,
         onKeyDown: @escaping (NSEvent) -> Bool, onDismiss: @escaping () -> Void
     ) {
         let transition = beginTransition(closing: false)
@@ -84,6 +84,8 @@ final class MenuPanelController {
         reducesMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         modelScale = reducesMotion ? 1 : motion.entryScale
         let panel = ensurePanel(state: core.palette)
+        // Never drawn, since the panel is borderless; VoiceOver names the window by it.
+        panel.title = title
         let wasVisible = panel.isVisible
         configureCallbacks(
             for: panel, core: core, onKeyDown: onKeyDown, onDismiss: onDismiss)

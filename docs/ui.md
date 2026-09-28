@@ -155,7 +155,7 @@ panel, the shortcut-recorder callout and the Notes switcher, and `menuRow` is de
 `settingsSidebar 215` · `settingsRowIcon 20` · `dialogCompactWidth 290` ·
 `dialogWidth 420` · `dialogButtonHeight 34` · `dialogSymbol 28` · `dialogSymbolContainer 52` ·
 `dialogIcon 32` · `hudWidth 200` ·
-`hudHeight 100` · `volumeTrackHeight 6` · `volumeReadout 38`
+`hudHeight 100` · `volumeTrackHeight 6` · `volumeReadout 38` · `focusRing 3`
 
 Notes adds `noteWindow 520×420` (opening size on a first run only), `noteWindowMinimum 320×220`,
 `noteTitlebar 44`, `noteTitleInset 120`, `noteEditorInset 16`, `noteSearchHeight 34`,
@@ -210,7 +210,8 @@ shipped. Light is the same stop with the ink inverted, and is the only column op
 `panelScrim` is the ramp's inverse — it darkens the dark surface and lightens the light one — so it
 is an `adaptive` pair, not a `ramp`.
 `brand`, `primaryAction`, `destructive`, `success` and `dropGuideArmed` are fixed hues and adapt on
-their own.
+their own. `focusRing` is the system's `keyboardFocusIndicatorColor`, so a ring Tinycast draws
+matches every native one.
 
 Beyond these, `.secondary`/`.tertiary` foreground styles are fine for SF Symbols (they resolve against
 the environment's appearance). **Selection always beats hover** when a row is both.
@@ -423,6 +424,10 @@ Glass is normally for floating controls. The dialog root is the one modal-surfac
 - **Every glyph kind shares one square `menuIcon` (20) slot**, which pins one row height. A native SF Symbol uses the dedicated 14pt Medium `menuSymbol` font; file and brand icons keep their own artwork sizing inside the same slot, and a thumbnail fills it.
 - Menu rows use the `md` icon→label gap; the fixed slot adds the remaining optical slack.
 - **A menu's rows are a `LazyVStack`**, so opening one builds only the rows in view: the model menu runs to hundreds, and laying all of them out took seconds. The viewport's height is worked out from the row count, never measured, so nothing needs the rest. The rows hold no AppKit control, which is what keeps a lazy stack safe here (see Settings lists below).
+- **A menu is named for VoiceOver by what opens it** — `Actions`, the app menu, `Type`, `Category`,
+  `Model` — and its rows are buttons whose hint spells the shortcut the chips show
+  (`KeyCapChip.spokenChord`, "Shift-Command-C"). See
+  [features/palette.md](features/palette.md#the-menus-own-window).
 
 ---
 
@@ -476,7 +481,7 @@ sole owner rule) and is the only presenter, so every confirmation in the app loo
   secondary message, optional accessory and full-width actions. Content uses a 22-point inset while
   the actions keep the tighter `dialogInset 18`. One action spans the row; two sit side by side with
   **Cancel rendered leading** only while both labels fit on one line, then `ViewThatFits` stacks them.
-  Three or more always stack in the caller's semantic order. `DialogView.visualOrder` reorders only
+  Three or more always stack in the caller's semantic order. `DialogRequest.visualOrder` reorders only
   horizontal display;
   `onChoose(index)` still dispatches against `DialogRequest.actions`' original order, so a caller
   never has to think about layout position when it builds a request. Every role uses the regular
@@ -492,6 +497,15 @@ sole owner rule) and is the only presenter, so every confirmation in the app loo
   Arrow keys walk the volume slider along the same 5% grid the volume commands use (`DialogPanel`
   reports `.increment` / `.decrement` and `DialogController` applies `VolumeLevel.stepped`, so the
   panel never learns what a volume step is); click-away resolves as a dismissal.
+- **⇥ walks the buttons, whatever Keyboard Navigation is set to.** A dialog's third button — the MCP
+  approval's Always Allow — has no key of its own, so `DialogPanel` takes ⇥ / ⇧⇥ and moves a
+  `DialogView.ButtonFocus` through `DialogRequest.visualOrder`, wrapping at either end, and Space
+  presses the button it rests on, as on any native control. Return and Escape keep their jobs, so
+  Escape still resolves the cancel action and never whichever button holds the ring. While a text
+  field is editing, ⇥ and Space stay the field's. The ring is `ModalActionButtonStyle`'s
+  `showsFocus`: a `focusRing` capsule, `Size.focusRing` wide, just outside the button — drawn too
+  when AppKit focuses the button itself, so a Settings editor's buttons show it under Keyboard
+  Navigation. VoiceOver hears the button's title when the ring lands.
 - **Async, not modal.** Presentation is `async` (`withCheckedContinuation`), so there is no nested run
   loop. A held hotkey can't stack dialogs: while one is up, a second request resolves immediately as a
   dismissal — which is why the old `isConfirmingCommand` re-entrancy flag is gone. The guard is keyed
