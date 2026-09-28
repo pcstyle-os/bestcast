@@ -11,6 +11,14 @@ enum CalcTokenizer {
         var functionDepth: Int?
 
         func isDigit(_ ch: Unicode.Scalar) -> Bool { (48...57).contains(ch.value) }
+        /// A comma is grouping only before exactly three digits, so `2,5` never reads as 25.
+        func opensGroup(_ comma: Int) -> Bool {
+            let group = comma + 1..<comma + 4
+            guard group.upperBound <= chars.count, group.allSatisfy({ isDigit(chars[$0]) }) else {
+                return false
+            }
+            return group.upperBound == chars.count || !isDigit(chars[group.upperBound])
+        }
 
         while i < chars.count {
             let ch = chars[i]
@@ -41,8 +49,7 @@ enum CalcTokenizer {
                     let c = chars[i]
                     if isDigit(c) {
                         text.unicodeScalars.append(c)
-                    } else if c == "," && functionDepth == nil && i + 1 < chars.count && isDigit(chars[i + 1])
-                    {
+                    } else if c == "," && functionDepth == nil && !seenDot && opensGroup(i) {
                         // grouping separator between digits — skip
                     } else if c == "." && !seenDot {
                         seenDot = true
@@ -192,6 +199,10 @@ enum CalcTokenizer {
                 tokens.append(.ident("sqrt"))
             case "∛":
                 tokens.append(.ident("cbrt"))
+            case "²":
+                tokens += [.op(.power), .number(2)]
+            case "³":
+                tokens += [.op(.power), .number(3)]
             case "=":
                 // Tolerate a trailing "=" ("2+2="); anywhere else it's not calculator input.
                 guard i == chars.count - 1 else { return nil }

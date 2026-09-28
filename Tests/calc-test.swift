@@ -71,6 +71,25 @@ struct CalcTests {
         expectDisplay("√16m2", "4 m")
         expectNil("√")
         expectNil("5 + √")
+        expectDisplay("3²", "9")
+        expectDisplay("(1+2)²", "9")
+        expectDisplay("3²+4²", "25")
+        expectDisplay("2³ - 1", "7")
+        expectDisplay("1m² + 10ft²", "20.76391042 ft²")
+        expectDisplay("2x3", "6")
+        expectDisplay("10%of 200", "20")
+        expectDisplay("  7 * 6  ", "42")
+        expectErrorWithoutRates("12usd in eur", "Exchange rates unavailable — check your connection.")
+
+        // A grouping comma owes exactly three digits; anything else is a typo, not a thousand
+        expectNil("1,5*2")
+        expectNil("2,5 + 1")
+        expectNil("1,2345 + 1")
+        expectNil("1 000 + 1")  // an ordinary space is never grouping
+        expectDisplay("1,234,567 * 2", "2,469,134")
+        expectDisplay("1,000.5 + 1", "1,001.5")
+        expectDisplay("average of 10,20,30", "20")
+        expectDisplay("sum of 1,2", "3")
 
         // Compact thousands suffix — attached `k` is a number suffix; spaced `k` remains Kelvin
         expectDisplay("10k", "10,000")

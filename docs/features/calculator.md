@@ -69,7 +69,8 @@ there is no second arithmetic parser or fallback evaluation of a completed scala
 
 `CalcTokenizer` scans Unicode scalars, retaining canonical-equivalent accented currency names.
 `CalcOperator` owns operator identity, binding power and spelling; `CalcMath` owns the function and
-constant catalog; `√` and `∛` tokenize as `sqrt` and `cbrt`, so `√16` and `2√16` answer. Spoken
+constant catalog; `√` and `∛` tokenize as `sqrt` and `cbrt`, so `√16` and `2√16` answer, and a
+`²` or `³` outside a unit name is a power, so `3²+4²` is 25 while `m²` stays area. Spoken
 roots use the typed parser too: `square root of 25m2` is `5 m`, and `cube root of -8m3` is `-2 m`.
 Dimensionless results can feed base conversion too: `2m / 2m to hex` is `0x1`.
 `CalcNumberBase` owns radix names and prefixes for both tokens and results. A conversion target is
@@ -433,8 +434,9 @@ and currency paths so a spelled-out word never outranks a measurement:
 - `round 47 to nearest 5` → 45, snapping to a step rather than a digit count
 
 `CalcToken.comma` separates these lists and function arguments. Outside function parentheses,
-a comma **between digits** remains a grouping separator, so `1,000 + 234` is unchanged and a bare
-`10,5` stays silent. Where the comma is the decimal, `;` takes its place — see
+a comma **before exactly three digits** remains a grouping separator, so `1,000 + 234` is unchanged.
+Any other comma separates, so `2,5 + 1` stays silent rather than reading as 25, and
+`average of 10,20,30` is 20. Where the comma is the decimal, `;` takes its place — see
 [Number format](#number-format).
 
 Each of these badges what its number **is** — `Tip`, `Discounted`, `Percentage`, `Total`, `Ratio`,
