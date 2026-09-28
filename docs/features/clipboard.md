@@ -47,6 +47,7 @@
 - **A paste queue runs in marking order, and `PasteQueue` alone decides what comes next.** It
   holds ids, never copies; an entry deleted since it was marked leaves the run before the run is
   counted, so the press that says **Queue finished** really is the last, and that press empties it.
+  A delete from the palette drops the entry at once, so every badge still names its paste's number.
   The queue is in memory on `ClipboardCoordinator`: it outlives the palette hiding between
   presses, never a relaunch, and switching the feature off clears it.
 - **An image is kept in the representation the app offered**, in the order PNG, JPEG, HEIC, TIFF;

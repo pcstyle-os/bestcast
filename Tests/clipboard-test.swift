@@ -36,6 +36,7 @@ struct ClipboardTests {
         offersTextExtraction()
         pasteQueuePastesInMarkingOrder()
         pasteQueueSkipsWhatWasDeleted()
+        pasteQueueNumbersCloseOverADelete()
         pasteQueueToggles()
         pasteAllJoinsTheText()
         itemLookupReachesPastTheWindow()
@@ -805,6 +806,28 @@ struct ClipboardTests {
         gone.toggle(e[5].id)
         expect(gone.advance(resolve: resolver([])) == nil, "a run of deleted entries pastes nothing")
         expect(gone.ids.isEmpty, "and is cleared")
+    }
+
+    /// A badge promises the number its paste reports, so a delete must renumber what follows it.
+    static func pasteQueueNumbersCloseOverADelete() {
+        let e = queueEntries
+        var queue = PasteQueue()
+        for index in [4, 1, 3, 5] { queue.toggle(e[index].id) }
+        let first = queue.advance(resolve: resolver(e))
+        expect(first?.message == "Pasted 1 of 4", "the run starts at four")
+
+        let survivors = e.filter { $0.id != e[3].id }
+        let live = queue.dropDeleted(resolve: resolver(survivors))
+        expect(live.map(\.id) == [e[1].id, e[5].id], "the deleted mark leaves, the rest keep order")
+        expect(queue.position(of: e[5].id) == 3, "the mark behind it moves up a number")
+        expect(queue.pending.count == 2, "and the queued count drops with it")
+
+        let second = queue.advance(resolve: resolver(survivors))
+        expect(second?.message == "Pasted 2 of 3", "what was already pasted keeps its count")
+        let third = queue.advance(resolve: resolver(survivors))
+        expect(
+            third?.item.id == e[5].id && third?.message == "Pasted 3 of 3 · Queue finished",
+            "so the badge's number is the one the HUD says")
     }
 
     static func pasteQueueToggles() {

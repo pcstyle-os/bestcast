@@ -44,9 +44,7 @@ struct PasteQueue: Equatable, Sendable {
 
     /// Drops what `resolve` no longer finds first, so the last press knows it is last.
     mutating func advance(resolve: (ClipboardItem.ID) -> ClipboardItem?) -> Step? {
-        let live = pending.compactMap(resolve)
-        ids = Array(ids[..<pasted]) + live.map(\.id)
-        guard let item = live.first else {
+        guard let item = dropDeleted(resolve: resolve).first else {
             self = PasteQueue()
             return nil
         }
@@ -54,6 +52,14 @@ struct PasteQueue: Equatable, Sendable {
         let step = Step(item: item, position: pasted, total: ids.count)
         if step.isLast { self = PasteQueue() }
         return step
+    }
+
+    /// Closes the numbering over deleted entries; what the run already pasted keeps its count.
+    @discardableResult
+    mutating func dropDeleted(resolve: (ClipboardItem.ID) -> ClipboardItem?) -> [ClipboardItem] {
+        let live = pending.compactMap(resolve)
+        ids = Array(ids[..<pasted]) + live.map(\.id)
+        return live
     }
 
     /// Paste All's text: each pending entry's plain text on a line of its own; an image has none.

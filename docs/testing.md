@@ -403,7 +403,8 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - A tall phone screenshot and a full-width Retina screenshot copy each line once, whole, in order
 - ⇧⌘A on three rows numbers them 1–3; with Paste Next Queued Clip bound, three presses in TextEdit
   paste them in that order with **Pasted 1 of 3** … **Pasted 3 of 3 · Queue finished**, and a fourth
-  says nothing is queued; hiding and reopening the palette mid-run keeps the numbers
+  says nothing is queued; hiding and reopening the palette mid-run keeps the numbers, and ⌃X on a
+  queued row renumbers the badges behind it
 - ⌘K ▸ Paste All pastes the queued text a line each, skipping a queued image
 - An image copied in Safari (TIFF + JPEG) adds a `.jpeg` blob; copying it again moves the row to the
   top without a second file; pasting it into TextEdit, Pages and a browser field shows the image

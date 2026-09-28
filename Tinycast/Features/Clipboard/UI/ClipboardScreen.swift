@@ -27,8 +27,7 @@ struct ClipboardScreen: PaletteScreen {
 
     func actions(at selection: Int) -> PopoverMenuContent? {
         guard let item = item(at: selection) else { return nil }
-        return ClipboardActionsMenu.content(
-            item: item, core: core, store: store, target: vm.pasteTarget)
+        return ClipboardActionsMenu.content(item: item, core: core, target: vm.pasteTarget)
     }
 
     func activate(at selection: Int) {
@@ -96,7 +95,7 @@ struct ClipboardScreen: PaletteScreen {
     /// ⌘⌫ / ⌃X — the screen owns the chord whether or not a row sits under the selection.
     private func delete(at selection: Int) {
         guard let item = item(at: selection) else { return }
-        store.remove(item)
+        core.clipboardCoordinator.deleteClip(item)
     }
 
     /// ⌃⇧X — mirrors the Actions row, confirmation included; pinned entries go with the rest.
@@ -171,7 +170,7 @@ private struct ClipFollowKey: Equatable {
 @MainActor
 enum ClipboardActionsMenu {
     static func content(
-        item: ClipboardItem, core: AppCore, store: ClipboardStore, target: PasteTarget?
+        item: ClipboardItem, core: AppCore, target: PasteTarget?
     ) -> PopoverMenuContent {
         let defaultAction = core.settings.clipboardDefaultAction
         // Chord order puts the default first, beside the ↵ it answers.
@@ -241,7 +240,7 @@ enum ClipboardActionsMenu {
                 title: "Delete Entry", systemImage: "trash", startsSection: true, shortcut: "⌃X",
                 isDestructive: true
             ) {
-                store.remove(item)
+                core.clipboardCoordinator.deleteClip(item)
             })
         items.append(
             PopoverMenuItem(

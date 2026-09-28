@@ -127,6 +127,12 @@ final class ClipboardCoordinator {
         pasteQueue = PasteQueue()
     }
 
+    /// ⌃X and its menu row; a queued entry leaves the run too, so no badge counts a gap.
+    func deleteClip(_ item: ClipboardItem) {
+        clipboardStore.remove(item)
+        pasteQueue.dropDeleted { clipboardStore.item(withID: $0) }
+    }
+
     /// The global chord, the launcher row and the ⌘K row alike: the next queued entry, pasted.
     func pasteNextQueued() {
         // The chord registers whatever the feature switch says, so the switch is read here.
@@ -176,6 +182,7 @@ final class ClipboardCoordinator {
     func clearHistory() {
         clipboardStore.open()
         clipboardStore.clearAll()
+        pasteQueue.dropDeleted { clipboardStore.item(withID: $0) }
         if !settings.clipboardEnabled { clipboardStore.close() }
     }
 
