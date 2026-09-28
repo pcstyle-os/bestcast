@@ -57,7 +57,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/DebugData" CODE_SIGNING_ALLOWED=NO 2>&1 \
             | tee "$RUNNER_TEMP/debug.log" | grep -E 'warning:|error:|BUILD' || true
           grep -q 'BUILD SUCCEEDED' "$RUNNER_TEMP/debug.log"
-          WARNINGS="$(grep -E '^/.*: warning:' "$RUNNER_TEMP/debug.log" | sort -u | wc -l | tr -d ' ')"
+          WARNINGS="$({ grep -E '^/.*: warning:' "$RUNNER_TEMP/debug.log" || true; } | sort -u | wc -l | tr -d ' ')"
           echo "Debug build: $WARNINGS unique warnings" >> "$GITHUB_STEP_SUMMARY"
 
       # Release-optimised, but on the dev channel's name and bundle id, so it runs beside an
