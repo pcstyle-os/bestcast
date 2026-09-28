@@ -101,6 +101,50 @@ struct ChatSearch: Equatable, Hashable, Sendable {
     /// Characters of reply text that had arrived when the search began.
     let textOffset: Int
     let sequence: Int
+    /// Live only, like `failed` and `callID`: `message_searches` has no column for any of them.
+    let kind: AIWebLookup
+    var failed: Bool
+    /// The route's own id, so parallel results settle their own rows; nil where a route has none.
+    let callID: String?
+
+    init(
+        query: String?, isComplete: Bool, textOffset: Int, sequence: Int,
+        kind: AIWebLookup = .search, failed: Bool = false, callID: String? = nil
+    ) {
+        self.query = query
+        self.isComplete = isComplete
+        self.textOffset = textOffset
+        self.sequence = sequence
+        self.kind = kind
+        self.failed = failed
+        self.callID = callID
+    }
+
+    var title: String {
+        switch (kind, isComplete, failed) {
+        case (.search, _, true): return "Search failed"
+        case (.search, true, false): return "Searched web"
+        case (.search, false, false): return "Searching web"
+        case (.fetch, _, true): return "Fetch failed"
+        case (.fetch, true, false): return "Fetched page"
+        case (.fetch, false, false): return "Fetching page"
+        }
+    }
+}
+
+extension Array where Element == ChatSearch {
+    /// A result naming its call settles that one; a route with no ids closes every open search.
+    mutating func settle(id: String?, query: String?, failed: Bool) {
+        let target =
+            id.flatMap { id in lastIndex { $0.callID == id } } ?? lastIndex { !$0.isComplete }
+        if let target {
+            self[target].query = self[target].query ?? query
+            self[target].failed = failed
+        }
+        for index in indices where id == nil || index == target {
+            self[index].isComplete = true
+        }
+    }
 }
 
 /// One tool call inside a reply: live while it runs, a record of what ran once it is done.

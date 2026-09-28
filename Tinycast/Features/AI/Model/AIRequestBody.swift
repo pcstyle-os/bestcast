@@ -72,7 +72,7 @@ enum AIRequestBody {
         return body
     }
 
-    /// The basic tool, as every model takes it; `max_uses` keeps its loop short of a `pause_turn`.
+    /// The basic tool, as every model takes it; `max_uses` bounds what one reply spends searching.
     static var anthropicWebSearch: [String: Any] {
         ["type": "web_search_20250305", "name": "web_search", "max_uses": 5]
     }

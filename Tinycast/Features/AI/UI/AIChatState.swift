@@ -226,22 +226,19 @@ final class AIChatState {
             if !pendingText.isEmpty { flushPendingText() }
             pendingReasoning += text
             scheduleFlush()
-        case .searching(let query):
+        case .searching(let query, let kind, let id):
             flushPendingText()
             guard var message = session.messages.last, message.role == .assistant else { return }
             isThinking = false
             message.searches.append(
                 ChatSearch(
                     query: query, isComplete: false, textOffset: message.text.count,
-                    sequence: message.nextSequence))
+                    sequence: message.nextSequence, kind: kind, callID: id))
             session.replaceLast(with: message)
-        case .searched(let query):
+        case .searched(let query, let id, let failed):
             flushPendingText()
             guard var message = session.messages.last, message.role == .assistant else { return }
-            if let index = message.searches.lastIndex(where: { !$0.isComplete }) {
-                message.searches[index].query = message.searches[index].query ?? query
-            }
-            message.searches = message.searches.map { Self.completed($0) }
+            message.searches.settle(id: id, query: query, failed: failed)
             session.replaceLast(with: message)
         case .toolCall(let id, let origin, let title):
             flushPendingText()

@@ -130,7 +130,9 @@ enum InstalledAIStreamDecoder {
                     frame.startedSearches.append(id)
                     let input = block["input"] as? [String: Any]
                     frame.events.append(
-                        .searching(ClaudeWebSearchLaunch.label(tool: name, input: input)))
+                        .searching(
+                            ClaudeWebSearchLaunch.label(tool: name, input: input),
+                            kind: ClaudeWebSearchLaunch.kind(of: name), id: id))
                 } else if !servers.isEmpty, let call = ClaudeMCPLaunch.route(name) {
                     frame.events.append(
                         .toolCall(
@@ -139,11 +141,11 @@ enum InstalledAIStreamDecoder {
                 }
             case "tool_result":
                 guard let id = block["tool_use_id"] as? String else { continue }
+                let isError = block["is_error"] as? Bool == true
                 if searches.contains(id) || frame.startedSearches.contains(id) {
-                    frame.events.append(.searched(nil))
+                    frame.events.append(.searched(nil, id: id, failed: isError))
                 } else if !servers.isEmpty {
-                    frame.events.append(
-                        .toolResult(id: id, isError: block["is_error"] as? Bool == true))
+                    frame.events.append(.toolResult(id: id, isError: isError))
                 }
             default:
                 continue

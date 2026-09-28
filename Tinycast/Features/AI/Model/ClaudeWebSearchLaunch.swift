@@ -23,9 +23,13 @@ enum ClaudeWebSearchLaunch {
         ]
     }
 
+    static func kind(of tool: String) -> AIWebLookup {
+        tool == "WebFetch" ? .fetch : .search
+    }
+
     /// What a search row names: the query, or for a fetch the page it read.
     static func label(tool: String, input: [String: Any]?) -> String? {
-        let value = (input?[tool == "WebFetch" ? "url" : "query"] as? String)?
+        let value = (input?[kind(of: tool) == .fetch ? "url" : "query"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return value?.isEmpty == false ? value : nil
     }

@@ -61,7 +61,9 @@ struct AIStreamDecoder: Sendable {
     private var usage = AIUsage()
     private var partialToolCalls: [Int: PartialToolCall] = [:]
     /// Anthropic's own searches by block index, each gathering its query as the JSON streams in.
-    private var searchQueries: [Int: String] = [:]
+    private var searchQueries: [Int: (id: String, query: String)] = [:]
+    /// Searches shown as running whose result block has not arrived yet.
+    private var openSearches: [String] = []
     private var citations = AnthropicCitations()
     private(set) var isTerminal = false
 
@@ -168,9 +170,11 @@ struct AIStreamDecoder: Sendable {
                     id: event.contentBlock?.id ?? "", name: event.contentBlock?.name ?? "",
                     arguments: "")
             case "server_tool_use" where event.contentBlock?.name == "web_search":
-                searchQueries[index] = ""
+                searchQueries[index] = (event.contentBlock?.id ?? "", "")
             case "web_search_tool_result":
-                return [.searched(nil)]
+                let id = event.contentBlock?.toolUseID
+                openSearches.removeAll { $0 == id }
+                return [.searched(nil, id: id, failed: event.contentBlock?.isSearchError == true)]
             default:
                 break
             }
@@ -183,7 +187,7 @@ struct AIStreamDecoder: Sendable {
             if event.delta?.type == "input_json_delta" {
                 let fragment = event.delta?.partialJSON ?? ""
                 partialToolCalls[index]?.arguments += fragment
-                searchQueries[index]? += fragment
+                searchQueries[index]?.query += fragment
                 return []
             }
             if event.delta?.type == "citations_delta", let citation = event.delta?.citation {
@@ -195,8 +199,9 @@ struct AIStreamDecoder: Sendable {
             return [.thinking, .reasoning(thinking)]
         case "content_block_stop":
             // The query is whole once its block closes; the search itself runs after that.
-            if let query = searchQueries.removeValue(forKey: index) {
-                return [.searching(Self.searchQuery(query))]
+            if let search = searchQueries.removeValue(forKey: index) {
+                openSearches.append(search.id)
+                return [.searching(Self.searchQuery(search.query), id: search.id)]
             }
             return citations.close(index).map { [.text($0)] } ?? []
         case "message_start":
@@ -208,9 +213,12 @@ struct AIStreamDecoder: Sendable {
             return [.usage(usage)]
         case "message_delta":
             usage.outputTokens = event.usage?.outputTokens ?? usage.outputTokens
+            // No result by now means it never ran: no server block is resent to run it later.
+            let unrun = openSearches.map { AIStreamEvent.searched(nil, id: $0, failed: true) }
+            openSearches.removeAll()
             // The calls are complete here, and `message_stop` may never arrive on a tool turn.
-            guard event.delta?.stopReason == "tool_use" else { return [.usage(usage)] }
-            return [.usage(usage)] + flushToolCalls()
+            guard event.delta?.stopReason == "tool_use" else { return [.usage(usage)] + unrun }
+            return [.usage(usage)] + unrun + flushToolCalls()
         case "message_stop":
             isTerminal = true
             return flushToolCalls() + [.finished]
@@ -351,16 +359,25 @@ private struct AnthropicCitations {
         return " (" + links + ")" + held
     }
 
-    /// A title that cannot close its own brackets, and a URL that cannot close its parenthesis.
+    /// What inline Markdown acts on inside link text; `|` would split a table cell around it.
+    private static let markdownActive: Set<Character> = [
+        "\\", "`", "*", "_", "[", "]", "<", ">", "&", "~", "|"
+    ]
+
+    /// A title escaped so it cannot end its own link, and a URL that cannot close its parenthesis.
     private static func source(url: String?, title: String?) -> (url: String, title: String)? {
         guard let url, !url.contains(where: \.isWhitespace), let parsed = URL(string: url),
             let host = parsed.host(), ["http", "https"].contains(parsed.scheme?.lowercased())
         else { return nil }
         let safeURL = url.replacingOccurrences(of: "(", with: "%28")
             .replacingOccurrences(of: ")", with: "%29")
-        let name = (title ?? "").replacing(#/\s*[\[\]\n\r]+\s*/#, with: " ")
+        let name = (title ?? "").replacing(#/\s*[\n\r]+\s*/#, with: " ")
             .trimmingCharacters(in: .whitespaces)
-        return (safeURL, name.isEmpty ? host : name)
+        let label = (name.isEmpty ? host : name).reduce(into: "") { label, character in
+            if markdownActive.contains(character) { label.append("\\") }
+            label.append(character)
+        }
+        return (safeURL, label)
     }
 }
 
@@ -386,9 +403,30 @@ private struct AnthropicEvent: Decodable {
     }
 
     struct ContentBlock: Decodable {
+        struct ResultError: Decodable { let type: String? }
+
         let type: String?
         let id: String?
         let name: String?
+        let toolUseID: String?
+        /// A search result's `content` is a list of pages, or one error object when it failed.
+        let resultError: ResultError?
+
+        var isSearchError: Bool { resultError?.type == "web_search_tool_result_error" }
+
+        enum CodingKeys: String, CodingKey {
+            case type, id, name, content
+            case toolUseID = "tool_use_id"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            type = try container.decodeIfPresent(String.self, forKey: .type)
+            id = try container.decodeIfPresent(String.self, forKey: .id)
+            name = try container.decodeIfPresent(String.self, forKey: .name)
+            toolUseID = try container.decodeIfPresent(String.self, forKey: .toolUseID)
+            resultError = try? container.decodeIfPresent(ResultError.self, forKey: .content)
+        }
     }
 
     struct Usage: Decodable {

@@ -388,10 +388,16 @@ struct InstalledAITests {
         expect(
             Array(events.filter { if case .text = $0 { false } else { true } }.prefix(4))
                 == [
-                    .searching("Łódź weather"), .searched(nil),
-                    .searching("https://example.org/łódź?q=1"), .searched(nil)
+                    .searching("Łódź weather", id: "toolu_search"),
+                    .searched(nil, id: "toolu_search"),
+                    .searching("https://example.org/łódź?q=1", kind: .fetch, id: "toolu_fetch"),
+                    .searched(nil, id: "toolu_fetch", failed: true)
                 ],
             "a search and a fetch each become a row named by its trimmed query or page")
+        expect(
+            ClaudeWebSearchLaunch.kind(of: "WebFetch") == .fetch
+                && ClaudeWebSearchLaunch.kind(of: "WebSearch") == .search,
+            "a fetch is a page read, not a search, and its is_error result settles it as failed")
         expect(
             events.contains(.text("Claude reply")) && events.last == .finished,
             "and the reply still streams and finishes after them")
@@ -440,8 +446,10 @@ struct InstalledAITests {
         }
         expect(
             rows == [
-                .searching("Łódź weather"), .searched(nil),
-                .searching("https://example.org/łódź?q=1"), .searched(nil),
+                .searching("Łódź weather", id: "toolu_search"),
+                .searched(nil, id: "toolu_search"),
+                .searching("https://example.org/łódź?q=1", kind: .fetch, id: "toolu_fetch"),
+                .searched(nil, id: "toolu_fetch", failed: true),
                 .toolCall(id: "toolu_stub", origin: "Probe", title: "safe_echo"),
                 .toolResult(id: "toolu_stub", isError: false)
             ],
