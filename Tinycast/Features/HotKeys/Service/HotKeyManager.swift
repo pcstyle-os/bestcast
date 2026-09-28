@@ -133,6 +133,17 @@ final class HotKeyManager {
 
     func binding(for action: HotKeyAction) -> HotKeyBinding? { bindings[action] }
 
+    /// Why a bound combo is not firing, or nil once Carbon accepted it and macOS doesn't claim it.
+    func registrationIssue(for action: HotKeyAction) -> HotKeyRegistrationIssue? {
+        center.issues[action.defaultsKey]
+    }
+
+    /// A no-op for a live combo, so any surface may call it whenever the reader looks.
+    func retryRegistration(for action: HotKeyAction) {
+        guard registrationIssue(for: action) != nil else { return }
+        center.retry(id: action.defaultsKey)
+    }
+
     private func storedBinding(for action: HotKeyAction) -> HotKeyBinding? {
         // The stored value is a JSON string; anything else reads as unbound.
         guard

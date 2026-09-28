@@ -47,6 +47,8 @@ struct ShortcutRecorder: View {
             .onChange(of: action) { old, _ in
                 if hotKeys.recordingAction == old { hotKeys.recordingAction = nil }
             }
+            // Opening Settings is when the reader looks, so a chord freed since then goes live.
+            .onAppear { hotKeys.retryRegistration(for: action) }
             .animation(.easeOut(duration: 0.12), value: hovered)
     }
 
@@ -75,6 +77,17 @@ struct ShortcutRecorder: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open Accessibility settings")
                 .help("Modifier-only hotkeys need Accessibility access. Click to grant it.")
+            } else if let issue = hotKeys.registrationIssue(for: action) {
+                Button {
+                    hotKeys.retryRegistration(for: action)
+                } label: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retry shortcut")
+                .accessibilityHint(issue.message)
+                .help(issue.message)
             }
             ForEach(Array(binding.keycaps.enumerated()), id: \.offset) { _, cap in
                 Text(cap)
