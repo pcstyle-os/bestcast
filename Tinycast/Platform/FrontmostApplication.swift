@@ -28,6 +28,8 @@ enum FrontmostApplication {
     private static func focusedPID() -> pid_t? {
         let systemWide = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(systemWide, timeout)
+        // On the system-wide element the timeout is process-global; 0 restores the default.
+        defer { AXUIElementSetMessagingTimeout(systemWide, 0) }
         var value: CFTypeRef?
         guard
             AXUIElementCopyAttributeValue(
