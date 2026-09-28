@@ -430,14 +430,21 @@ and currency paths so a spelled-out word never outranks a measurement:
 - `50 is what % of 200` → 25%, the spoken form of `as % of`
 - `30 is 20% of what` → 150, solving for the whole instead of the share
 - `ratio of 1920 to 1080` → `16 : 9`, reduced by GCD; integers only
-- `average|sum|min|max of 10, 20, 30`, separated by `,` or `and`
+- `average|avg|mean|sum|total|min|max|median of 10, 20, 30`, separated by `,`, `and` or plain
+  spaces; `of` is optional when the list opens on a number, so `avg 1 2 3` and `sum 1 2 3` work.
+  Two bare numbers side by side always split (`1.5 2.5`); an operator keeps them one operand
+  (`sum of 2*3 4` is 6 and 4). Function-call spellings such as `average(1,2,3)` and `median(9,1,5)`
+  take the same words. An even-sized `median` averages its two middle values.
 - `round 47 to nearest 5` → 45, snapping to a step rather than a digit count
 
 `CalcToken.comma` separates these lists and function arguments. Outside function parentheses,
 a comma **before exactly three digits** remains a grouping separator, so `1,000 + 234` is unchanged.
 Any other comma separates, so `2,5 + 1` stays silent rather than reading as 25, and
 `average of 10,20,30` is 20. Where the comma is the decimal, `;` takes its place — see
-[Number format](#number-format).
+[Number format](#number-format). The one exception is an aggregate list (a query opening with
+`average of`, `sum 1`, …): there a run with two or more decimal commas (`average of 10,20,30`)
+can only be separators, so each comma splits, while a single comma stays a decimal
+(`average of 1,5 2,5` is 1.5 and 2.5, and `average of 2,5` is one value, so no card).
 
 Each of these badges what its number **is** — `Tip`, `Discounted`, `Percentage`, `Total`, `Ratio`,
 `Average`, `Sum`, `Minimum`, `Maximum`, `Rounded` — rather than the bare `Result` that says nothing
@@ -654,7 +661,7 @@ BTU (international table), `rpm`, pound-force (`lbf`), US/UK tons and UK liquid 
 
 Functions accept comma-separated arguments: `hypot(3,4)`, `round(3.14159,2)`, `log(8,2)`,
 `gcd(12,18)`, `lcm(4,6)`, `atan2(1,1)`, `pow(2,10)` and `root(-8,3)`.
-A one-argument `log` remains base 10. `min`, `max`, `sum`, `avg`, `mean` and `average` accept lists,
+A one-argument `log` remains base 10. `min`, `max`, `sum`, `avg`, `mean`, `average` and `median` accept lists,
 including compatible measurements: `sum(1km,500m)` gives `1.5 km`, and `hypot(3m,400cm)` gives `5 m`.
 `round(2.567km,1)` keeps the unit. Inside function arguments, commas separate values;
 write `1000` rather than `1,000` there.

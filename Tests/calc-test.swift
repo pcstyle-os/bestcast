@@ -1012,6 +1012,21 @@ struct CalcTests {
         // A comma between digits is still a grouping separator, and one operand is not a list
         expectDisplay("1,000 + 234", "1,234")
         expectNil("average of 5")
+        // Spaces separate too, `of` is optional, and median joins the family
+        expectDisplay("average of 10 20 30", "20")
+        expectDisplay("avg 1 2 3", "2")
+        expectDisplay("mean of 4, 5", "4.5")
+        expectDisplay("sum of 1 2 3", "6")
+        expectDisplay("sum 1 2 3", "6")
+        expectDisplay("average(1,2,3)", "2")
+        expectDisplay("max 4 9 2", "9")
+        expectDisplay("median of 5 1 3", "3")
+        expectDisplay("median of 1, 2, 3, 10", "2.5")
+        expectDisplay("median(9,1,5)", "5")
+        expectDisplay("average of 1.5 2.5", "2")
+        expectDisplay("sum of 2 million 3", "2,000,003")
+        expectBadges("median of 5 1 3", source: "Expression", target: "Median")
+        expectNil("avg 5")
         expectNil("10,5")
 
         // Timespans break a duration into the units that fit it
@@ -1649,6 +1664,13 @@ struct CalcTests {
         expectLocalized("average of 10; 20; 30", "20", italian)
         expectLocalized("average of 10, 20, 30", "20", italian)
         expectLocalized("sum of 1,5; 2,5", "4", italian)
+        // In an aggregate list two or more decimal commas can only be separators; a spaced pair splits
+        expectLocalized("average of 10,20,30", "20", italian)
+        expectLocalized("sum of 1,2,3", "6", italian)
+        expectLocalized("average of 1,5 2,5", "2", italian)
+        expectLocalized("sum 1,5 2,5", "4", italian)
+        expectLocalized("median of 3,1,2", "2", italian)
+        expectLocalizedNil("average of 2,5", italian)
 
         // A number with no single reading earns no card rather than a guess
         expectLocalizedNil("1,2,3", italian)

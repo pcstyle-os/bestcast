@@ -103,10 +103,12 @@ enum CalcPercent {
     }
 
     private static func parseAggregate(_ tokens: [CalcToken], query: String) -> CalcResult? {
-        guard tokens.count >= 3, case .ident(let name) = tokens[0],
-            let aggregate = aggregates[name], tokens[1] == .ident("of")
+        guard tokens.count >= 3, case .ident(let name) = tokens[0], let aggregate = aggregates[name]
         else { return nil }
-        let values = splitList(Array(tokens[2...]))
+        let hasOf = tokens[1] == .ident("of")
+        // Without `of` the list must open on a number, so `average(1,2)` stays a function call.
+        guard hasOf || isNumber(tokens[1]) else { return nil }
+        let values = splitList(Array(tokens[(hasOf ? 2 : 1)...]))
         guard values.count >= 2, let result = aggregate.reduce(values), result.isFinite
         else { return nil }
         return card(query, .number(result), target: aggregate.name)
@@ -138,18 +140,35 @@ enum CalcPercent {
         "sum": Aggregate(name: "Sum") { $0.reduce(0, +) },
         "total": Aggregate(name: "Sum") { $0.reduce(0, +) },
         "min": Aggregate(name: "Minimum") { $0.min() },
-        "max": Aggregate(name: "Maximum") { $0.max() }
+        "max": Aggregate(name: "Maximum") { $0.max() },
+        "median": Aggregate(name: "Median") { CalcMath.median($0) }
     ]
 
-    /// Each run is evaluated whole, so `sum of 2*3, 4` stays two operands.
+    /// Whether the text opens with an aggregate word and a list, for the decimal-comma reader.
+    static func opensAggregateList(_ text: String) -> Bool {
+        let words = text.lowercased().split(
+            maxSplits: 2, omittingEmptySubsequences: true, whereSeparator: \.isWhitespace)
+        guard words.count >= 2, aggregates[String(words[0])] != nil else { return false }
+        return words[1] == "of" || words[1].first?.isNumber == true
+    }
+
+    private static func isNumber(_ token: CalcToken) -> Bool {
+        switch token {
+        case .number, .compactNumber: return true
+        default: return false
+        }
+    }
+
+    /// Each run is evaluated whole, so `sum of 2*3, 4` stays two operands; two bare numbers split.
     private static func splitList(_ tokens: [CalcToken]) -> [Double] {
         var values: [Double] = []
         var current: [CalcToken] = []
         for token in tokens {
-            if token == .comma || token == .ident("and") {
+            let splitsBeforeNumber = isNumber(token) && current.last.map(isNumber) == true
+            if token == .comma || token == .ident("and") || splitsBeforeNumber {
                 guard let value = CalcExpressionParser.scalar(current) else { return [] }
                 values.append(value)
-                current = []
+                current = splitsBeforeNumber ? [token] : []
             } else {
                 current.append(token)
             }

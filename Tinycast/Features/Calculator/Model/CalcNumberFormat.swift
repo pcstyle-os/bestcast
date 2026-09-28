@@ -61,6 +61,7 @@ struct CalcNumberFormat: Equatable, Sendable {
         guard self != .english else { return query }
         let scalars = Array(query.unicodeScalars)
         var output = String.UnicodeScalarView()
+        let listsAggregate = usesDecimalComma && CalcPercent.opensAggregateList(query)
         var index = 0
         while index < scalars.count {
             let scalar = scalars[index]
@@ -81,7 +82,8 @@ struct CalcNumberFormat: Equatable, Sendable {
             if Self.isClockFragment(scalars, run: index..<end) {
                 output.append(contentsOf: run)
             } else {
-                guard let number = canonicalNumber(run) else { return nil }
+                guard let number = canonicalNumber(run) ?? (listsAggregate ? listedNumbers(run) : nil)
+                else { return nil }
                 output.append(contentsOf: number)
             }
             index = end
@@ -109,6 +111,19 @@ struct CalcNumberFormat: Equatable, Sendable {
             number.append(contentsOf: parts[1])
         }
         return number
+    }
+
+    /// In an aggregate list `10,20,30` has no single number to read, so each comma separates.
+    private func listedNumbers(_ run: ArraySlice<Unicode.Scalar>) -> [Unicode.Scalar]? {
+        let pieces = run.split(separator: decimalSeparator, omittingEmptySubsequences: false)
+        guard pieces.count > 2 else { return nil }
+        var output: [Unicode.Scalar] = []
+        for (index, piece) in pieces.enumerated() {
+            guard !piece.isEmpty, let number = canonicalNumber(piece) else { return nil }
+            if index > 0 { output.append(contentsOf: ", ".unicodeScalars) }
+            output.append(contentsOf: number)
+        }
+        return output
     }
 
     private func isGrouping(_ scalar: Unicode.Scalar) -> Bool { scalar == groupingSeparator }
