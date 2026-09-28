@@ -88,6 +88,11 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
   out of band, as `citations_delta`s on a text block, so `AIStreamDecoder` closes each cited block
   on its sources as Markdown links — ` ([title](url), …)`, ahead of the block's trailing
   punctuation, which it holds back until the block ends — and the same extraction then lists them.
+  A title is the page's own, so it is backslash-escaped where inline Markdown would act on it
+  (`\`, `` ` ``, `*`, `_`, `[`, `]`, `<`, `>`, `&`, `~`, `|`) — a title ending in `\` would otherwise
+  escape its own closing bracket and unmake the link. `ChatReferences` accepts escaped characters
+  inside a link's text, reads the title back unescaped for its chip, and never lets an escaped
+  backtick open the inline code it skips.
 - **Tools are chosen per chat.** The composer's tools menu switches MCP off for the chat or turns
   single servers off (`ChatToolScope`, held on `AIChatState`, not stored); `@server` still narrows
   one turn inside that. The scope binds both shapes alike: Tinycast's loop is offered only the
@@ -312,8 +317,10 @@ from `agent --list-models` after `agent status --format json` confirms a login.
 Turning thinking off is a reasoning effort, not a second control: `reasoningOptions(for:)` answers with
 the connection's catalogued efforts, or — for a connection with no catalog to publish one — `Default`
 and `None`. `takesThinkingField` decides who gets that pair: an OpenAI-shaped preset whose base URL is
-not that preset's own, because a preset pointed away from its own API is a gateway, and a gateway is
-the only destination Tinycast can offer the switch to honestly. Picking `None` sends
+not on that preset's own host (`targetsOwnAPI` false), because a preset pointed away from its own API is a
+gateway, and a gateway is the only destination Tinycast can offer the switch to honestly. The same
+fact gates Anthropic's web search the other way: only a connection still on Anthropic's own API is
+offered the server tool. Picking `None` sends
 `"thinking": {"type": "disabled"}`, which is how DeepSeek and the endpoints that copied its contract
 answer without reasoning first. A vendor API is never offered the pair and so is never sent a field it
 does not define — which matters precisely because the preset alone says nothing about the destination
@@ -538,6 +545,8 @@ window, and every chat action either surface sends — is the nineteenth feature
 - With web search on, ask the Anthropic API and the Claude command about today's news: each
   search shows its row ("Searching web" → "Searched web · query") before the answer, and the
   answer's sources appear as numbered chips. With it off, neither route searches or shows a row.
+  Ask the Claude command to read a page that does not exist: its row reads "Fetch failed · url".
+  An Anthropic connection pointed at any other base URL shows no web-search toggle.
 - With `Quick AI opens to: Recent Conversation` and a five-minute window, Escape out and summon again inside
   five minutes resumes the transcript; past it, the composer is empty. Quitting and relaunching still
   reopens the last conversation. `A New Conversation` is always empty.
@@ -553,7 +562,8 @@ window, and every chat action either surface sends — is the nineteenth feature
 - Collapse the sidebar with the toolbar button; ⌘N and ⌘Q (Close Window) still work, and ⌘Q with
   Settings in front closes Settings instead.
 - Harnesses: `ai-provider-test` (endpoints, request bodies — web search on and off per route —
-  stream decoding, Anthropic's search rows and citations, persistence repair, Codex framing,
+  stream decoding, Anthropic's search rows, failed and paused searches, citations with escaped
+  titles and search offered only on Anthropic's own URL, persistence repair, Codex framing,
   on-device routing, the two MCP launch encodings and the two consent channels),
   `ai-chat-test` (`ChatSession`, `MarkdownBlock`, `ChatHistoryStore` with renames and pins,
   `AIToolLoopProvider`, regenerate, and `AIChatSurfacesState`'s one-live-place rule),
@@ -653,27 +663,50 @@ transport code at all.
 | OpenRouter | `plugins: [{id: "web"}]` — OpenRouter's own layer, any model | `image_url` part, only for models whose catalog lists the `image` modality | never yet — its catalog publishes a `file` modality Tinycast does not read | `tools` + `role: "tool"` turns |
 | OpenAI | not offered — Chat Completions has no search switch for a general model (below) | `image_url` part, assumed supported | `file` part with `filename` and a `file_data` data URL | `tools` + `role: "tool"` turns |
 | Gemini / compatible | not offered | `image_url` part, assumed supported | never — a gateway that has not implemented the part bills the upload before rejecting it | `tools` + `role: "tool"` turns |
-| Anthropic | the `web_search_20250305` server tool, `max_uses: 5` | base64 `image` block | base64 `document` block, ahead of the text block | `tools` + `tool_use` / `tool_result` blocks |
+| Anthropic | the `web_search_20250305` server tool, `max_uses: 5` — on Anthropic's own host only | base64 `image` block | base64 `document` block, ahead of the text block | `tools` + `tool_use` / `tool_result` blocks |
 
 A search is part of the reply, not a status: `item/started` for a `webSearch` item appends a
 `ChatSearch` to the streaming message pinned at the text length so far, `item/completed` (or the
 next text delta, or the turn ending) marks it finished and fills in the query if the start didn't
 carry it. `ChatMessage.segments` splits the text around its searches so the transcript renders
 text, a search row (spinner → globe, "Searching web" → "Searched web · query"), then the rest, in
-the order it happened. Searches persist in `message_searches`. OpenRouter's web plugin is invisible
+the order it happened. A row that failed reads as a failed tool call does — the warning glyph in
+the destructive colour, "Search failed · query" — and a page fetch reads as one: "Fetching page" →
+"Fetched page · url", or "Fetch failed · url". A result that names its call (`.searched` with an
+id) settles that row alone, so parallel calls cannot settle each other; a route with no ids, Codex,
+still closes every open row at once. Searches persist in `message_searches` — the query, offset and
+place only. That table has no column for failure, kind or call id, and adding one would take the
+migration the codebase does not carry, so those three are live-only: reopened, a failed search or
+a fetch reads back as "Searched web · query" (a fetch's query being its URL). OpenRouter's web plugin is invisible
 to the stream, so it shows none. The web-search instructions ask for citations linked by the
 publication's name — the model otherwise labels them "Read more".
 
 The other two routes feed the same two events. On the Anthropic API a `server_tool_use` block named
-`web_search` gathers its query from `input_json_delta`s and reports `.searching` when the block
-closes, and the `web_search_tool_result` block that follows reports `.searched`. The tool is the
+`web_search` gathers its query from `input_json_delta`s and reports `.searching`, with the block's
+id, when the block closes; the `web_search_tool_result` block that follows reports `.searched` for
+its `tool_use_id`. That block's `content` is a list of results, or — on a 200 response, never as
+an HTTP error — a single `web_search_tool_result_error` object (`max_uses_exceeded`,
+`too_many_requests`, `invalid_tool_input`, `query_too_long`, `request_too_large`, `unavailable`),
+and only that object fails the row: an empty list is a search that found nothing. A search still
+open when `message_delta` names the stop reason never ran in this response and never will, since
+Tinycast resends no server block, so it is failed there too. The tool is offered only when the
+connection's base URL is on Anthropic's own host (`AIConnection.targetsOwnAPI`, which compares
+hosts, so a trailing slash or an explicit `/v1/messages` keeps it): a server tool runs on
+Anthropic's servers, and an Anthropic-shaped gateway may reject it, bill it differently or drop it,
+so turning search on for another route never reaches one. The tool is the
 basic `web_search_20250305` rather than a dynamic-filtering version, which 400s on models older
 than 4.6 and on Vertex — and a connection's model is whatever the reader typed. `max_uses: 5`
-keeps the server's own loop short of `pause_turn`, which Tinycast does not resume; a paused
-reply simply ends where it stopped. Past turns go back as their text alone, as on every route:
-the search blocks are not resent, so a later turn sees what the reply said, not the raw results.
+bounds what one reply may spend. The API can still pause a long server-side loop with
+`stop_reason: "pause_turn"`, and Tinycast does not resume it: resuming means sending the paused
+assistant message back unchanged — every `server_tool_use` block, each result's
+`encrypted_content`, each citation's `encrypted_index` and any signed thinking — with the same
+tools, and `AIMessage` carries only text and client tool calls, so there is nothing faithful to
+send. A paused reply ends where it stopped, marked complete, and a search the pause left unrun
+reads as failed. Past turns go back as their text alone, as on every route: the search blocks are
+not resent, so a later turn sees what the reply said, not the raw results.
 On the Claude command a `WebSearch` or `WebFetch` `tool_use` in an `assistant` frame opens a row
-named by its query or URL, and its `tool_result` settles it; the runner keeps the ids it opened,
+named by its query or URL, and its `tool_result` settles it, failed when the result carries
+`is_error: true`; the runner keeps the ids it opened,
 so a search's result never settles an MCP row and an MCP result never settles a search's.
 
 OpenAI is the one vendor API with no search, deliberately. Its Chat Completions endpoint — the

@@ -19,15 +19,16 @@ enum ChatReferences {
         let prose = withoutCode(text)
         var found: [(offset: Int, reference: ChatReference)] = []
         var linked = Set<String>()
-        for match in prose.matches(of: #/\[([^\]\n]+)\]\((https?://[^)\s]+)\)/#) {
+        for match in prose.matches(of: #/\[((?:\\.|[^\\\]\n])+)\]\((https?://[^)\s]+)\)/#) {
             guard let url = URL(string: String(match.output.2)) else { continue }
-            let label = String(match.output.1).trimmingCharacters(in: .whitespaces)
+            let label = String(match.output.1).replacing(#/\\([!-\/:-@\[-`{-~])/#) { $0.output.1 }
+                .trimmingCharacters(in: .whitespaces)
             let title = label.hasPrefix("http") ? readable(url) : label
             linked.insert(key(url))
             found.append((offset(of: match.range, in: prose), ChatReference(title: title, url: url)))
         }
         // Bare URLs outside a Markdown link: the link's own target was already counted above.
-        let unlinked = prose.replacing(#/\[[^\]\n]+\]\(https?://[^)\s]+\)/#) { match in
+        let unlinked = prose.replacing(#/\[(?:\\.|[^\\\]\n])+\]\(https?://[^)\s]+\)/#) { match in
             String(repeating: " ", count: match.output.count)
         }
         for match in unlinked.matches(of: #/https?://[^\s<>"'`)\]]+/#) {
@@ -46,10 +47,10 @@ enum ChatReferences {
             .map { $0 }
     }
 
-    /// Fences and inline code are examples, not citations.
+    /// Fences and inline code are examples, not citations; an escaped backtick opens no code.
     private static func withoutCode(_ text: String) -> String {
         text.replacing(#/```[\s\S]*?(```|$)/#) { _ in "" }
-            .replacing(#/`[^`\n]*`/#) { _ in "" }
+            .replacing(#/\\.|`[^`\n]*`/#) { $0.output.hasPrefix("\\") ? $0.output : "" }
     }
 
     /// Each source's number, keyed as `key` keys a URL, so a citation can find its chip.

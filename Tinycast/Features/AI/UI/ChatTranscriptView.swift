@@ -609,14 +609,15 @@ private struct ChatSearchRow: View {
 
     var body: some View {
         HStack(spacing: metrics.spacing.sm) {
-            if search.isComplete {
-                Image(systemName: "globe")
-                    .font(metrics.typography.rowTrailing)
-                    .symbolRenderingMode(.hierarchical)
+            if search.failed {
+                glyph("exclamationmark.triangle")
+                    .foregroundStyle(Theme.Colors.destructive)
+            } else if search.isComplete {
+                glyph("globe")
             } else {
                 ProgressView().controlSize(.small)
             }
-            Text(search.isComplete ? "Searched web" : "Searching web")
+            Text(search.title)
                 .font(metrics.typography.rowTrailing)
             if let query = search.query, !query.isEmpty {
                 Text("· \(query)")
@@ -626,6 +627,12 @@ private struct ChatSearchRow: View {
             }
         }
         .foregroundStyle(Theme.Colors.textSecondary)
-        .animation(.easeOut(duration: Theme.Duration.chatFooter), value: search.isComplete)
+        .animation(.easeOut(duration: Theme.Duration.chatFooter), value: search.title)
+    }
+
+    private func glyph(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(metrics.typography.rowTrailing)
+            .symbolRenderingMode(.hierarchical)
     }
 }

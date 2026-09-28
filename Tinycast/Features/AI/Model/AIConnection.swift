@@ -77,10 +77,15 @@ struct AIConnection: Codable, Equatable, Identifiable, Sendable {
         self.reasoningOptions = reasoningOptions
     }
 
-    /// A preset pointed away from its own API is a gateway, and only a gateway takes a thinking field.
+    /// A preset pointed away from its own API is a gateway, however faithfully it copies the shape.
+    var targetsOwnAPI: Bool {
+        let host = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines))?.host()
+        return host?.lowercased() == URL(string: provider.defaultBaseURL)?.host()
+    }
+
+    /// Only a gateway takes a thinking field.
     var takesThinkingField: Bool {
-        provider.apiShape == .openAICompatible
-            && baseURL.trimmingCharacters(in: .whitespacesAndNewlines) != provider.defaultBaseURL
+        provider.apiShape == .openAICompatible && !targetsOwnAPI
     }
 
     /// A gateway publishes no catalog, so the only effort it is known to honour is the off switch.
@@ -98,8 +103,9 @@ struct AIConnection: Codable, Equatable, Identifiable, Sendable {
             images: provider != .openRouter || visionModels.contains(model),
             // Only the two shapes whose bodies Tinycast writes; a gateway bills the upload first.
             documents: provider == .openAI || provider == .anthropic,
-            // OpenAI's Chat Completions has no search switch for a general model; see ai.md.
-            webSearch: provider == .openRouter || provider == .anthropic, tools: true)
+            // A server tool runs only on Anthropic's own API; OpenAI's absence is argued in ai.md.
+            webSearch: provider == .openRouter || (provider == .anthropic && targetsOwnAPI),
+            tools: true)
     }
 }
 

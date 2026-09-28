@@ -139,13 +139,20 @@ struct AIUsage: Equatable, Sendable {
     }
 }
 
+/// A search looks the web up; a fetch reads one page, named by its URL.
+enum AIWebLookup: Equatable, Hashable, Sendable {
+    case search
+    case fetch
+}
+
 enum AIStreamEvent: Equatable, Sendable {
     case text(String)
     case thinking
     /// Reasoning text, where a route shares it; never answer text, and never sent back as context.
     case reasoning(String)
-    case searching(String?)
-    case searched(String?)
+    case searching(String?, kind: AIWebLookup = .search, id: String? = nil)
+    /// With an id it settles that search alone; without one, every search still open.
+    case searched(String?, id: String? = nil, failed: Bool = false)
     /// What a transport emits; the loop consumes it and never passes it on to the transcript.
     case toolCallRequested(AIToolCall)
     /// What the loop emits in its place, already carrying what a row has to show.

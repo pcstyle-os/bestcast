@@ -109,6 +109,7 @@ struct AIProviderTests {
         aGatewayOffersNoneAsItsReasoningEffort()
         webSearchRidesEachCapableRoute()
         anthropicSearchStreamsRowsAndSources()
+        anthropicSearchFailuresAndTitlesStaySound()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -336,6 +337,18 @@ struct AIProviderTests {
             searches(.anthropic) && !searches(.openAI) && !searches(.gemini)
                 && !searches(.openAICompatible),
             "search is offered on Anthropic and not on the OpenAI-shaped vendor routes")
+        for gateway in ["https://gateway.example", "https://api.anthropic.com.example.net"] {
+            let connection = AIConnection(provider: .anthropic, baseURL: gateway, models: ["m"])
+            expect(
+                !connection.capabilities(for: "m").webSearch && !connection.targetsOwnAPI,
+                "an Anthropic-shaped gateway is never offered the server tool (\(gateway))")
+        }
+        for own in [" https://api.anthropic.com\n", "https://api.anthropic.com/v1/messages"] {
+            expect(
+                AIConnection(provider: .anthropic, baseURL: own, models: ["m"])
+                    .capabilities(for: "m").webSearch,
+                "Anthropic's own API keeps it, however its endpoint is spelled (\(own))")
+        }
         expect(
             AIModelCapabilities.claudeCommand.webSearch && AIModelCapabilities.codex.webSearch
                 && !AIModelCapabilities.appleIntelligence.webSearch,
@@ -368,14 +381,16 @@ struct AIProviderTests {
                 }
             }
             expect(
-                rows == [.searching("Łódź time"), .searched(nil)],
+                rows == [
+                    .searching("Łódź time", id: "srvtoolu_1"), .searched(nil, id: "srvtoolu_1")
+                ],
                 "a server search becomes one row, named by its whole query (slice \(slice))")
             let text = events.compactMap { event -> String? in
                 if case .text(let text) = event { return text }
                 return nil
             }.joined()
             let expected =
-                "Let me check. It is 14:05 in Łódź ([Łódź city guide](https://example.org/"
+                #"Let me check. It is 14:05 in Łódź ([Łódź \[city\] guide](https://example.org/"#
                 + "lodz_%28city%29), [time.example](https://time.example/pl)). \nAnything else?"
             expect(
                 text == expected,
@@ -401,6 +416,103 @@ struct AIProviderTests {
         expect(
             (try? uncited.feed(plain)) == [.text("Done. ")],
             "an uncited block streams exactly as it did, trailing punctuation and all")
+    }
+
+    /// A search that failed or never ran reads as failed, and no title can break its own link.
+    static func anthropicSearchFailuresAndTitlesStaySound() {
+        func decode(_ payloads: [String]) -> [AIStreamEvent] {
+            var decoder = AIStreamDecoder(shape: .anthropic)
+            let stream = Data(payloads.map { "data: \($0)\n\n" }.joined().utf8)
+            return ((try? decoder.feed(stream)) ?? []) + ((try? decoder.finish()) ?? [])
+        }
+        func search(_ index: Int, _ id: String, _ query: String) -> [String] {
+            [
+                #"{"type":"content_block_start","index":\#(index),"content_block":"#
+                    + #"{"type":"server_tool_use","id":"\#(id)","name":"web_search"}}"#,
+                #"{"type":"content_block_delta","index":\#(index),"delta":"#
+                    + #"{"type":"input_json_delta","partial_json":"{\"query\":\"\#(query)\"}"}}"#,
+                #"{"type":"content_block_stop","index":\#(index)}"#
+            ]
+        }
+        func result(_ index: Int, _ id: String, _ content: String) -> String {
+            #"{"type":"content_block_start","index":\#(index),"content_block":"#
+                + #"{"type":"web_search_tool_result","tool_use_id":"\#(id)","content":\#(content)}}"#
+        }
+        let paused = decode(
+            search(0, "srvtoolu_a", "Kraków")
+                + [
+                    result(
+                        1, "srvtoolu_a",
+                        #"{"type":"web_search_tool_result_error","error_code":"max_uses_exceeded"}"#)
+                ]
+                + search(2, "srvtoolu_b", "Gdańsk") + [result(3, "srvtoolu_b", "[]")]
+                + search(4, "srvtoolu_c", "Toruń")
+                + [
+                    #"{"type":"message_delta","delta":{"stop_reason":"pause_turn"},"#
+                        + #""usage":{"output_tokens":3}}"#,
+                    #"{"type":"message_stop"}"#
+                ])
+        let rows = paused.filter {
+            switch $0 {
+            case .searching, .searched: return true
+            default: return false
+            }
+        }
+        expect(
+            rows == [
+                .searching("Kraków", id: "srvtoolu_a"),
+                .searched(nil, id: "srvtoolu_a", failed: true),
+                .searching("Gdańsk", id: "srvtoolu_b"), .searched(nil, id: "srvtoolu_b"),
+                .searching("Toruń", id: "srvtoolu_c"),
+                .searched(nil, id: "srvtoolu_c", failed: true)
+            ],
+            "an error result fails its row, no results is not an error, a paused search never ran")
+        expect(paused.last == .finished, "a paused turn still ends, where it stopped")
+
+        var live = [
+            ChatSearch(query: "a", isComplete: false, textOffset: 0, sequence: 0, callID: "1"),
+            ChatSearch(
+                query: "https://b.example", isComplete: false, textOffset: 0, sequence: 1,
+                kind: .fetch, callID: "2")
+        ]
+        live.settle(id: "1", query: nil, failed: true)
+        expect(
+            live.map(\.title) == ["Search failed", "Fetching page"],
+            "a result settles its own call alone, even with another still in flight")
+        live.settle(id: "2", query: nil, failed: false)
+        expect(live[1].title == "Fetched page", "and a fetch reads as the page it read")
+        live.append(ChatSearch(query: nil, isComplete: false, textOffset: 0, sequence: 2))
+        live.settle(id: nil, query: "c", failed: false)
+        expect(
+            live.map(\.title) == ["Search failed", "Fetched page", "Searched web"]
+                && live[2].query == "c",
+            "a route with no ids still closes what is open and names it")
+
+        let cited = decode([
+            #"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#,
+            #"{"type":"content_block_delta","index":0,"delta":{"type":"citations_delta","citation":"#
+                + #"{"url":"https://a.example/p","title":"C:\\Temp\\"}}}"#,
+            #"{"type":"content_block_delta","index":0,"delta":{"type":"citations_delta","citation":"#
+                + #"{"url":"https://b.example/q","title":"[Draft] *AT&T* | `x` <y> ~z_"}}}"#,
+            #"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Cited."}}"#,
+            #"{"type":"content_block_stop","index":0}"#
+        ])
+        let text = cited.compactMap { event -> String? in
+            if case .text(let text) = event { return text }
+            return nil
+        }.joined()
+        let drawn = MarkdownBlock.inline(text)
+        expect(
+            String(drawn.characters) == #"Cited (C:\Temp\, [Draft] *AT&T* | `x` <y> ~z_)."#,
+            "a title ending in a backslash, or holding Markdown, draws exactly as written")
+        expect(
+            drawn.runs.compactMap { $0.link?.absoluteString }
+                == ["https://a.example/p", "https://b.example/q"],
+            "and each title stays its own link")
+        expect(
+            ChatReferences.extract(from: text).map(\.title)
+                == [#"C:\Temp\"#, "[Draft] *AT&T* | `x` <y> ~z_"],
+            "the sources list reads each title back unescaped")
     }
 
     /// A body that named the default would 400 on every endpoint without a thinking mode.
