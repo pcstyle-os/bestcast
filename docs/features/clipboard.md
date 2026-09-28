@@ -267,18 +267,20 @@ Sequentially**, which is the same first press, **Paste All**, and **Clear Paste 
 anything is waiting.
 
 Any kind can be queued; an image pastes as an image where it was marked. A run pastes without
-promoting, like ⌥↵, so the history keeps the order the run was picked from.
+promoting, like ⌥↵, so the history keeps the order the run was picked from. **Paste All** writes the
+pending entries' `plainText` joined with newlines — a file as its path, an image left out — as one
+marked paste, and clears the queue. Marking a row again unmarks it; marking one already pasted in
+this run queues it again at the end. `clipboard-test` drives `PasteQueue` over deliberately uneven
+entries — edge whitespace, a tab and newline, unicode, a file and an image in the middle.
 
 Presses are strictly serial. `Paster.pasteQueued` returns only after its ⌘V is posted and a further
 `readAllowance` has passed, since the target reads the pasteboard when it handles the keystroke,
 not when it is posted. A press that lands inside that window waits and runs next; one that lands
 while a press already waits is a held key repeating, and is dropped. So two quick presses paste two
-entries in order, and a held key pastes one entry per paste cycle and stops within one of release.
-`clipboard-test` drives `PasteQueue.Pacer` on a fake clock against a simulated pasteboard. **Paste All** writes the
-pending entries' `plainText` joined with newlines — a file as its path, an image left out — as one
-marked paste, and clears the queue. Marking a row again unmarks it; marking one already pasted in
-this run queues it again at the end. `clipboard-test` drives `PasteQueue` over deliberately uneven
-entries — edge whitespace, a tab and newline, unicode, a file and an image in the middle.
+entries in order, and a held key pastes one entry per paste cycle and stops within one entry of
+release. The cost is that a third tap inside one cycle (about 230 ms) is dropped too: it cannot be
+told from a repeat. `clipboard-test` drives `PasteQueue.Pacer` on a fake clock against a simulated
+pasteboard, and shows the unpaced race pasting one entry twice.
 
 ## Copy Text from an image
 
