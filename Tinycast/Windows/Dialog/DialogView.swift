@@ -31,11 +31,13 @@ struct DialogView: View {
             VStack(alignment: .leading, spacing: metrics.spacing.xxl) {
                 if let symbol = request.symbol {
                     DialogSymbol(name: symbol, tone: request.tone)
+                        .accessibilityHidden(true)
                 }
 
                 VStack(alignment: .leading, spacing: metrics.spacing.sm) {
                     Text(request.title)
                         .font(metrics.typography.panelTitle)
+                        .accessibilityAddTraits(.isHeader)
                     if let message = request.message {
                         Text(message)
                             .font(metrics.typography.rowTitle)

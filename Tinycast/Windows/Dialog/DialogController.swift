@@ -126,6 +126,9 @@ final class DialogController: NSObject, NSWindowDelegate {
                     }),
                 width: width, minHeight: 0)
             let panel = DialogPanel(content: content, cornerRadius: metrics.radius.panel)
+            // Never drawn, since the panel is borderless; VoiceOver names the window by it.
+            panel.title = request.title
+            panel.setAccessibilitySubrole(.dialog)
             panel.handlesArrowKeys = request.accessory?.claimsArrowKeys ?? false
             panel.delegate = self
             panel.onKey = { [weak self] key in
@@ -145,6 +148,7 @@ final class DialogController: NSObject, NSWindowDelegate {
             self.panel = panel
             place(panel)
             show(panel)
+            announce(request)
         }
     }
 
@@ -165,6 +169,13 @@ final class DialogController: NSObject, NSWindowDelegate {
             panel.animator().setFrame(destination, display: false)
             panel.animator().alphaValue = 1
         }
+    }
+
+    /// A non-activating panel may never get VoiceOver's cursor, so the question is read out.
+    private func announce(_ request: DialogRequest) {
+        guard NSWorkspace.shared.isVoiceOverEnabled else { return }
+        let spoken = [request.title, request.message].compactMap { $0 }.joined(separator: ". ")
+        AccessibilityNotification.Announcement(spoken).post()
     }
 
     /// A refused primary action leaves the dialog up, as a greyed-out button would.

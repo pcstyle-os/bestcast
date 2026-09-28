@@ -508,6 +508,11 @@ sole owner rule) and is the only presenter, so every confirmation in the app loo
 - **Non-activating**, like the palette: the dialog takes key focus for its own keys without pulling app
   focus off whatever the user was in. It sits at `.dialog`, above the palette's `.palette`, and is
   centred on the **cursor's** display with the same slight optical lift the palette uses.
+- **Spoken, because it may never get VoiceOver's cursor.** The panel carries the request's title as
+  its window title and the `dialog` subrole, the tone glyph is hidden, and while VoiceOver runs the
+  title and message are posted as an announcement when the dialog appears.
+  `MessageHUDController` announces every message it shows the same way, since the pill never takes
+  focus.
 - **`VolumeSlider`** uses SwiftUI's native `Slider`, paired with a monospaced-digit percentage in the
   same `volumeReadout 38` slot the HUD uses, so the row does not resize between `0%` and `100%`.
   Pointer interaction stays native; the arrows still walk the 5% grid through `DialogPanel`.

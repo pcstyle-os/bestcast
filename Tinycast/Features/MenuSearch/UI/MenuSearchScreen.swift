@@ -16,6 +16,8 @@ struct MenuSearchScreen: PaletteScreen {
         rows.indices.contains(selection) ? rows[selection] : nil
     }
 
+    func spokenTitle(at selection: Int) -> String? { item(at: selection)?.title }
+
     func activate(at selection: Int) {
         guard let item = item(at: selection) else { return }
         core.menuSearchCoordinator.activate(item)

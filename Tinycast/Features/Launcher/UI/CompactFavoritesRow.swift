@@ -12,7 +12,7 @@ struct CompactFavoritesRow: View {
         HStack(spacing: metrics.spacing.xs) {
             // Identified by the app, so a reorder moves an icon with its app, not by position.
             ForEach(Array(favorites.enumerated()), id: \.element.id) { index, app in
-                CompactFavoriteButton(help: help(for: app, at: index)) {
+                CompactFavoriteButton(label: app.name, help: help(for: app, at: index)) {
                     onLaunch(app)
                 } content: {
                     AppIconView(app: app, pointSize: metrics.size.rowIcon)
@@ -20,7 +20,9 @@ struct CompactFavoritesRow: View {
                 }
             }
             if showsOverflow {
-                CompactFavoriteButton(help: "Show all  ↓", action: onOverflow) {
+                CompactFavoriteButton(
+                    label: "Show All Favorites", help: "Show all  ↓", action: onOverflow
+                ) {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.Colors.textSecondary)
@@ -43,6 +45,7 @@ struct CompactFavoritesRow: View {
 
 /// One compact favorite: bare icon, tooltip, action; no hover chrome, so it reads tight.
 private struct CompactFavoriteButton<Content: View>: View {
+    let label: String
     let help: String
     let action: () -> Void
     @ViewBuilder let content: Content
@@ -55,5 +58,6 @@ private struct CompactFavoriteButton<Content: View>: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(label)
     }
 }

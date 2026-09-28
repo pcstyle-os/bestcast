@@ -30,6 +30,8 @@ struct FileSearchList: View {
                                 drag: drag(for: result)
                             )
                             .onRightClick { onActions(result) }
+                            .accessibilityAction { onActivate(result) }
+                            .accessibilityAction(named: "Show Actions") { onActions(result) }
                     }
                 }
                 .padding(.horizontal, metrics.spacing.md)

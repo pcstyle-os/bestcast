@@ -66,6 +66,11 @@ struct QuicklinkList: View {
                                 }
                             )
                             .onRightClick { onActions(quicklink) }
+                            .accessibilityAction {
+                                onSelect(quicklink)
+                                onActivate()
+                            }
+                            .accessibilityAction(named: "Show Actions") { onActions(quicklink) }
                         }
                     }
                 }
@@ -134,6 +139,11 @@ private struct QuicklinkRow: View {
                 .fill(fill)
         )
         .armedHover($hovered)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(quicklink.name)
+        .accessibilityValue(
+            quicklink.showsInRootSearch ? quicklink.link : "\(quicklink.link), hidden from search")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

@@ -56,6 +56,7 @@ struct ScheduleList: View {
                             .contentShape(Rectangle())
                             .onTapGesture { onActivate(meeting) }
                             .onRightClick { onActions(meeting) }
+                            .accessibilityAction(named: "Show Actions") { onActions(meeting) }
                             .selectionFrame(meeting.id == selectedID)
                         }
                     }

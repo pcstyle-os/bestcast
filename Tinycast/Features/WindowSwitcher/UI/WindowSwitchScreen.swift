@@ -10,6 +10,11 @@ struct WindowSwitchScreen: PaletteScreen {
 
     func hasActions(at selection: Int) -> Bool { false }
 
+    func spokenTitle(at selection: Int) -> String? {
+        let rows = rows
+        return rows.indices.contains(selection) ? rows[selection].displayTitle : nil
+    }
+
     func activate(at selection: Int) {
         guard rows.indices.contains(selection) else { return }
         core.windowSwitchCoordinator.activate(rows[selection])

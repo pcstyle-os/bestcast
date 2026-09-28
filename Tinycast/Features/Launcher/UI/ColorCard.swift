@@ -29,6 +29,9 @@ struct ColorCard: View {
         .padding(.horizontal, metrics.spacing.xl)
         .padding(.vertical, metrics.spacing.xxxl)
         .leadCard(selected: selected)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Color \(primary.string(for: color))")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

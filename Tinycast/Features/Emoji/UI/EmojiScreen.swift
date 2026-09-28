@@ -57,6 +57,8 @@ struct EmojiScreen: PaletteScreen {
             zoom: zoom)
     }
 
+    func spokenTitle(at selection: Int) -> String? { entry(at: selection)?.displayName }
+
     func activate(at selection: Int) {
         guard let entry = entry(at: selection) else { return }
         core.emojiCoordinator.pasteEmoji(entry)

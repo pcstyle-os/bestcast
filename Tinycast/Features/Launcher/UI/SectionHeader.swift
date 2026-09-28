@@ -14,6 +14,7 @@ struct SectionHeader: View {
         HStack(spacing: metrics.spacing.sm) {
             Text(title)
                 .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
             if let configure {
                 Button(action: configure) {
                     Image(systemName: "gearshape")
@@ -22,6 +23,7 @@ struct SectionHeader: View {
                 }
                 .buttonStyle(.plain)
                 .help(configureHelp)
+                .accessibilityLabel(configureHelp)
             }
             Spacer(minLength: 0)
         }

@@ -29,6 +29,8 @@ struct FileSearchScreen: PaletteScreen {
             result: result, core: core, vm: vm, target: vm.pasteTarget)
     }
 
+    func spokenTitle(at selection: Int) -> String? { result(at: selection)?.name }
+
     func activate(at selection: Int) {
         guard let result = result(at: selection) else { return }
         core.fileSearchCoordinator.open(result)

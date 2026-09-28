@@ -36,6 +36,12 @@ struct UninstallScreen: PaletteScreen {
         return UninstallActionsMenu.content(candidate: candidate, session: session, core: core)
     }
 
+    func spokenTitle(at selection: Int) -> String? {
+        guard let candidate = candidate(at: selection) else { return nil }
+        let checked = session.selection?.isChecked(candidate.id) ?? false
+        return "\(candidate.name), \(checked ? "checked" : "not checked")"
+    }
+
     /// The primary action trashes the session's checked set, not the highlighted row.
     func activate(at selection: Int) {
         core.uninstallCoordinator.performUninstall()

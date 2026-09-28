@@ -66,6 +66,14 @@ struct CalculatorHistoryScreen: PaletteScreen {
         }
     }
 
+    func spokenTitle(at selection: Int) -> String? {
+        switch row(at: selection) {
+        case .calc(let result): return CalculatorCard.spokenLabel(for: format.localized(result))
+        case .entry(let entry): return CalcHistoryRow.spokenLabel(for: entry, format: format)
+        case nil: return nil
+        }
+    }
+
     func activate(at selection: Int) {
         switch row(at: selection) {
         // A fresh calculation: copy + record like the launcher card; error cards no-op.

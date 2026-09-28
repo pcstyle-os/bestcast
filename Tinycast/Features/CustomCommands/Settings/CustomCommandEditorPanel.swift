@@ -221,6 +221,7 @@ struct CustomCommandEditorPanel: View {
             }
             .buttonStyle(.borderless)
             .help("Remove this argument")
+            .accessibilityLabel("Remove argument $\(position(of: id))")
         }
     }
 
