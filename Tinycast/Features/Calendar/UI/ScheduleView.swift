@@ -112,7 +112,7 @@ private struct MeetingRow: View {
         .armedHover($hovered)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
     private var accessibilityText: String {

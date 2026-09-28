@@ -1450,11 +1450,13 @@ private struct PaletteHideObserver: ViewModifier {
 
 /// The field keeps focus while ↑/↓ move a highlight, so VoiceOver has to be told what landed.
 private struct SelectionAnnouncement: ViewModifier {
+    @Environment(PaletteState.self) private var vm
     let title: String?
 
     func body(content: Content) -> some View {
+        // The tree stays mounted while hidden, so a pop to root there must not speak.
         content.onChange(of: title) { _, title in
-            guard let title, NSWorkspace.shared.isVoiceOverEnabled else { return }
+            guard let title, vm.isVisible, NSWorkspace.shared.isVoiceOverEnabled else { return }
             AccessibilityNotification.Announcement(title).post()
         }
     }

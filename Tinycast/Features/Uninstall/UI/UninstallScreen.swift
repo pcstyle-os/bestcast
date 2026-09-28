@@ -39,7 +39,8 @@ struct UninstallScreen: PaletteScreen {
     func spokenTitle(at selection: Int) -> String? {
         guard let candidate = candidate(at: selection) else { return nil }
         let checked = session.selection?.isChecked(candidate.id) ?? false
-        return "\(candidate.name), \(checked ? "checked" : "not checked")"
+        let state = candidate.isLocked ? "locked" : checked ? "checked" : "not checked"
+        return "\(candidate.name), \(state)"
     }
 
     /// The primary action trashes the session's checked set, not the highlighted row.

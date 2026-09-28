@@ -77,8 +77,9 @@ answers through `perform(_:at:)`, so a new chord never adds a cast to the shell.
 
 **VoiceOver hears the highlight through `spokenTitle(at:)`.** The search field keeps focus while ↑/↓
 move a highlight rather than VoiceOver's cursor, so `RootPaletteView` posts the selected row's
-`spokenTitle` as an announcement whenever it changes and VoiceOver is running. The default is `nil`,
-which stays silent; the launcher, quicklinks, file search, calculator history, emoji, uninstall,
+`spokenTitle` as an announcement whenever it changes while the palette is shown and VoiceOver is
+running — never while hidden, where a pop to root would otherwise speak. The default is `nil`, which
+stays silent; the launcher, quicklinks, file search, calculator history, emoji, uninstall,
 schedule, menu search and window switcher answer it. Each row still exposes itself as one element — a
 label, a value for what it shows beside the title, the selected trait, a default action and, where
 the screen has a ⌘K menu, a `Show Actions` action — for a reader who walks the list with the
