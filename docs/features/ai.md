@@ -688,21 +688,22 @@ its `tool_use_id`. That block's `content` is a list of results, or — on a 200 
 an HTTP error — a single `web_search_tool_result_error` object (`max_uses_exceeded`,
 `too_many_requests`, `invalid_tool_input`, `query_too_long`, `request_too_large`, `unavailable`),
 and only that object fails the row: an empty list is a search that found nothing. A search still
-open when `message_delta` names the stop reason never ran in this response and never will, since
-Tinycast resends no server block, so it is failed there too. The tool is offered only when the
+open when `message_delta` names a final stop reason is failed there too. A `pause_turn` keeps
+pending searches open for the continuation. The tool is offered only when the
 connection's base URL is on Anthropic's own host (`AIConnection.targetsOwnAPI`, which compares
 hosts, so a trailing slash or an explicit `/v1/messages` keeps it): a server tool runs on
 Anthropic's servers, and an Anthropic-shaped gateway may reject it, bill it differently or drop it,
 so turning search on for another route never reaches one. The tool is the
 basic `web_search_20250305` rather than a dynamic-filtering version, which 400s on models older
 than 4.6 and on Vertex — and a connection's model is whatever the reader typed. `max_uses: 5`
-bounds what one reply may spend. The API can still pause a long server-side loop with
-`stop_reason: "pause_turn"`, and Tinycast does not resume it: resuming means sending the paused
-assistant message back unchanged — every `server_tool_use` block, each result's
-`encrypted_content`, each citation's `encrypted_index` and any signed thinking — with the same
-tools, and `AIMessage` carries only text and client tool calls, so there is nothing faithful to
-send. A paused reply ends where it stopped, marked complete, and a search the pause left unrun
-reads as failed. Past turns go back as their text alone, as on every route: the search blocks are
+bounds searches per API request. On `stop_reason: "pause_turn"`, Tinycast continues the same send
+up to three times, streaming into the same reply. The decoder retains the assistant content blocks
+in memory, including every `server_tool_use`, result's `encrypted_content`, citation's
+`encrypted_index`, signed thinking and unmodified text. Each continuation sends the accumulated
+blocks as assistant content with the original tools and system prompt. Nothing is persisted;
+`AIMessage` still carries only text and client tool calls. A fourth pause reports an error rather
+than marking an unfinished reply complete.
+Past turns go back as their text alone, as on every route: the search blocks are
 not resent, so a later turn sees what the reply said, not the raw results.
 On the Claude command a `WebSearch` or `WebFetch` `tool_use` in an `assistant` frame opens a row
 named by its query or URL, and its `tool_result` settles it, failed when the result carries

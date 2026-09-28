@@ -66,6 +66,27 @@ struct AIStreamDecoder: Sendable {
     private var openSearches: [String] = []
     private var citations = AnthropicCitations()
     private(set) var isTerminal = false
+    private(set) var stopReason: String?
+    private var rawBlocks: [Int: JSONValue] = [:]
+    private var rawInputs: [Int: String] = [:]
+    private var continuationCount = 0
+
+    mutating func resumePausedTurn() throws -> [JSONValue]? {
+        guard isTerminal, stopReason == "pause_turn" else { return nil }
+        guard continuationCount < 3 else {
+            throw AIProviderError.responseFailed("The provider paused too many times. Try again.")
+        }
+        guard !rawBlocks.isEmpty else { throw AIProviderError.malformedResponse }
+        let blocks = rawBlocks.sorted { $0.key < $1.key }.map(\.value)
+        continuationCount += 1
+        rawBlocks.removeAll()
+        rawInputs.removeAll()
+        parser = SSEParser()
+        usage = AIUsage()
+        stopReason = nil
+        isTerminal = false
+        return blocks
+    }
 
     init(shape: AIHTTPConfiguration.APIShape) {
         self.shape = shape
@@ -162,6 +183,7 @@ struct AIStreamDecoder: Sendable {
         }
 
         let index = event.index ?? 0
+        try retainAnthropicBlock(data, event: event, index: index)
         switch event.type {
         case "content_block_start":
             switch event.contentBlock?.type {
@@ -213,7 +235,8 @@ struct AIStreamDecoder: Sendable {
             return [.usage(usage)]
         case "message_delta":
             usage.outputTokens = event.usage?.outputTokens ?? usage.outputTokens
-            // No result by now means it never ran: no server block is resent to run it later.
+            stopReason = event.delta?.stopReason ?? stopReason
+            guard stopReason != "pause_turn" else { return [.usage(usage)] }
             let unrun = openSearches.map { AIStreamEvent.searched(nil, id: $0, failed: true) }
             openSearches.removeAll()
             // The calls are complete here, and `message_stop` may never arrive on a tool turn.
@@ -221,12 +244,51 @@ struct AIStreamDecoder: Sendable {
             return [.usage(usage)] + unrun + flushToolCalls()
         case "message_stop":
             isTerminal = true
-            return flushToolCalls() + [.finished]
+            return stopReason == "pause_turn" ? [] : flushToolCalls() + [.finished]
         case "error":
             isTerminal = true
             throw AIProviderError.responseFailed(Self.anthropicErrorMessage(event.error?.type))
         default:
             return []
+        }
+    }
+
+    private mutating func retainAnthropicBlock(
+        _ data: Data, event: AnthropicEvent, index: Int
+    ) throws {
+        let raw = JSONValue(data: data)?.objectValue
+        switch event.type {
+        case "content_block_start":
+            rawBlocks[index] = raw?["content_block"]
+        case "content_block_delta":
+            guard var block = rawBlocks[index]?.objectValue,
+                let delta = raw?["delta"]?.objectValue
+            else { return }
+            switch event.delta?.type {
+            case "text_delta", "thinking_delta", "signature_delta":
+                let key = String((event.delta?.type ?? "").dropLast(6))
+                block[key] = .string(
+                    (block[key]?.stringValue ?? "") + (delta[key]?.stringValue ?? ""))
+            case "input_json_delta":
+                rawInputs[index, default: ""] += event.delta?.partialJSON ?? ""
+            case "citations_delta":
+                if let citation = delta["citation"] {
+                    block["citations"] = .array((block["citations"]?.arrayValue ?? []) + [citation])
+                }
+            default:
+                break
+            }
+            rawBlocks[index] = .object(block)
+        case "content_block_stop":
+            if let input = rawInputs.removeValue(forKey: index) {
+                guard let value = JSONValue(data: Data(input.utf8)),
+                    var block = rawBlocks[index]?.objectValue
+                else { throw AIProviderError.malformedResponse }
+                block["input"] = value
+                rawBlocks[index] = .object(block)
+            }
+        default:
+            break
         }
     }
 
