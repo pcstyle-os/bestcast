@@ -84,7 +84,10 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
   open in the browser. The same numbers close the sentence that cited each source, as a raised,
   linked `[n]`: `ChatCitations` finds each link's sentence end in the drawn text and inserts after
   it, two sources in one sentence sharing it, so prose and chips always agree. The preamble asks the model to link a page it relies on inline, so a cited
-  answer carries its sources without a second request.
+  answer carries its sources without a second request. The Anthropic API cites its own searches
+  out of band, as `citations_delta`s on a text block, so `AIStreamDecoder` closes each cited block
+  on its sources as Markdown links — ` ([title](url), …)`, ahead of the block's trailing
+  punctuation, which it holds back until the block ends — and the same extraction then lists them.
 - **Tools are chosen per chat.** The composer's tools menu switches MCP off for the chat or turns
   single servers off (`ChatToolScope`, held on `AIChatState`, not stored); `@server` still narrows
   one turn inside that. The scope binds both shapes alike: Tinycast's loop is offered only the
@@ -149,7 +152,7 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
   conversation. `installed-ai-test` runs the Claude, Grok, OpenCode and Cursor adapters against real
   subprocess stubs and pins their safety boundaries.
 - **Grok, OpenCode and Cursor are text transports, not agents, and so is Claude with no server to
-  run.** Claude runs one turn with no tools, browser integration, slash commands or persisted
+  run and search off.** Claude runs one turn with no tools, browser integration, slash commands or persisted
   session — but never `--bare`, which reads neither
   OAuth nor the keychain and so refuses the very sign-in this route reuses. Given servers by
   [MCP](mcp.md) it becomes an agent for that turn and only over those: `--tools ""` still withholds
@@ -158,6 +161,19 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
   the round cap instead of the constant 1, or is left out on Unlimited, and
   `--permission-mode default` with an ask rule per server keeps the reader's own allow rules and
   default mode from answering before Tinycast does.
+  A turn the reader has opted into web search for (`aiWebSearch` and the composer's toggle, which
+  are one switch) is handed exactly two built-ins, and `ClaudeWebSearchLaunch` is where that is
+  spelled: `--tools WebSearch,WebFetch`, so nothing else — no Bash, Read or Edit — exists, and
+  `--allowedTools WebSearch,WebFetch`, the allow rule that is the only reason they run without a
+  prompt. The reader's own deny or ask rule for either still outranks it, and the call is then
+  refused rather than asked. With no server to run, `--disallowedTools "mcp__*"` replaces `"*"` so
+  every MCP tool stays denied — a managed policy's servers included — `--permission-mode default`
+  keeps the reader's default mode out of the turn, and `--max-turns` is
+  `ClaudeWebSearchLaunch.searchTurns` (10), since a search and the answer after it are separate
+  requests. Beside armed servers the web tools simply join the turn, on its round cap. Every other
+  flag above is unchanged, `--strict-mcp-config` included. Verified against Claude Code 2.1.283:
+  the `init` frame listed only `WebFetch` and `WebSearch`, no MCP server and mode `default`, and a
+  search and a fetch then ran with no permission denial.
   Grok runs with `--deny *`,
   `dontAsk` permissions and a workspace sandbox, and never `--always-approve`, so a user's always-approve
   config cannot arm tools for this route. OpenCode runs `--pure` with deny-all permissions, disabled
@@ -173,8 +189,8 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
   `permission: deny` for OpenCode and withheld MCP approval for Cursor. Cursor's is the only one resting
   on an approval prompt rather than an explicit deny, which is why its Providers row says so and the
   others do not. That is also why none of the three may be handed a server: there is no way to offer
-  one without offering the reader's own. None of these routes offer web search, and only Claude
-  takes images: every Claude turn is one `--input-format stream-json` user message, the newest
+  one without offering the reader's own. Of these routes only Claude offers web search, and only
+  Claude takes images: every Claude turn is one `--input-format stream-json` user message, the newest
   question's pictures as base64 `image` blocks beside the framed prompt. Claude also runs with
   `--thinking-display summarized` — a hidden flag, and the only switch that works: a `-p` run forces
   its display to `omitted` unless one is named explicitly, and the `showThinkingSummaries` setting
@@ -519,6 +535,9 @@ window, and every chat action either surface sends — is the nineteenth feature
 - On Codex and on the Claude command, with an MCP server enabled, a question answered with a tool
   shows the same rows the API routes show and the reply continues after them; with MCP off, both
   routes stream exactly as they did before.
+- With web search on, ask the Anthropic API and the Claude command about today's news: each
+  search shows its row ("Searching web" → "Searched web · query") before the answer, and the
+  answer's sources appear as numbered chips. With it off, neither route searches or shows a row.
 - With `Quick AI opens to: Recent Conversation` and a five-minute window, Escape out and summon again inside
   five minutes resumes the transcript; past it, the composer is empty. Quitting and relaunching still
   reopens the last conversation. `A New Conversation` is always empty.
@@ -533,8 +552,9 @@ window, and every chat action either surface sends — is the nineteenth feature
 - Drop a PDF on the pane with a text-only model selected: the HUD refuses it, as a paste would.
 - Collapse the sidebar with the toolbar button; ⌘N and ⌘Q (Close Window) still work, and ⌘Q with
   Settings in front closes Settings instead.
-- Harnesses: `ai-provider-test` (endpoints, request bodies, stream decoding, persistence repair,
-  Codex framing, on-device routing, the two MCP launch encodings and the two consent channels),
+- Harnesses: `ai-provider-test` (endpoints, request bodies — web search on and off per route —
+  stream decoding, Anthropic's search rows and citations, persistence repair, Codex framing,
+  on-device routing, the two MCP launch encodings and the two consent channels),
   `ai-chat-test` (`ChatSession`, `MarkdownBlock`, `ChatHistoryStore` with renames and pins,
   `AIToolLoopProvider`, regenerate, and `AIChatSurfacesState`'s one-live-place rule),
   `codex-turn-test` (the Stop path, driven against a stub app-server stalled where Stop races the
@@ -542,7 +562,7 @@ window, and every chat action either surface sends — is the nineteenth feature
   rows and the call cap),
   `installed-ai-test` (Claude/Grok/OpenCode/Cursor flags, prompt
   framing, streaming and cleanup, and Claude's private MCP configuration, control channel, round
-  cap and managed-policy branch) and `apple-intelligence-test` (status copy, snapshot deltas,
+  cap, managed-policy branch and web-tool flags and rows, with servers and without) and `apple-intelligence-test` (status copy, snapshot deltas,
   transcript assembly, error mapping, plus one real generation when this Mac can run one), all in
   `run-tests.sh`.
 
@@ -626,14 +646,14 @@ transport code at all.
 | --- | --- | --- | --- | --- |
 | Apple Intelligence | never — it reaches nothing | never — the model is text-only | never | never |
 | Codex | thread-scoped `web_search` config | `image` input part | never — the app-server takes no document part | Tinycast's servers, added as launch overrides; the reader's own are disabled by name |
-| Claude command | never | base64 `image` block in its stream-json user message | never | Tinycast's servers, through `--strict-mcp-config` and a private config file — an empty one when there are none, and neither flag under a managed MCP policy |
+| Claude command | its own `WebSearch` and `WebFetch`, the only built-ins it is given, allowed by rule | base64 `image` block in its stream-json user message | never | Tinycast's servers, through `--strict-mcp-config` and a private config file — an empty one when there are none, and neither flag under a managed MCP policy |
 | Grok command | never | never | never | the global config still loads — `--deny *` refuses the call |
 | OpenCode command | never | never | never | the global config still loads — `permission: deny` refuses the call |
 | Cursor command | never | never | never | the global config still loads — ask mode and withheld approval refuse the call |
 | OpenRouter | `plugins: [{id: "web"}]` — OpenRouter's own layer, any model | `image_url` part, only for models whose catalog lists the `image` modality | never yet — its catalog publishes a `file` modality Tinycast does not read | `tools` + `role: "tool"` turns |
-| OpenAI | not offered | `image_url` part, assumed supported | `file` part with `filename` and a `file_data` data URL | `tools` + `role: "tool"` turns |
+| OpenAI | not offered — Chat Completions has no search switch for a general model (below) | `image_url` part, assumed supported | `file` part with `filename` and a `file_data` data URL | `tools` + `role: "tool"` turns |
 | Gemini / compatible | not offered | `image_url` part, assumed supported | never — a gateway that has not implemented the part bills the upload before rejecting it | `tools` + `role: "tool"` turns |
-| Anthropic | not offered | base64 `image` block | base64 `document` block, ahead of the text block | `tools` + `tool_use` / `tool_result` blocks |
+| Anthropic | the `web_search_20250305` server tool, `max_uses: 5` | base64 `image` block | base64 `document` block, ahead of the text block | `tools` + `tool_use` / `tool_result` blocks |
 
 A search is part of the reply, not a status: `item/started` for a `webSearch` item appends a
 `ChatSearch` to the streaming message pinned at the text length so far, `item/completed` (or the
@@ -643,6 +663,27 @@ text, a search row (spinner → globe, "Searching web" → "Searched web · quer
 the order it happened. Searches persist in `message_searches`. OpenRouter's web plugin is invisible
 to the stream, so it shows none. The web-search instructions ask for citations linked by the
 publication's name — the model otherwise labels them "Read more".
+
+The other two routes feed the same two events. On the Anthropic API a `server_tool_use` block named
+`web_search` gathers its query from `input_json_delta`s and reports `.searching` when the block
+closes, and the `web_search_tool_result` block that follows reports `.searched`. The tool is the
+basic `web_search_20250305` rather than a dynamic-filtering version, which 400s on models older
+than 4.6 and on Vertex — and a connection's model is whatever the reader typed. `max_uses: 5`
+keeps the server's own loop short of `pause_turn`, which Tinycast does not resume; a paused
+reply simply ends where it stopped. Past turns go back as their text alone, as on every route:
+the search blocks are not resent, so a later turn sees what the reply said, not the raw results.
+On the Claude command a `WebSearch` or `WebFetch` `tool_use` in an `assistant` frame opens a row
+named by its query or URL, and its `tool_result` settles it; the runner keeps the ids it opened,
+so a search's result never settles an MCP row and an MCP result never settles a search's.
+
+OpenAI is the one vendor API with no search, deliberately. Its Chat Completions endpoint — the
+only OpenAI shape Tinycast writes — reaches the web only through the dedicated search models
+(`gpt-5-search-api`; the `-search-preview` pair is deprecated), which search before every answer
+whatever the request says; a general model has no search field there at all, since hosted search
+is a tool of the Responses API. There is therefore nothing for the toggle to switch: offering it
+would either send a field the model rejects or promise an off that a search model ignores. A
+search model added to a connection by hand searches on every turn regardless of the toggle and,
+like OpenRouter's plugin, shows no rows.
 
 `AIModelCapabilities` says what the footer may offer for the selected model. OpenRouter is the only
 catalog that reports `architecture.input_modalities`, so it is the only provider gated on it:
@@ -764,7 +805,8 @@ preamble is the part that is billed on every turn for every user and has no othe
 disables the editor rather than hiding it, so what is being withheld stays readable. One thing it
 deliberately cannot reach: every installed CLI route prepends its own instruction never to run
 commands or touch files, and never to invoke a tool beyond the MCP tools an armed Codex or Claude
-turn supplies. That is a sandbox boundary on a local CLI, not Tinycast describing itself, and a user
+turn supplies — plus, on a Claude turn the reader opted into search for, `WebSearch` and
+`WebFetch`. That is a sandbox boundary on a local CLI, not Tinycast describing itself, and a user
 switch must not be able to lift it.
 
 `mcpEnabled` and `mcpServers` are excluded for the reasons in [mcp.md](mcp.md).

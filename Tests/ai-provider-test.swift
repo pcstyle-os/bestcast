@@ -107,6 +107,8 @@ struct AIProviderTests {
         codexElicitationsAreOnlyToolCalls()
         claudeControlFramesAnswerOneTool()
         aGatewayOffersNoneAsItsReasoningEffort()
+        webSearchRidesEachCapableRoute()
+        anthropicSearchStreamsRowsAndSources()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -286,6 +288,119 @@ struct AIProviderTests {
         expect(
             (router["reasoning"] as? [String: String])?["effort"] == "low",
             "OpenRouter receives the reasoning effort its catalog offered")
+    }
+
+    /// Search is the reader's opt-in, so a turn without it must not carry the tool at all.
+    static func webSearchRidesEachCapableRoute() {
+        let anthropicConfiguration = AIHTTPConfiguration(
+            provider: .anthropic, baseURL: URL(string: "https://api.anthropic.com")!,
+            model: "claude-opus-5-5")
+        let question = [AIMessage(role: .user, text: "  Wie spät ist es in Łódź?\n")]
+        let tool = AITool(
+            name: "notes__find", description: "Finds a note.",
+            parameters: .object(["type": .string("object")]), origin: "Notes", title: "find")
+
+        let off = AIRequestBody.make(
+            AIRequest(messages: question), configuration: anthropicConfiguration)
+        expect(off["tools"] == nil, "Anthropic sends no tools key when search is off")
+        let on = AIRequestBody.make(
+            AIRequest(messages: question, webSearch: true), configuration: anthropicConfiguration)
+        let search = (on["tools"] as? [[String: Any]]) ?? []
+        expect(
+            search.count == 1 && search.first?["type"] as? String == "web_search_20250305"
+                && search.first?["name"] as? String == "web_search"
+                && search.first?["max_uses"] as? Int == 5
+                && search.first?["input_schema"] == nil,
+            "with search on, Anthropic gets the basic server tool and nothing of a client tool's")
+        let both = AIRequestBody.make(
+            AIRequest(messages: question, webSearch: true, tools: [tool]),
+            configuration: anthropicConfiguration)
+        expect(
+            (both["tools"] as? [[String: Any]])?.map { $0["name"] as? String }
+                == ["notes__find", "web_search"],
+            "an MCP tool and the search tool ride together, the client's first")
+
+        let openAIConfiguration = AIHTTPConfiguration(
+            provider: .openAI, baseURL: URL(string: "https://api.openai.com/v1")!, model: "gpt-5")
+        let openAI = AIRequestBody.make(
+            AIRequest(messages: question, webSearch: true), configuration: openAIConfiguration)
+        expect(
+            openAI["web_search_options"] == nil && openAI["plugins"] == nil
+                && openAI["tools"] == nil,
+            "OpenAI's Chat Completions is sent no search field even if a caller sets the flag")
+
+        func searches(_ provider: AIProviderKind) -> Bool {
+            AIConnection(provider: provider, models: ["m"]).capabilities(for: "m").webSearch
+        }
+        expect(
+            searches(.anthropic) && !searches(.openAI) && !searches(.gemini)
+                && !searches(.openAICompatible),
+            "search is offered on Anthropic and not on the OpenAI-shaped vendor routes")
+        expect(
+            AIModelCapabilities.claudeCommand.webSearch && AIModelCapabilities.codex.webSearch
+                && !AIModelCapabilities.appleIntelligence.webSearch,
+            "the Claude command offers search beside Codex; the on-device model never does")
+    }
+
+    /// Anthropic's search and its citations, fed in odd slices, become rows and linked sources.
+    static func anthropicSearchStreamsRowsAndSources() {
+        guard
+            let data = FileManager.default.contents(
+                atPath: "Tests/ai-fixtures/anthropic-web-search.txt")
+        else {
+            expect(false, "anthropic-web-search fixture is readable")
+            return
+        }
+        for slice in [data.count, 13] {
+            var decoder = AIStreamDecoder(shape: .anthropic)
+            var events: [AIStreamEvent] = []
+            var offset = 0
+            while offset < data.count {
+                let end = min(offset + slice, data.count)
+                events += (try? decoder.feed(data[offset..<end])) ?? []
+                offset = end
+            }
+            events += (try? decoder.finish()) ?? []
+            let rows = events.filter {
+                switch $0 {
+                case .searching, .searched: return true
+                default: return false
+                }
+            }
+            expect(
+                rows == [.searching("Łódź time"), .searched(nil)],
+                "a server search becomes one row, named by its whole query (slice \(slice))")
+            let text = events.compactMap { event -> String? in
+                if case .text(let text) = event { return text }
+                return nil
+            }.joined()
+            let expected =
+                "Let me check. It is 14:05 in Łódź ([Łódź city guide](https://example.org/"
+                + "lodz_%28city%29), [time.example](https://time.example/pl)). \nAnything else?"
+            expect(
+                text == expected,
+                "cited text closes on its sources, before its full stop (slice \(slice))")
+            expect(
+                ChatReferences.extract(from: text).map(\.url.absoluteString)
+                    == ["https://example.org/lodz_%28city%29", "https://time.example/pl"],
+                "and ChatReferences lists both as sources, once each (slice \(slice))")
+            expect(events.last == .finished, "the search turn still ends on message_stop")
+        }
+
+        var uncited = AIStreamDecoder(shape: .anthropic)
+        let plain = Data(
+            """
+            data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Done. "}}
+
+            data: {"type":"content_block_stop","index":0}
+
+
+            """.utf8)
+        expect(
+            (try? uncited.feed(plain)) == [.text("Done. ")],
+            "an uncited block streams exactly as it did, trailing punctuation and all")
     }
 
     /// A body that named the default would 400 on every endpoint without a thinking mode.
