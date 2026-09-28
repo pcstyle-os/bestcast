@@ -206,6 +206,10 @@ House idioms for the sharp edges:
   `hotKeyCarbonEventHandler`).
 - `HealthTicker` (`Platform/HealthTicker.swift`) is the one shared timer for periodic health checks, so
   the event taps do not each own one.
+- `HyperKeyTap`'s modifying tap is the one callback that runs on a dedicated `Thread` with its own run
+  loop rather than on main, because a modifying tap holds every keystroke until it answers. It shares
+  only a `Mutex`-guarded `HyperKeyRewriter` and hops back with a `Task`; it is a thread, not an actor.
+  See [hotkeys.md](features/hotkeys.md#the-tap-runs-on-its-own-thread).
 
 ## The tree
 

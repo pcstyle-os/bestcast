@@ -1,6 +1,7 @@
 // Standalone contract tests for the real pure snippet sources and main-actor store watcher.
 
 import AppKit
+import Carbon.HIToolbox
 import Foundation
 
 @main
@@ -30,6 +31,7 @@ struct SnippetsTests {
         testKeywordLifecycle()
         await testKeywordListenerLifecycle()
         await testKeywordListenerFollowsEdits()
+        await testHyperKeyInputReachesTheListener()
         testOwnEditorInjection()
 
         print(failures == 0 ? "\nALL PASSED" : "\n\(failures) FAILED")
@@ -2149,6 +2151,52 @@ struct SnippetsTests {
         listener.update([record(path, Snippet(name: "Follow", text: "x", keyword: nil))])
         await type(["!signoff"])
         check("a cleared keyword does nothing", matches.count == 2)
+        listener.stop()
+    }
+
+    /// Hyper's Quick Press Escape and a Right Option held over dictation, as the listener sees them.
+    private static func testHyperKeyInputReachesTheListener() async {
+        let listener = SnippetKeywordListener(
+            tapController: FakeSnippetKeywordTapController(), accessibilityTrusted: { true },
+            secureEventInputEnabled: { false }, now: { Date(timeIntervalSince1970: 3_000) },
+            syntheticEventTag: Paster.tinycastEventTag, logsTapFailures: false)
+        var matches: [Int] = []
+        var activity = 0
+        listener.start(
+            onUserActivity: { activity += 1 },
+            onMatch: { _, _, count, _ in matches.append(count) })
+        listener.update([record("/tmp/hyper.md", Snippet(name: "Hyper", text: "x", keyword: "zq;"))])
+        func key(_ text: String, keyCode: Int = 0, flags: UInt64 = 0, tag: Int64 = 0) async {
+            listener.processEvent(
+                typeRaw: CGEventType.keyDown.rawValue, keyCode: keyCode, flagsRaw: flags,
+                text: text, eventUserData: tag, secureEventInputEnabled: false)
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        // `HyperKeyTap.syntheticTag`, which this harness does not compile.
+        let quickPressTag: Int64 = 0x5459_4354
+
+        await key("zq")
+        await key("\u{1B}", keyCode: kVK_Escape, tag: quickPressTag)
+        await key(";")
+        check(
+            "a Quick Press Escape splits a keyword exactly as the reader's own Escape would",
+            matches.isEmpty && activity == 3)
+        await key("zq")
+        await key("\u{1B}", keyCode: kVK_Escape, tag: Paster.tinycastEventTag)
+        await key(";")
+        check(
+            "why it keeps its own tag: a delivery-tagged Escape is invisible to the buffer",
+            matches == [3] && activity == 5)
+
+        let rightOption = CGEventFlags.maskAlternate.rawValue | 0x40
+        await key("dictated phrase ends zq;", flags: rightOption)
+        check(
+            "Right Option held over an injected phrase still expands the keyword it ends with",
+            matches == [3, 3])
+        let hyperChord = CGEventFlags([.maskControl, .maskAlternate, .maskCommand]).rawValue
+        await key("zq", flags: hyperChord)
+        await key(";")
+        check("the same phrase under a held Hyper chord resets instead", matches == [3, 3])
         listener.stop()
     }
 

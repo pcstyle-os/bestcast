@@ -201,7 +201,15 @@ installs or repairs the tap when they become available, and tears it down after 
 disabling the setting. `stop()` is authoritative and clears the buffer. The buffer also resets on app
 or session changes, Secure Event Input, navigation and modifier shortcuts, and 15 seconds of
 inactivity. It is capped at 256 characters. Keywords are matched case-insensitively by longest suffix;
-duplicates resolve by file identity. Tinycast-tagged synthetic events are ignored.
+duplicates resolve by file identity. Tinycast-tagged synthetic events are ignored. The Hyper Key's
+Quick Press Escape is deliberately not one of them: it stands in for the reader's Escape, so it
+resets the buffer and cancels pending delivery like the physical key (see
+[hotkeys.md](hotkeys.md#press-tracking-uses-toggle-semantics)).
+
+**The keyword tap stays on the main run loop**, unlike `HyperKeyTap`'s, which moved to its own thread.
+A listen-only tap is never waited on to deliver the keystroke, so a busy main actor delays only the
+buffer's view of typing, not the typing; and the buffer, the injection target it samples and the match
+task are all main-actor state, which a second thread would have to hop back to for every event.
 
 **A keystroke's Unicode string is read whole, however long.** Dictation and autocomplete tools post a
 phrase as a single keyDown; reading only a fixed prefix of it once let a phrase whose first sixteen
