@@ -110,6 +110,7 @@ struct AIProviderTests {
         webSearchRidesEachCapableRoute()
         anthropicSearchStreamsRowsAndSources()
         anthropicSearchFailuresAndTitlesStaySound()
+        anthropicPausedTurnsPreserveContent()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -419,6 +420,111 @@ struct AIProviderTests {
     }
 
     /// A search that failed or never ran reads as failed, and no title can break its own link.
+    static func anthropicPausedTurnsPreserveContent() {
+        guard let fixture = FileManager.default.contents(
+            atPath: "Tests/ai-fixtures/anthropic-pause-turn.txt")
+        else {
+            expect(false, "pause fixture is readable")
+            return
+        }
+        let expected = JSONValue(data: Data(
+            """
+            [
+              {"type":"thinking","thinking":"Reason carefully","signature":"signed-fixture"},
+              {"type":"redacted_thinking","data":"opaque-fixture"},
+              {"type":"server_tool_use","id":"search_done","name":"web_search","input":{"query":"first"}},
+              {"type":"web_search_tool_result","tool_use_id":"search_done","content":[
+                {"type":"web_search_result","url":"https://example.com","title":"Example",
+                 "encrypted_content":"encrypted-fixture","page_age":"today"}]},
+              {"type":"text","text":"Found evidence.","citations":[
+                {"type":"web_search_result_location","url":"https://example.com","title":"Example",
+                 "encrypted_index":"index-fixture","cited_text":"evidence"}]},
+              {"type":"server_tool_use","id":"search_pending","name":"web_search","input":{"query":"next"}}
+            ]
+            """.utf8))
+        let configuration = AIHTTPConfiguration(
+            provider: .anthropic, baseURL: URL(string: "https://api.anthropic.com")!, model: "claude")
+        let request = AIRequest(
+            instructions: "Keep the system prompt.", messages: [AIMessage(role: .user, text: "Search")],
+            webSearch: true, tools: [
+                AITool(name: "notes__find", description: "Find a note",
+                       parameters: .object(["type": .string("object")]), origin: "Notes", title: "find")
+            ])
+        for width in [1, 17, fixture.count] {
+            do {
+                var decoder = AIStreamDecoder(shape: .anthropic)
+                var events: [AIStreamEvent] = []
+                for offset in stride(from: 0, to: fixture.count, by: width) {
+                    events += try decoder.feed(fixture.subdata(in: offset..<min(offset + width, fixture.count)))
+                }
+                expect(decoder.isTerminal && decoder.stopReason == "pause_turn", "pause closes the HTTP response")
+                expect(!events.contains(.finished), "pause does not finish the send")
+                expect(!events.contains(.searched(nil, id: "search_pending", failed: true)), "pause keeps search pending")
+                let blocks = try decoder.resumePausedTurn() ?? []
+                expect(.array(blocks) == expected, "all raw blocks survive fragmented streaming unchanged")
+                let body = AIRequestBody.make(request, configuration: configuration, pausedContent: blocks)
+                let encoded = try JSONSerialization.data(withJSONObject: body)
+                let wire = JSONValue(data: encoded)?.objectValue
+                let messages = wire?["messages"]?.arrayValue ?? []
+                expect(messages.count == 2, "continuation appends one assistant message")
+                expect(messages.last?.objectValue?["role"] == .string("assistant"), "continuation is assistant content")
+                expect(messages.last?.objectValue?["content"] == expected, "wire carries every raw block unchanged")
+                let original = AIRequestBody.make(request, configuration: configuration)
+                expect(JSONValue(body["tools"] ?? []) == JSONValue(original["tools"] ?? []), "tools stay unchanged")
+                expect(body["system"] as? String == original["system"] as? String, "system prompt stays unchanged")
+                let ending = Data(
+                    """
+                    data: {"type":"content_block_start","index":0,"content_block":\
+                    {"type":"web_search_tool_result","tool_use_id":"search_pending","content":[]}}
+
+                    data: {"type":"content_block_stop","index":0}
+
+                    data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+                    data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" More."}}
+
+                    data: {"type":"content_block_stop","index":1}
+
+                    data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}
+
+                    data: {"type":"message_stop"}
+
+
+                    """.utf8)
+                events += try decoder.feed(ending)
+                expect(events.contains(.searched(nil, id: "search_pending")), "continuation settles the original search")
+                expect(events.contains(.text(" More.")), "continuation text reaches the same event stream")
+                expect(events.filter { $0 == .finished }.count == 1, "only the final response finishes")
+                let resumed = try decoder.resumePausedTurn()
+                expect(resumed == nil, "end_turn does not resume")
+            } catch {
+                expect(false, "pause continuation failed: \(error)")
+            }
+        }
+        do {
+            var decoder = AIStreamDecoder(shape: .anthropic)
+            var accumulated: [JSONValue] = []
+            for count in 1...3 {
+                _ = try decoder.feed(fixture)
+                accumulated += try decoder.resumePausedTurn() ?? []
+                expect(accumulated.count == count * 6, "repeated pauses keep earlier content")
+                let body = AIRequestBody.make(request, configuration: configuration, pausedContent: accumulated)
+                let messages = body["messages"] as? [[String: Any]] ?? []
+                expect(JSONValue(messages.last?["content"] ?? []) == .array(accumulated),
+                       "repeated continuation sends all earlier blocks")
+            }
+            _ = try decoder.feed(fixture)
+            do {
+                _ = try decoder.resumePausedTurn()
+                expect(false, "fourth pause must fail")
+            } catch {
+                expect(error is AIProviderError, "continuation cap reports a provider error")
+            }
+        } catch {
+            expect(false, "three continuations are allowed: \(error)")
+        }
+    }
+
     static func anthropicSearchFailuresAndTitlesStaySound() {
         func decode(_ payloads: [String]) -> [AIStreamEvent] {
             var decoder = AIStreamDecoder(shape: .anthropic)
@@ -463,11 +569,10 @@ struct AIProviderTests {
                 .searching("Kraków", id: "srvtoolu_a"),
                 .searched(nil, id: "srvtoolu_a", failed: true),
                 .searching("Gdańsk", id: "srvtoolu_b"), .searched(nil, id: "srvtoolu_b"),
-                .searching("Toruń", id: "srvtoolu_c"),
-                .searched(nil, id: "srvtoolu_c", failed: true)
+                .searching("Toruń", id: "srvtoolu_c")
             ],
-            "an error result fails its row, no results is not an error, a paused search never ran")
-        expect(paused.last == .finished, "a paused turn still ends, where it stopped")
+            "an error result fails its row, empty results succeed, and a paused search stays open")
+        expect(!paused.contains(.finished), "a paused turn does not finish the reply")
 
         var live = [
             ChatSearch(query: "a", isComplete: false, textOffset: 0, sequence: 0, callID: "1"),

@@ -16,37 +16,43 @@ struct HTTPAIProvider: AIProvider {
                 let session = Self.makeSession()
                 defer { session.invalidateAndCancel() }
                 do {
-                    let urlRequest = try makeURLRequest(request)
-                    let (bytes, response) = try await session.bytes(for: urlRequest)
-                    guard let response = response as? HTTPURLResponse else {
-                        throw AIProviderError.responseFailed(
-                            "The provider returned an invalid HTTP response.")
-                    }
-                    guard response.statusCode == 200 else {
-                        throw AIProviderError.responseFailed(Self.statusMessage(response))
-                    }
                     var decoder = AIStreamDecoder(shape: configuration.shape)
-                    var chunk = Data()
-                    chunk.reserveCapacity(2_048)
-                    // Per line, not per 2 KB: a short reply must show before the stream closes.
-                    for try await byte in bytes {
+                    var pausedContent: [JSONValue] = []
+                    while true {
                         try Task.checkCancellation()
-                        chunk.append(byte)
-                        if byte == 0x0A {
-                            for event in try decoder.feed(chunk) { continuation.yield(event) }
-                            chunk.removeAll(keepingCapacity: true)
-                            if decoder.isTerminal { break }
+                        let urlRequest = try makeURLRequest(request, pausedContent: pausedContent)
+                        let (bytes, response) = try await session.bytes(for: urlRequest)
+                        guard let response = response as? HTTPURLResponse else {
+                            throw AIProviderError.responseFailed(
+                                "The provider returned an invalid HTTP response.")
                         }
-                    }
-                    if !chunk.isEmpty, !decoder.isTerminal {
-                        for event in try decoder.feed(chunk) { continuation.yield(event) }
-                    }
-                    if !decoder.isTerminal {
-                        for event in try decoder.finish() { continuation.yield(event) }
-                    }
-                    guard decoder.isTerminal else {
-                        throw AIProviderError.responseFailed(
-                            "The connection closed before the response completed.")
+                        guard response.statusCode == 200 else {
+                            throw AIProviderError.responseFailed(Self.statusMessage(response))
+                        }
+                        var chunk = Data()
+                        chunk.reserveCapacity(2_048)
+                        // Per line, not per 2 KB: a short reply must show before the stream closes.
+                        for try await byte in bytes {
+                            try Task.checkCancellation()
+                            chunk.append(byte)
+                            if byte == 0x0A {
+                                for event in try decoder.feed(chunk) { continuation.yield(event) }
+                                chunk.removeAll(keepingCapacity: true)
+                                if decoder.isTerminal { break }
+                            }
+                        }
+                        if !chunk.isEmpty, !decoder.isTerminal {
+                            for event in try decoder.feed(chunk) { continuation.yield(event) }
+                        }
+                        if !decoder.isTerminal {
+                            for event in try decoder.finish() { continuation.yield(event) }
+                        }
+                        guard decoder.isTerminal else {
+                            throw AIProviderError.responseFailed(
+                                "The connection closed before the response completed.")
+                        }
+                        guard let blocks = try decoder.resumePausedTurn() else { break }
+                        pausedContent += blocks
                     }
                     continuation.finish()
                 } catch is CancellationError {
@@ -62,7 +68,9 @@ struct HTTPAIProvider: AIProvider {
         }
     }
 
-    private func makeURLRequest(_ input: AIRequest) throws -> URLRequest {
+    private func makeURLRequest(
+        _ input: AIRequest, pausedContent: [JSONValue]
+    ) throws -> URLRequest {
         var request = URLRequest(url: configuration.endpointURL)
         request.httpMethod = "POST"
         request.timeoutInterval = 90
@@ -70,7 +78,8 @@ struct HTTPAIProvider: AIProvider {
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         applyAuthentication(to: &request)
         request.httpBody = try JSONSerialization.data(
-            withJSONObject: AIRequestBody.make(input, configuration: configuration))
+            withJSONObject: AIRequestBody.make(
+                input, configuration: configuration, pausedContent: pausedContent))
         return request
     }
 

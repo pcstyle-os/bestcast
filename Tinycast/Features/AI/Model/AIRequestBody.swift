@@ -3,11 +3,13 @@ import Foundation
 /// The JSON body each route expects. Pure on purpose: a wrong shape is a mid-conversation 400.
 enum AIRequestBody {
     static func make(
-        _ input: AIRequest, configuration: AIHTTPConfiguration
+        _ input: AIRequest, configuration: AIHTTPConfiguration,
+        pausedContent: [JSONValue] = []
     ) -> [String: Any] {
         switch configuration.shape {
         case .openAICompatible: return openAI(input, configuration: configuration)
-        case .anthropic: return anthropic(input, configuration: configuration)
+        case .anthropic:
+            return anthropic(input, configuration: configuration, pausedContent: pausedContent)
         }
     }
 
@@ -48,15 +50,19 @@ enum AIRequestBody {
     }
 
     private static func anthropic(
-        _ input: AIRequest, configuration: AIHTTPConfiguration
+        _ input: AIRequest, configuration: AIHTTPConfiguration, pausedContent: [JSONValue]
     ) -> [String: Any] {
         let systemParts =
             ([input.instructions]
             + input.messages.compactMap { $0.role == .system ? $0.text : nil })
             .compactMap { $0?.nonEmpty }
+        var messages = anthropicMessages(input.messages)
+        if !pausedContent.isEmpty {
+            messages.append(["role": "assistant", "content": pausedContent.map(\.jsonObject)])
+        }
         var body: [String: Any] = [
             "model": configuration.model,
-            "messages": anthropicMessages(input.messages),
+            "messages": messages,
             "max_tokens": input.maxOutputTokens,
             "stream": true
         ]
