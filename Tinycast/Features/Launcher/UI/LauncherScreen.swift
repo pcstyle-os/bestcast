@@ -246,6 +246,17 @@ struct LauncherScreen: PaletteScreen {
         }
     }
 
+    func spokenTitle(at selection: Int) -> String? {
+        switch row(at: selection) {
+        case .calc(let result):
+            return CalculatorCard.spokenLabel(for: core.calcNumberFormat.localized(result))
+        case .color(let color): return ColorFormat.primary(for: color).string(for: color)
+        case .meeting(let meeting): return meeting.title
+        case .entry(let app), .fallback(_, let app): return app.name
+        case nil: return nil
+        }
+    }
+
     func activate(at selection: Int) {
         switch row(at: selection) {
         // Error cards no-op — copyCalculatorResult only acts on value payloads.

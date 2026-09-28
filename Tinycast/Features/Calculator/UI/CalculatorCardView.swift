@@ -72,6 +72,17 @@ struct CalculatorCard: View {
         .padding(.horizontal, metrics.spacing.xl)
         .padding(.vertical, metrics.spacing.xxxl)
         .leadCard(selected: selected)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.spokenLabel(for: result))
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// One phrase, where reading the parts would speak the arrow between them as a glyph.
+    static func spokenLabel(for result: CalcResult) -> String {
+        switch result.payload {
+        case .value(let display, _): return "\(result.expression) equals \(display)"
+        case .error(let message): return message
+        }
     }
 }
 

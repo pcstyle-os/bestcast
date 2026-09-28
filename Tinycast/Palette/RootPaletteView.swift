@@ -276,6 +276,7 @@ struct RootPaletteView: View {
         let showActionGroup =
             (count > 0 || screen.actsWithoutRows)
             && screen.hasPrimaryAction(at: sel)
+        let spokenTitle = isCollapsed ? nil : screen.spokenTitle(at: sel)
 
         // One header position, so focus survives the swap. See docs/features/palette.md.
         return keyHandlers(
@@ -333,7 +334,9 @@ struct RootPaletteView: View {
                     value: core.isDimmingPaletteForDialog
                 )
                 .clipShape(RoundedRectangle(cornerRadius: metrics.radius.panel, style: .continuous))),
-            selection: sel)
+            selection: sel
+        )
+        .modifier(SelectionAnnouncement(title: spokenTitle))
     }
 
     /// The emoji grid's observers, split out so `stateObservers` stays within type-checker reach.
@@ -644,7 +647,7 @@ struct RootPaletteView: View {
             headerGutter(width: metrics.spacing.md * 2)
             // Every sub-screen leaves the same way, so the slot reads the same on all of them.
             if vm.mode != .launcher {
-                HeaderBackButton(help: backHelp, action: goBack)
+                HeaderBackButton(label: hasBackStep ? "Back" : "Close", help: backHelp, action: goBack)
             } else {
                 Image(systemName: vm.mode.systemImage)
                     .font(metrics.typography.headerIcon)
@@ -652,6 +655,7 @@ struct RootPaletteView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: metrics.size.headerIconSlot)
                     .windowDraggable(settings.paletteDraggable, onBegan: beginDrag, onEnded: endDrag)
+                    .accessibilityHidden(true)
             }
             headerGutter(width: metrics.spacing.md)
             // One structural position: a field inside a branch loses first responder when it flips.
@@ -762,6 +766,8 @@ struct RootPaletteView: View {
             }
         }
         .help("Ask Quick AI what you typed  ⇥")
+        .accessibilityLabel("Quick AI")
+        .accessibilityHint("Tab")
     }
 
     /// Resolved through `PaletteTabAction`, so the hint cannot promise the wrong destination.
@@ -893,6 +899,7 @@ struct RootPaletteView: View {
         MenuCircleButton {
             if openMenu == .app { closeMenus() } else { open(.app, highlighting: 0) }
         }
+        .accessibilityLabel("\(Bundle.main.appDisplayName) Menu")
     }
 
     /// The footer control group: primary action and the Actions toggle sharing one glass capsule.
@@ -915,6 +922,8 @@ struct RootPaletteView: View {
                     }
                 }
             }
+            .accessibilityLabel(pillLabel)
+            .accessibilityHint(formPrimaryShortcut ? "Command-Return" : "Return")
             if showActions {
                 BarButton(action: toggleActions) {
                     HStack(spacing: metrics.spacing.sm) {
@@ -927,6 +936,8 @@ struct RootPaletteView: View {
                         }
                     }
                 }
+                .accessibilityLabel("Actions")
+                .accessibilityHint("Command-K")
             }
         }
         .padding(metrics.spacing.xs)
@@ -1437,6 +1448,20 @@ private struct PaletteHideObserver: ViewModifier {
     }
 }
 
+/// The field keeps focus while ↑/↓ move a highlight, so VoiceOver has to be told what landed.
+private struct SelectionAnnouncement: ViewModifier {
+    @Environment(PaletteState.self) private var vm
+    let title: String?
+
+    func body(content: Content) -> some View {
+        // The tree stays mounted while hidden, so a pop to root there must not speak.
+        content.onChange(of: title) { _, title in
+            guard let title, vm.isVisible, NSWorkspace.shared.isVoiceOverEnabled else { return }
+            AccessibilityNotification.Announcement(title).post()
+        }
+    }
+}
+
 /// Its own modifier: the palette's body is already at the type-checker's limit.
 private struct SearchFieldHiding: ViewModifier {
     let hidden: Bool
@@ -1472,6 +1497,7 @@ private struct MenuCircleButton: View {
 
 /// Hover state lives here, so lighting the chevron never re-renders the header around it.
 private struct HeaderBackButton: View {
+    let label: String
     let help: String
     let action: () -> Void
     @State private var hovered = false
@@ -1490,5 +1516,6 @@ private struct HeaderBackButton: View {
         .onHover { hovered = $0 }
         .animation(.easeOut(duration: Theme.Duration.hover), value: hovered)
         .help(help)
+        .accessibilityLabel(label)
     }
 }

@@ -31,6 +31,8 @@ struct QuicklinkListScreen: PaletteScreen {
             values: QuicklinkArgumentsAccessory.values(for: quicklink, core: core, vm: vm))
     }
 
+    func spokenTitle(at selection: Int) -> String? { quicklink(at: selection)?.name }
+
     func activate(at selection: Int) {
         guard let quicklink = quicklink(at: selection) else { return }
         core.quicklinkCoordinator.openQuicklink(

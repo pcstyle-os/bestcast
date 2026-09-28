@@ -56,6 +56,7 @@ struct ScheduleList: View {
                             .contentShape(Rectangle())
                             .onTapGesture { onActivate(meeting) }
                             .onRightClick { onActions(meeting) }
+                            .accessibilityAction(named: "Show Actions") { onActions(meeting) }
                             .selectionFrame(meeting.id == selectedID)
                         }
                     }
@@ -111,7 +112,7 @@ private struct MeetingRow: View {
         .armedHover($hovered)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
     private var accessibilityText: String {

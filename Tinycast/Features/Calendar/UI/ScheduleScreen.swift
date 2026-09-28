@@ -33,6 +33,8 @@ struct ScheduleScreen: PaletteScreen {
         return MeetingActionsMenu.content(meeting: meeting, core: core)
     }
 
+    func spokenTitle(at selection: Int) -> String? { meeting(at: selection)?.title }
+
     func activate(at selection: Int) {
         guard let meeting = meeting(at: selection) else { return }
         core.calendarCoordinator.activateMeeting(id: meeting.id)

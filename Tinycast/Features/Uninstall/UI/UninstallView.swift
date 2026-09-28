@@ -42,6 +42,7 @@ struct UninstallList: View {
                             }
                         )
                         .onRightClick { onActions(candidate) }
+                        .accessibilityAction(named: "Show Actions") { onActions(candidate) }
                     }
                 }
                 .padding(.horizontal, metrics.spacing.md)
@@ -121,6 +122,20 @@ private struct UninstallRow: View {
                 .fill(fill)
         )
         .armedHover($hovered)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(candidate.name)
+        .accessibilityValue(spokenDetail)
+        .accessibilityAddTraits(selected ? [.isToggle, .isSelected] : .isToggle)
+        .accessibilityAction { onToggle() }
+    }
+
+    /// The checkbox state leads, since it is what ↵ acts on; a lock says why it can't change.
+    private var spokenDetail: String {
+        let state = candidate.isLocked ? "locked" : checked ? "checked" : "not checked"
+        let parts = [
+            state, candidate.locationLabel, candidate.evidence.label, candidate.size?.formatted
+        ]
+        return parts.compactMap { $0 }.joined(separator: ", ")
     }
 }
 

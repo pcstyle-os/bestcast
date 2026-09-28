@@ -233,6 +233,16 @@ private struct EmojiGridRowView: View {
                         hovered: column == hoveredColumn,
                         size: cellSize
                     )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(row[column].displayName)
+                    .accessibilityAddTraits(
+                        row.start + column == selection ? [.isButton, .isSelected] : .isButton
+                    )
+                    .accessibilityAction {
+                        onSelect(row.start + column)
+                        onActivate()
+                    }
+                    .accessibilityAction(named: "Show Actions") { onActions(row.start + column) }
                 } else {
                     // Empty trailing slots keep a partial last row aligned with the full rows.
                     Color.clear.frame(width: cellSize, height: cellSize)

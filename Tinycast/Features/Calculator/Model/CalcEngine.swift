@@ -52,7 +52,7 @@ enum CalcEngine {
         region: String? = nil, format: CalcNumberFormat = .english
     ) -> CalcResult? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= 256, let query = format.canonical(trimmed) else {
+        guard !trimmed.isEmpty, trimmed.count <= 256, var query = format.canonical(trimmed) else {
             return nil
         }
         guard !query.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) }) else {
@@ -64,13 +64,17 @@ enum CalcEngine {
         // Before tokenizing: `5pm ldn in sf` is words, which the tokenizer would reject.
         if let zone = CalcTimeZone.evaluate(query, now: now, calendar: calendar) { return zone }
 
-        guard let tokens = CalcTokenizer.tokenize(query), !tokens.isEmpty else { return nil }
+        guard let typed = CalcTokenizer.tokenize(query), !typed.isEmpty else { return nil }
 
         if let partial = partialResult(
-            tokens, query: query, now: now, calendar: calendar, rates: rates, region: region)
+            typed, query: query, now: now, calendar: calendar, rates: rates, region: region)
         {
             return partial
         }
+
+        let unclosed = unclosedGroups(typed)
+        let tokens = typed + Array(repeating: .op(.close), count: unclosed)
+        query += String(repeating: ")", count: unclosed)
 
         // A lone literal reads as an app search, so no card — except a radix one ("0xff").
         if tokens.count == 1 {
@@ -203,6 +207,18 @@ enum CalcEngine {
             expression: CalcFormatter.expression(query),
             sourceBadge: "Expression", targetBadge: "Result",
             payload: .number(value))
+    }
+
+    /// Groups still open at the end: the closers are the one thing a left-to-right typist owes.
+    private static func unclosedGroups(_ tokens: [CalcToken]) -> Int {
+        var depth = 0
+        for token in tokens {
+            if token == .op(.open) { depth += 1 }
+            if token == .op(.close) { depth -= 1 }
+            // A stray closer is a typo, not a debt, so it is left to fail the parse.
+            guard depth >= 0 else { return 0 }
+        }
+        return depth
     }
 
     private static func partialOperatorText(_ token: CalcToken) -> String? {

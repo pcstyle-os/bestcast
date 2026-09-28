@@ -132,6 +132,8 @@ private extension MenuPanelCorner {
         onActivate: @escaping (Int) -> Void
     ) -> PaletteMenuContent?
     func activate(at selection: Int)
+    /// What VoiceOver says when the highlight lands on a row, or nil to stay silent.
+    func spokenTitle(at selection: Int) -> String?
     /// ⌘↵. False when the selection has no secondary action, leaving the key unhandled.
     func secondary(at selection: Int) -> Bool
     /// ⌃⌘↵. False when the selection has no third action, leaving the chord to `secondary`.
@@ -172,6 +174,7 @@ extension PaletteScreen {
                 placeholder: "Search for actions…", placement: .bottom),
             onActivate: onActivate, preferredSelection: filtered.bestMatch)
     }
+    func spokenTitle(at selection: Int) -> String? { nil }
     func tertiary(at selection: Int) -> Bool { false }
     func pasteKeepingWindowOpen(at selection: Int) -> Bool { false }
     func perform(_ shortcut: PaletteShortcut, at selection: Int) -> Bool { false }

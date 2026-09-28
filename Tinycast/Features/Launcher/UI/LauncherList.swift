@@ -153,6 +153,8 @@ struct LauncherList: View {
                                         .contentShape(Rectangle())
                                         .onTapGesture(perform: onActivateCard)
                                         .onRightClick(perform: onCardActions)
+                                        .accessibilityAction { onActivateCard() }
+                                        .accessibilityAction(named: "Show Actions", onCardActions)
                                         .padding(.bottom, metrics.spacing.xs)
                                         .selectionFrame(cardSelected)
                                 case .app(let app, let slot):
@@ -165,6 +167,8 @@ struct LauncherList: View {
                                     .contentShape(Rectangle())
                                     .onRowTap(drag: drag(for: app)) { onActivate(app) }
                                     .onRightClick { onActions(app) }
+                                    .accessibilityAction { onActivate(app) }
+                                    .accessibilityAction(named: "Show Actions") { onActions(app) }
                                     .selectionFrame(app.id == selectedRowID)
                                 case .fallback(let app, let index):
                                     AppRow(
@@ -174,6 +178,10 @@ struct LauncherList: View {
                                     .contentShape(Rectangle())
                                     .onTapGesture { fallbacks?.onActivate(index) }
                                     .onRightClick { fallbacks?.onActions(index) }
+                                    .accessibilityAction { fallbacks?.onActivate(index) }
+                                    .accessibilityAction(named: "Show Actions") {
+                                        fallbacks?.onActions(index)
+                                    }
                                     .selectionFrame(row.id == selectedRowID)
                                 }
                             }
@@ -241,6 +249,13 @@ private struct AppRow: View {
         if selected { return Theme.Colors.selection }
         if hovered { return Theme.Colors.rowHover }
         return .clear
+    }
+
+    /// Everything the row shows beside its name, in reading order, as one VoiceOver value.
+    private var spokenDetail: String {
+        let alias = aliases.alias(for: app.preferenceKey).map { "alias \($0)" }
+        let parts = [app.subtitle, alias, app.kindLabel, running ? "running" : nil]
+        return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
     /// Keycaps for this entry's hotkey, or `nil` if none is bound.
@@ -319,5 +334,9 @@ private struct AppRow: View {
                 .fill(fill)
         )
         .armedHover($hovered)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(app.name)
+        .accessibilityValue(spokenDetail)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }

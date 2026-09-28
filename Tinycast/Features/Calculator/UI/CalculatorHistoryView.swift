@@ -71,6 +71,7 @@ struct CalculatorHistoryList: View {
                                 .contentShape(Rectangle())
                                 .onTapGesture(perform: onActivateCalc)
                                 .onRightClick(perform: onCalcActions)
+                                .accessibilityAction(named: "Show Actions", onCalcActions)
                                 .padding(.bottom, metrics.spacing.xs)
                                 .selectionFrame(calcSelected)
                         case .entry(let entry):
@@ -85,6 +86,11 @@ struct CalculatorHistoryList: View {
                                     }
                                 )
                                 .onRightClick { onActions(entry) }
+                                .accessibilityAction {
+                                    onSelect(entry)
+                                    onActivate()
+                                }
+                                .accessibilityAction(named: "Show Actions") { onActions(entry) }
                         }
                     }
                 }
@@ -103,7 +109,7 @@ struct CalculatorHistoryList: View {
     }
 }
 
-private struct CalcHistoryRow: View {
+struct CalcHistoryRow: View {
 
     @Environment(\.metrics) private var metrics
     @Environment(AppCore.self) private var core
@@ -147,5 +153,12 @@ private struct CalcHistoryRow: View {
                 .fill(fill)
         )
         .armedHover($hovered)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.spokenLabel(for: entry, format: format))
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    static func spokenLabel(for entry: CalcHistoryEntry, format: CalcNumberFormat) -> String {
+        "\(format.localizedExpression(entry.expression)) equals \(format.localized(entry.result))"
     }
 }
