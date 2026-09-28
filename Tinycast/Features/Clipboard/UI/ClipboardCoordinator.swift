@@ -18,6 +18,7 @@ final class ClipboardCoordinator {
     /// In memory only: a run outlives the palette hiding between presses, never a relaunch.
     private(set) var pasteQueue = PasteQueue()
     @ObservationIgnored private var pastePacer = PasteQueue.Pacer()
+    @ObservationIgnored private var historyWalk = PasteQueue.HistoryWalk()
 
     init(
         clipboardStore: ClipboardStore,
@@ -134,7 +135,7 @@ final class ClipboardCoordinator {
         pasteQueue.dropDeleted { clipboardStore.item(withID: $0) }
     }
 
-    /// The global chord, the launcher row and the ⌘K row alike: the next queued entry, pasted.
+    /// The global chord, the launcher row and the ⌘K row alike: the next entry, pasted.
     func pasteNextQueued() {
         // The chord registers whatever the feature switch says, so the switch is read here.
         guard settings.clipboardEnabled else { return }
@@ -153,14 +154,28 @@ final class ClipboardCoordinator {
         guard settings.clipboardEnabled else { return }
         let target = paletteCoordinator.targetApp
         if paletteCoordinator.isVisible { paletteCoordinator.hidePalette(restoreFocus: false) }
-        guard let step = pasteQueue.advance(resolve: { clipboardStore.item(withID: $0) }) else {
-            return core.showMessage("Nothing queued to paste", tone: .neutral)
+        guard let step = nextPasteStep() else {
+            let empty = clipboardStore.items.isEmpty
+            return core.showMessage(
+                empty ? "Clipboard history is empty" : "No older clips · next press starts over",
+                tone: .neutral)
         }
         if await Paster.pasteQueued(step.item, store: clipboardStore, previousApp: target) {
             core.showMessage(step.message)
         } else {
             core.showMessage("\(step.message) · Entry no longer available", tone: .danger)
         }
+    }
+
+    /// A marked run takes precedence; with nothing marked, Paste Next walks the history.
+    private func nextPasteStep() -> (item: ClipboardItem, message: String)? {
+        if pasteQueue.hasPending,
+            let step = pasteQueue.advance(resolve: { clipboardStore.item(withID: $0) })
+        {
+            return (step.item, step.message)
+        }
+        guard let step = historyWalk.advance(history: clipboardStore.items) else { return nil }
+        return (step.item, step.message)
     }
 
     /// Every pending entry's text in one paste, a line each; images have none and are left out.

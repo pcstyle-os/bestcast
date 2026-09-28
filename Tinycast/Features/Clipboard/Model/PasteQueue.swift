@@ -50,6 +50,38 @@ struct PasteQueue: Equatable, Sendable {
         }
     }
 
+    /// Paste Next with nothing marked: history newest-first, one entry a press.
+    struct HistoryWalk: Equatable, Sendable {
+        struct Step: Equatable, Sendable {
+            let item: ClipboardItem
+            let position: Int
+
+            var message: String {
+                position == 1 ? "Pasted the latest clip" : "Pasted clip \(position) from history"
+            }
+        }
+
+        /// The newest entry when the walk began; a different one means a copy, which restarts it.
+        private(set) var anchor: ClipboardItem.ID?
+        private(set) var pasted: [ClipboardItem.ID] = []
+
+        /// Nil past the oldest entry, and the walk restarts so the next press pastes the newest.
+        mutating func advance(history: [ClipboardItem]) -> Step? {
+            if history.first?.id != anchor { self = HistoryWalk(anchor: history.first?.id) }
+            // Resumes after the latest pasted entry still listed, so a delete never skips one.
+            let resume = pasted.reversed().lazy.compactMap { id in
+                history.firstIndex { $0.id == id }
+            }.first
+            let start = resume.map { $0 + 1 } ?? 0
+            guard start < history.count else {
+                self = HistoryWalk()
+                return nil
+            }
+            pasted.append(history[start].id)
+            return Step(item: history[start], position: pasted.count)
+        }
+    }
+
     private(set) var ids: [ClipboardItem.ID] = []
     /// How far the run has got: `ids[pasted...]` is what the next presses paste.
     private(set) var pasted = 0

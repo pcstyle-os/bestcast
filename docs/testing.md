@@ -402,11 +402,13 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - Copying something else while "Reading text…" shows leaves that copy on the pasteboard, and the
   pill says **Clipboard changed, text not copied**
 - A tall phone screenshot and a full-width Retina screenshot copy each line once, whole, in order
-- ⇧⌘A on three rows numbers them 1–3; with Paste Next Queued Clip bound, three presses in TextEdit
+- ⇧⌘A on three rows numbers them 1–3; with Paste Next Clip bound, three presses in TextEdit
   paste them in that order with **Pasted 1 of 3** … **Pasted 3 of 3 · Queue finished**, and a fourth
-  says nothing is queued; hiding and reopening the palette mid-run keeps the numbers, and ⌃X on a
+  walks the history from the newest; hiding and reopening the palette mid-run keeps the numbers, and ⌃X on a
   queued row renumbers the badges behind it
-- Holding Paste Next Queued Clip's shortcut pastes one entry at a time, in order, and stops within
+- With nothing marked, copying three texts then pressing Paste Next Clip three times in TextEdit
+  pastes them newest-first, spaces, line breaks and unicode intact, and TextEdit stays frontmost
+- Holding Paste Next Clip's shortcut pastes one entry at a time, in order, and stops within
   one entry of release; two quick taps paste two different entries
 - ⌘K ▸ Paste All pastes the queued text a line each, skipping a queued image
 - An image copied in Safari (TIFF + JPEG) adds a `.jpeg` blob; copying it again moves the row to the

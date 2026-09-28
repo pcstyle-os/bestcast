@@ -50,6 +50,9 @@
   A delete from the palette drops the entry at once, so every badge still names its paste's number.
   The queue is in memory on `ClipboardCoordinator`: it outlives the palette hiding between
   presses, never a relaunch, and switching the feature off clears it.
+- **With nothing marked, Paste Next walks the history, and `PasteQueue.HistoryWalk` alone decides
+  what comes next.** It pastes newest-first, resuming after the latest pasted entry still listed,
+  and a new newest entry — a copy, or a promoting paste — restarts it from the top.
 - **A run pastes one entry at a time, and `PasteQueue.Pacer` alone decides when a press runs.**
   Each paste writes the pasteboard and posts ⌘V after `activationDelay`, so a write that lands
   before that ⌘V pastes the wrong entry. A press while one is in flight waits its turn; a press
@@ -261,13 +264,17 @@ re-encoding the TIFF an app offers *beside* its own compressed original, and one
 ## Paste Sequentially
 
 Mark entries on the Clipboard screen with **⇧⌘A** or the ⌘K row **Add to Paste Queue**; a marked
-row shows its number, which is the number its paste will report. **Paste Next Queued Clip** is a
+row shows its number, which is the number its paste will report. **Paste Next Clip** is a
 command in the launcher and in Settings ▸ Clipboard, so it takes a global shortcut like any other
 command. Each press pastes the next marked entry into the frontmost app — or the app behind the
 palette, which it hides — with a HUD saying **Pasted 2 of 5**, and **Pasted 5 of 5 · Queue
-finished** on the last. A press with nothing queued says so. The ⌘K menu adds **Paste
-Sequentially**, which is the same first press, **Paste All**, and **Clear Paste Queue** while
-anything is waiting.
+finished** on the last. The ⌘K menu adds **Paste Sequentially**, which is the same first press,
+**Paste All**, and **Clear Paste Queue** while anything is waiting.
+
+Marking is optional. With nothing marked, each press pastes the next entry down the history —
+the newest first, then the one before it — without promoting, so the history keeps its order.
+A new copy restarts the walk at the top. Past the oldest entry a press pastes nothing and says
+**No older clips**, and the press after that starts again from the newest.
 
 Any kind can be queued; an image pastes as an image where it was marked. A run pastes without
 promoting, like ⌥↵, so the history keeps the order the run was picked from. **Paste All** writes the

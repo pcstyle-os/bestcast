@@ -57,7 +57,7 @@ enum CommandID: String, CaseIterable, Sendable {
         case .summarize: return BuiltInQuickAction.summarize.title
         case .calculatorHistory: return "Calculator History"
         case .clipboardHistory: return "Clipboard History"
-        case .pasteNextQueuedClip: return "Paste Next Queued Clip"
+        case .pasteNextQueuedClip: return "Paste Next Clip"
         case .searchEmoji: return "Search Emoji & Symbols"
         case .searchFiles: return "Search Files"
         case .searchMenuItems: return "Search Menu Bar Items"

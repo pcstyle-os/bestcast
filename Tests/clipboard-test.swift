@@ -38,6 +38,8 @@ struct ClipboardTests {
         pasteQueueSkipsWhatWasDeleted()
         pasteQueueNumbersCloseOverADelete()
         pasteQueueToggles()
+        historyWalkPastesNewestFirst()
+        historyWalkRestartsOnACopy()
         pasteAllJoinsTheText()
         pacerAdmitsOnePressAtATime()
         quickPressesPasteEachEntryOnce()
@@ -848,6 +850,38 @@ struct ClipboardTests {
         expect(
             queue.ids == [e[2].id, e[1].id, e[0].id] && queue.pasted == 0,
             "marking a pasted entry again queues it behind the rest")
+    }
+
+    /// Nothing marked: each press pastes the next older entry, whitespace and all, then stops once.
+    static func historyWalkPastesNewestFirst() {
+        let e = queueEntries
+        var walk = PasteQueue.HistoryWalk()
+        var pasted: [ClipboardItem.ID] = []
+        while let step = walk.advance(history: e) { pasted.append(step.item.id) }
+        expect(pasted == e.map(\.id), "every entry once, in history order")
+        expect(walk.advance(history: e)?.item.id == e[0].id, "the press after the end starts over")
+        expect(walk.advance(history: e)?.message == "Pasted clip 2 from history", "the HUD counts")
+
+        var gone = PasteQueue.HistoryWalk()
+        _ = gone.advance(history: e)
+        let second = gone.advance(history: e)
+        let afterDelete = gone.advance(history: e.filter { $0.id != second?.item.id })
+        expect(afterDelete?.item.id == e[2].id, "deleting the last pasted entry skips nothing")
+        var empty = PasteQueue.HistoryWalk()
+        expect(empty.advance(history: []) == nil, "an empty history pastes nothing")
+    }
+
+    /// A new copy lands on top, so the next press pastes it rather than continuing down.
+    static func historyWalkRestartsOnACopy() {
+        let e = queueEntries
+        var walk = PasteQueue.HistoryWalk()
+        _ = walk.advance(history: e)
+        _ = walk.advance(history: e)
+        let copied = ClipboardItem(text: "fresh copy", sourceBundleID: nil)
+        let step = walk.advance(history: [copied] + e)
+        expect(step?.item.id == copied.id && step?.position == 1, "a copy restarts the walk")
+        let next = walk.advance(history: [copied] + e)
+        expect(next?.item.id == e[0].id, "and it continues from there")
     }
 
     /// Paste All takes the pending text a line each: a file as its path, an image not at all.
