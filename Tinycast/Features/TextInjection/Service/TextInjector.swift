@@ -886,6 +886,9 @@ final class TextInjector {
                 keyDown: false)
         else { return nil }
 
+        // The session source carries held modifiers; under ⌘ or Hyper, text reads as a shortcut.
+        down.flags = []
+        up.flags = []
         tag(down)
         tag(up)
         down.keyboardSetUnicodeString(

@@ -66,8 +66,10 @@ struct DoubleTapDetectorTests {
         timing()
         chords()
         interruptions()
+        optionTyping()
         repeats()
         resetting()
+        registrationIssues()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -481,6 +483,100 @@ struct DoubleTapDetectorTests {
         clicked.otherInput(at: 0.10)
         clicked.tap(.option, at: 0.14)
         expect(clicked.fired, [], "a click between taps cancels the pair")
+    }
+
+    /// Right Option held to type å or ∂ is typing, not a tap, however quick the hold.
+    static func optionTyping() {
+        var accented = Keyboard()
+        accented.press([.option], at: 0)
+        accented.otherInput(at: 0.03)
+        accented.release(at: 0.06)
+        accented.press([.option], at: 0.10)
+        accented.otherInput(at: 0.12)
+        accented.release(at: 0.14)
+        expect(accented.fired, [], "two ⌥-held keystrokes never read as a double-tap")
+
+        var typedThenTapped = Keyboard()
+        typedThenTapped.press([.option], at: 0)
+        typedThenTapped.otherInput(at: 0.02)
+        typedThenTapped.release(at: 0.05)
+        typedThenTapped.tap(.option, at: 0.10)
+        typedThenTapped.tap(.option, at: 0.25)
+        expect(
+            typedThenTapped.fired, [.option],
+            "a clean double-tap right after ⌥-typing still fires, exactly once")
+
+        var dictated = Keyboard()
+        dictated.tap(.option, at: 0)
+        dictated.otherInput(at: 0.05)
+        dictated.otherInput(at: 0.06)
+        dictated.tap(.option, at: 0.12)
+        expect(dictated.fired, [], "a foreign tool's keystrokes between taps cancel the pair")
+
+        var shifted = Keyboard()
+        shifted.press([.option], at: 0)
+        shifted.press([.option, .shift], at: 0.02)
+        shifted.release(at: 0.06)
+        shifted.tap(.option, at: 0.10)
+        expect(shifted.fired, [], "⌥⇧ held together is a chord, not the first ⌥ tap")
+    }
+
+    static func registrationIssues() {
+        typealias Issue = HotKeyRegistrationIssue
+        let space = kVK_Space
+        let spotlight = Issue.SystemShortcut(carbonKeyCode: space, carbonModifiers: cmdKey)
+        let characterViewer = Issue.SystemShortcut(
+            carbonKeyCode: space, carbonModifiers: controlKey | cmdKey)
+        let missionControl = Issue.SystemShortcut(
+            carbonKeyCode: kVK_UpArrow, carbonModifiers: controlKey | Int(kEventKeyModifierFnMask))
+        let system = [characterViewer, spotlight, missionControl]
+
+        expect(
+            Issue.diagnose(
+                status: noErr, carbonKeyCode: space, carbonModifiers: optionKey,
+                systemShortcuts: system) == nil,
+            "⌥Space registered and unclaimed by macOS is live")
+        expect(
+            Issue.diagnose(
+                status: noErr, carbonKeyCode: space, carbonModifiers: cmdKey,
+                systemShortcuts: system) == .reservedBySystem,
+            "⌘Space accepted by Carbon still loses to an enabled Spotlight shortcut")
+        expect(
+            Issue.diagnose(
+                status: noErr, carbonKeyCode: space, carbonModifiers: cmdKey,
+                systemShortcuts: [characterViewer]) == nil,
+            "⌘Space is live once Spotlight's shortcut is off, whatever ⌃⌘Space does")
+        expect(
+            Issue.diagnose(
+                status: OSStatus(eventHotKeyExistsErr), carbonKeyCode: space,
+                carbonModifiers: optionKey, systemShortcuts: system) == .heldByAnotherApp,
+            "an exclusive registration elsewhere reads as another app holding the chord")
+        expect(
+            Issue.diagnose(
+                status: OSStatus(eventInternalErr), carbonKeyCode: kVK_ANSI_O,
+                carbonModifiers: optionKey | shiftKey, systemShortcuts: [])
+                == .refused(OSStatus(eventInternalErr)),
+            "any other refusal keeps its status for the message")
+        expect(
+            Issue.diagnose(
+                status: OSStatus(eventHotKeyExistsErr), carbonKeyCode: space,
+                carbonModifiers: cmdKey, systemShortcuts: system) == .reservedBySystem,
+            "a system shortcut is named ahead of whatever status came back")
+        expect(
+            Issue.diagnose(
+                status: noErr, carbonKeyCode: kVK_UpArrow, carbonModifiers: controlKey,
+                systemShortcuts: system) == .reservedBySystem,
+            "macOS's fn bit on an arrow entry doesn't hide it from a recorded ⌃↑")
+        expect(
+            Issue.diagnose(
+                status: noErr, carbonKeyCode: kVK_UpArrow, carbonModifiers: controlKey | shiftKey,
+                systemShortcuts: system) == nil,
+            "an extra modifier is a different chord")
+        expect(
+            [Issue.heldByAnotherApp, .reservedBySystem, .refused(-9868)].allSatisfy {
+                $0.message.contains("retry")
+            },
+            "every issue message names the retry path")
     }
 
     // MARK: - Repeats

@@ -183,8 +183,9 @@ is installed.
 
 `flagsChanged` does not describe its own direction, so a modifier-style Hyper key is tracked by
 toggling. The obvious alternative — querying `CGEventSource` key state — **races the release**,
-inverting the state machine and breaking Quick Press. A missed release therefore lingers only until
-the watchdog or the next press clears it. Work that posts events or touches IOKit is deferred to the
+inverting the state machine and breaking Quick Press. A missed release therefore lingers until the
+next press, or until the system disables the tap and the callback re-enables it, which drops the
+hold; the watchdog does not clear one. Work that posts events or touches IOKit is deferred to the
 next runloop turn rather than run inside the tap callback, where it would risk re-entrancy.
 
 The flags OR'd into every rewritten event are the generic ⌃⌥(⇧)⌘ masks **plus the left-side device
@@ -192,7 +193,10 @@ bits** (`NX_DEVICE…KEYMASK`, from `IOLLEvent.h`). Some consumers distinguish s
 flags do not always read as fully pressed. The Hyper key's own residue is scrubbed in the same pass:
 Caps Lock's alpha-shift bit, or — for a key modifier outside the Hyper set — its generic mask and both
 device bits. Events the tap posts carry a `"TYCT"` marker in `.eventSourceUserData`, the same FourCC
-`HotKeyCenter` uses, so the tap never reacts to its own synthetics.
+`HotKeyCenter` uses, so the tap never reacts to its own synthetics. Events the rest of Tinycast
+posts — a paste's ⌘V or ⌘C, a snippet's backspaces and typed text — carry `Paster.tinycastEventTag`
+and pass through untouched as well: each sets its own flags, and a held Hyper would otherwise turn
+⌘V into ⌃⌥⇧⌘V. Another process's synthetic events are rewritten like real ones while Hyper is held.
 
 A Quick Press key is posted with **`flags` cleared explicitly**, like every other synthetic in the app.
 A keyboard event built from `.combinedSessionState` inherits the source's modifiers, and the release
@@ -226,7 +230,7 @@ there, so the toggle cannot move without a chord to mean.
 
 Like every keyboard tap it needs the **Accessibility** grant and never prompts for it. A one-second
 watchdog runs while a key is configured: it retries installation until the grant lands, notices
-revocation, revives a tap the system disabled on timeout or user input, and clears a stuck hold. On
+revocation, and revives a tap the system disabled on timeout or user input. On
 fast user switching another session owns the keyboard, so half-held state is dropped and rewriting
 stops until this session is active again. The HID remap outlives the process, so
 `applicationWillTerminate` hands the key back to the system before exiting.
@@ -244,3 +248,25 @@ Setting `recordingAction` is what starts and stops the capture, so there is exac
 callout above the field render the live state from outside the row that opened it. The field itself
 only ever shows the binding; the prompt, the live preview and the conflict message all live in the
 callout. See [ui.md](../ui.md#the-shortcut-recorder-callout).
+
+## When a combo does not register
+
+A recorded combo is saved whatever Carbon says, so the reader keeps the chord they chose — for
+instance the one Raycast holds, before quitting Raycast. `HotKeyCenter` records why each registration
+is not live in `issues`, and the recorder shows it as an orange triangle beside the keycaps, the same
+shape as the modifier-only Accessibility warning. Its tooltip is the reason; clicking it retries.
+`HotKeyRegistrationIssue.diagnose` is the pure part, covered by `hotkey-test`:
+
+- **Reserved by macOS** — the chord is an *enabled* entry in `CopySymbolicHotKeys`, such as
+  Spotlight's ⌘Space. This is checked even when `RegisterEventHotKey` succeeds, because macOS takes
+  the chord before Carbon delivers it. The comparison ignores the fn bit, which macOS stores on every
+  F-key and arrow entry and the recorder drops.
+- **In use by another app** — `eventHotKeyExistsErr`, which Carbon returns when another process
+  registered the chord exclusively.
+- **Refused** — any other status, kept for the message.
+
+A retry re-reads the system shortcuts and registers again. It runs on a click, whenever a recorder
+for a failing action appears (opening Settings retries it), and implicitly on every re-record, since
+`setBinding` re-registers. Success is not proof the chord reaches Tinycast: an app that registered
+the same chord *non*-exclusively leaves Carbon nothing to refuse, and which of the two receives it is
+up to macOS, so quitting the other app is still the dependable fix.

@@ -27,13 +27,7 @@ private func snippetKeywordCallback(
     let typeRaw = type.rawValue
     let flagsRaw = event.flags.rawValue
     let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-    var length = 0
-    var characters = [UniChar](repeating: 0, count: 16)
-    event.keyboardGetUnicodeString(
-        maxStringLength: characters.count,
-        actualStringLength: &length,
-        unicodeString: &characters)
-    let text = length > 0 ? String(utf16CodeUnits: characters, count: length) : nil
+    let text = SnippetKeywordListener.typedText(in: event)
 
     MainActor.assumeIsolated {
         listener.processEvent(
@@ -345,6 +339,21 @@ final class SnippetKeywordListener: HealthCheckable {
             self.matchTask = nil
             self.onMatch?(match.snippetID, match.keyword, match.deletionCount, target)
         }
+    }
+
+    /// The whole string: dictation and autocomplete tools post a phrase as one keyDown.
+    nonisolated static func typedText(in event: CGEvent) -> String? {
+        var length = 0
+        event.keyboardGetUnicodeString(
+            maxStringLength: 0, actualStringLength: &length, unicodeString: nil)
+        guard length > 0 else { return nil }
+        var characters = [UniChar](repeating: 0, count: length)
+        event.keyboardGetUnicodeString(
+            maxStringLength: characters.count,
+            actualStringLength: &length,
+            unicodeString: &characters)
+        let count = min(length, characters.count)
+        return count > 0 ? String(utf16CodeUnits: characters, count: count) : nil
     }
 
     private static let resetKeyCodes: Set<Int> = [

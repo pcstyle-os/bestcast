@@ -203,6 +203,14 @@ or session changes, Secure Event Input, navigation and modifier shortcuts, and 1
 inactivity. It is capped at 256 characters. Keywords are matched case-insensitively by longest suffix;
 duplicates resolve by file identity. Tinycast-tagged synthetic events are ignored.
 
+**A keystroke's Unicode string is read whole, however long.** Dictation and autocomplete tools post a
+phrase as a single keyDown; reading only a fixed prefix of it once let a phrase whose first sixteen
+units happened to end in a keyword expand over text that was not the keyword. A keyword the whole
+phrase ends with matches, and one it only contains never does. Other tools' backspaces edit the buffer
+like the reader's own, and more of them than it holds just empty it. The buffer and every keyword
+length count `Character`s, so an emoji, a ZWJ cluster or an accent sent as its own combining keyDown
+is one unit to match and one backspace in the deletion count.
+
 A match is delivered on a later main-actor turn, never inside the tap callback, so the triggering
 keystroke reaches the target before the argument dialog can take focus. The target is still
 sampled with the keystroke. Further real input or `stop()` cancels a match that has not run yet.
@@ -306,7 +314,9 @@ we did not write is `.rejected`, because events would then edit a document we ca
 
 **Rule 4** keeps the same permission, consent, Secure Event Input, target-app and cancellation gates.
 The fallback deletes the keyword first, waits for deletion to settle, then inserts the expansion.
-Short single-line expansions of at most 100 characters use Unicode keyboard events.
+Short single-line expansions of at most 100 characters use Unicode keyboard events. Like the
+deletions they carry no modifier flags: an event from the session source inherits whatever the reader
+still holds, and text under ⌘ or a held Hyper chord reads as a shortcut rather than text.
 
 **A Unicode keystroke carries at most four UTF-16 units.** Blink stores one key event's text in a
 fixed `WebKeyboardEvent::kTextLengthCap` array, so a Chromium target — Brave, Chrome, Electron, VS
