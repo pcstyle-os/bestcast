@@ -17,6 +17,7 @@ final class ClipboardCoordinator {
     @ObservationIgnored private var textTask: Task<Void, Never>?
     /// In memory only: a run outlives the palette hiding between presses, never a relaunch.
     private(set) var pasteQueue = PasteQueue()
+    @ObservationIgnored private var pastePacer = PasteQueue.Pacer()
 
     init(
         clipboardStore: ClipboardStore,
@@ -137,13 +138,25 @@ final class ClipboardCoordinator {
     func pasteNextQueued() {
         // The chord registers whatever the feature switch says, so the switch is read here.
         guard settings.clipboardEnabled else { return }
+        if pastePacer.press() == .paste { pasteNextTurn() }
+    }
+
+    /// One press's paste; a press that arrived meanwhile follows once this one has landed.
+    private func pasteNextTurn() {
+        Task {
+            await pasteNextStep()
+            if pastePacer.finish() { pasteNextTurn() }
+        }
+    }
+
+    private func pasteNextStep() async {
+        guard settings.clipboardEnabled else { return }
         let target = paletteCoordinator.targetApp
         if paletteCoordinator.isVisible { paletteCoordinator.hidePalette(restoreFocus: false) }
         guard let step = pasteQueue.advance(resolve: { clipboardStore.item(withID: $0) }) else {
             return core.showMessage("Nothing queued to paste", tone: .neutral)
         }
-        // Unpromoted, so a run leaves the history in the order it was picked from.
-        if Paster.paste(step.item, store: clipboardStore, previousApp: target, promoting: false) {
+        if await Paster.pasteQueued(step.item, store: clipboardStore, previousApp: target) {
             core.showMessage(step.message)
         } else {
             core.showMessage("\(step.message) · Entry no longer available", tone: .danger)
@@ -167,7 +180,7 @@ final class ClipboardCoordinator {
         core.showMessage("That file has moved or been deleted.", tone: .danger)
     }
 
-    /// Both the ⌃⇧X chord and the menu row land here, so neither can skip the confirmation.
+    /// The ⌃⇧X chord, the menu row and Settings all land here, so none can skip the confirmation.
     func deleteAllClips() async {
         guard
             await core.confirm(
@@ -179,7 +192,7 @@ final class ClipboardCoordinator {
     }
 
     /// Reachable with the feature off, so what was kept before can still be erased afterwards.
-    func clearHistory() {
+    private func clearHistory() {
         clipboardStore.open()
         clipboardStore.clearAll()
         pasteQueue.dropDeleted { clipboardStore.item(withID: $0) }

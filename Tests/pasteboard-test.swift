@@ -345,7 +345,7 @@ struct PasteboardTests {
         expect(kept?.digest.count == 32, "a 128-bit prefix, spelled in hex")
     }
 
-    /// A blob goes back out as the type it was kept in; AppKit still serves TIFF from either.
+    /// A blob goes back out as the type it was kept in, first; a JPEG also answers PNG and TIFF.
     static func imagesWriteBackInTheirOwnType() {
         withScratch { dir in
             let store = ClipboardStore(directory: dir.appendingPathComponent("store"))
@@ -359,11 +359,24 @@ struct PasteboardTests {
 
             let photoBoard = board()
             let photo = ClipboardItem(imagePath: jpegURL.path, sourceBundleID: nil)
-            expect(Paster.write(photo, store: store, to: photoBoard), "a JPEG blob writes")
+            // Drained, so the promise below is kept alive by the pasteboard and nothing of ours.
+            let wrote = autoreleasepool { Paster.write(photo, store: store, to: photoBoard) }
+            expect(wrote, "a JPEG blob writes")
+            expect(photoBoard.types?.first == jpegType, "with the JPEG as the first type offered")
             expect(photoBoard.data(forType: jpegType) == jpeg, "as the JPEG it was kept as")
+            let pngRead = photoBoard.data(forType: .png)
+            expect(pngRead.map { $0.starts(with: pngSignature) } == true, "and reads as a real PNG")
+            let decoded = pngRead.flatMap(NSBitmapImageRep.init(data:))
+            let jpegPixels = NSBitmapImageRep(data: jpeg)
+            expect(
+                decoded?.pixelsWide == image.width && decoded?.pixelsHigh == image.height,
+                "the PNG keeps the photo's odd size")
+            expect(
+                decoded?.colorAt(x: 11, y: 7) == jpegPixels?.colorAt(x: 11, y: 7)
+                    && decoded?.colorAt(x: 30, y: 2) == jpegPixels?.colorAt(x: 30, y: 2),
+                "and the JPEG's own pixels")
             let tiff = photoBoard.data(forType: .tiff).flatMap(NSBitmapImageRep.init(data:))
             expect(tiff?.pixelsWide == image.width, "and still reads as TIFF for readers that want one")
-            expect(photoBoard.data(forType: .png) == nil, "never mislabelled as PNG")
             expect(
                 photoBoard.types?.contains(ClipboardManager.internalType) == true,
                 "marked, so the poller skips our own write")
@@ -377,6 +390,7 @@ struct PasteboardTests {
     }
 
     static let jpegType = NSPasteboard.PasteboardType("public.jpeg")
+    static let pngSignature: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
 
     /// Synthetic and uneven: odd sides, a gradient and partial alpha, so a swap or flatten shows.
     static func picture() -> CGImage {

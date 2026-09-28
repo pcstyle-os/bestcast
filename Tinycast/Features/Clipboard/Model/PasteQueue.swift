@@ -16,6 +16,40 @@ struct PasteQueue: Equatable, Sendable {
         }
     }
 
+    /// Paste Next's presses, one paste at a time in press order, so no write lands before a ⌘V.
+    struct Pacer: Equatable, Sendable {
+        enum Admission: Equatable, Sendable {
+            case paste
+            /// Runs once the paste in flight has posted its ⌘V and the target has read it.
+            case wait
+            /// A press already waits, so this is the key repeating; queuing it would run ahead.
+            case ignore
+        }
+
+        private(set) var isPasting = false
+        private(set) var isWaiting = false
+
+        mutating func press() -> Admission {
+            guard isPasting else {
+                isPasting = true
+                return .paste
+            }
+            guard !isWaiting else { return .ignore }
+            isWaiting = true
+            return .wait
+        }
+
+        /// The paste in flight has landed; true when the waiting press takes its turn now.
+        mutating func finish() -> Bool {
+            guard isWaiting else {
+                isPasting = false
+                return false
+            }
+            isWaiting = false
+            return true
+        }
+    }
+
     private(set) var ids: [ClipboardItem.ID] = []
     /// How far the run has got: `ids[pasted...]` is what the next presses paste.
     private(set) var pasted = 0

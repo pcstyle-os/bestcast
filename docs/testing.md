@@ -93,8 +93,8 @@ If a change touches anything in the right column, the harness on the left is man
 | `calendar-test` | all of `Calendar/Model/` — link detection, the join window, the day buckets |
 | `clipboard-search-test` | Ordinary and OCR result ordering, opt-in lifecycle, cancellation, pins and type filters |
 | `clipboard-text-test` | Apple Vision/PDF extraction, scheduling, retry backoff and recovery |
-| `clipboard-test` | `Clipboard/Model/ClipboardStore.swift`, `PasteQueue.swift`, `ClipboardFilter.swift`, `ClipboardFileKind.swift`, the colour trio — including image dedupe and the paste queue's order, skips and end |
-| `pasteboard-test` | `Clipboard/Service/ClipboardManager.swift` capture and `Paster.write` — what a Finder copy reads as, which image representation is kept, and what a file or image entry writes back |
+| `clipboard-test` | `Clipboard/Model/ClipboardStore.swift`, `PasteQueue.swift`, `ClipboardFilter.swift`, `ClipboardFileKind.swift`, the colour trio — including image dedupe, the paste queue's order, skips and end, and its press pacing |
+| `pasteboard-test` | `Clipboard/Service/ClipboardManager.swift` capture and `Paster.write` — what a Finder copy reads as, which image representation is kept, and what a file or image entry writes back, a JPEG's promised PNG included |
 | `emoji-test` | `Emoji/Model/EmojiCatalog.swift`, `EmojiGridGeometry.swift`, the generated data |
 | `emoji-search-test` | `Emoji/Service/EmojiIndex.swift`, `FrequentEmojiStore.swift`, `Scripts/gen-emoji.js`'s keyword format |
 | `palette-navigation-test` | `Palette/PaletteState.swift`'s screen motions — `prepare`, `replace`, `push`, `pop` |
@@ -405,9 +405,12 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
   paste them in that order with **Pasted 1 of 3** … **Pasted 3 of 3 · Queue finished**, and a fourth
   says nothing is queued; hiding and reopening the palette mid-run keeps the numbers, and ⌃X on a
   queued row renumbers the badges behind it
+- Holding Paste Next Queued Clip's shortcut pastes one entry at a time, in order, and stops within
+  one entry of release; two quick taps paste two different entries
 - ⌘K ▸ Paste All pastes the queued text a line each, skipping a queued image
 - An image copied in Safari (TIFF + JPEG) adds a `.jpeg` blob; copying it again moves the row to the
-  top without a second file; pasting it into TextEdit, Pages and a browser field shows the image
+  top without a second file; pasting it into TextEdit, Pages and a browser field shows the image,
+  and so does pasting it into an app that reads only PNG
 - A copy from an excluded app (Settings ▸ Clipboard ▸ Disabled Applications) is **not** recorded
 - Password-manager copies are still not recorded
 - Off (Settings ▸ Clipboard ▸ Enable Clipboard History): nothing new is recorded, the launcher row
