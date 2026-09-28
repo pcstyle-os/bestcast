@@ -32,14 +32,21 @@ enum CalcMath {
 
     static let multipleArguments: Set<String> = [
         "hypot", "round", "log", "gcd", "lcm", "atan2", "pow", "root", "fmod",
-        "min", "max", "sum", "avg", "mean", "average"
+        "min", "max", "sum", "avg", "mean", "average", "median"
     ]
     static let measurements: Set<String> = [
-        "hypot", "round", "min", "max", "sum", "avg", "mean", "average"
+        "hypot", "round", "min", "max", "sum", "avg", "mean", "average", "median"
     ]
 
     static func isFunction(_ name: String) -> Bool {
         CalcMath.functions[name] != nil || multipleArguments.contains(name)
+    }
+
+    static func median(_ values: [Double]) -> Double? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let middle = sorted.count / 2
+        return sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
     }
 
     static func evaluate(_ name: String, _ values: [Double]) -> Double? {
@@ -51,6 +58,7 @@ enum CalcMath {
         case "max": result = values.max() ?? first
         case "sum": result = values.reduce(0, +)
         case "avg", "mean", "average": result = values.reduce(0) { $0 + $1 / Double(values.count) }
+        case "median": result = median(values) ?? first
         case "hypot": result = values.reduce(0) { hypot($0, $1) }
         case "gcd", "lcm":
             var accumulator: Int64 = name == "gcd" ? 0 : 1
