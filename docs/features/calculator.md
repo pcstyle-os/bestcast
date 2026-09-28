@@ -447,7 +447,7 @@ can only be separators, so each comma splits, while a single comma stays a decim
 (`average of 1,5 2,5` is 1.5 and 2.5, and `average of 2,5` is one value, so no card).
 
 Each of these badges what its number **is** — `Tip`, `Discounted`, `Percentage`, `Total`, `Ratio`,
-`Average`, `Sum`, `Minimum`, `Maximum`, `Rounded` — rather than the bare `Result` that says nothing
+`Average`, `Sum`, `Minimum`, `Maximum`, `Median`, `Rounded` — rather than the bare `Result` that says nothing
 the card doesn't already show. `min` and `max` are only told apart by it.
 
 ## Modulo
