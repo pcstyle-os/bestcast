@@ -386,6 +386,16 @@ struct PasteboardTests {
             expect(Paster.write(shot, store: store, to: shotBoard), "a PNG blob writes")
             expect(shotBoard.data(forType: .png) == png, "as itself")
             expect(shotBoard.data(forType: jpegType) == nil, "and nothing else")
+
+            expect(
+                Paster.promisesPNG(photoBoard.pasteboardItems?.first?.types ?? []),
+                "a copy of the clipboard knows our JPEG write only promises its PNG")
+            expect(
+                !Paster.promisesPNG(shotBoard.pasteboardItems?.first?.types ?? []),
+                "while our PNG write holds real PNG bytes")
+            expect(
+                !Paster.promisesPNG([jpegType, .png]),
+                "and another app's JPEG and PNG are both its own")
         }
     }
 

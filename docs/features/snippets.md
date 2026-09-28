@@ -335,7 +335,8 @@ re-gated loop the deletions use, so a target that goes away mid-word stops the r
 
 Longer or multiline fallback text uses a temporary paste. Tinycast snapshots every item, type and data
 payload, then **lends a board holding nothing but the expansion** — one item carrying the plain text
-and Tinycast's own marker type — and restores by rewriting the snapshot whole.
+and Tinycast's own marker type — and restores by rewriting the snapshot whole. The one type it
+leaves unread is the PNG a Tinycast image paste only promises, which the restore promises again.
 
 **The loan carries no other flavour of the old clipboard.** Keeping the original item's shape and
 swapping only its `.string` would leave `public.html`, `public.rtf` and the rest describing the

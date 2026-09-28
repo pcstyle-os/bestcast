@@ -178,8 +178,22 @@ enum Paster {
         let item = NSPasteboardItem()
         item.setData(data, forType: type)
         item.setData(Data(), forType: ClipboardManager.internalType)
-        if type != .png { item.setDataProvider(PNGPromise(data), forTypes: [.png]) }
+        if type != .png { promisePNG(on: item, from: data) }
         return item
+    }
+
+    /// An item `imageItem` wrote: its PNG and TIFF are derived, so a copy of the item skips them.
+    @MainActor
+    static func promisesPNG(_ types: [NSPasteboard.PasteboardType]) -> Bool {
+        types.contains(ClipboardManager.internalType)
+            && types.contains {
+                $0 != .png && $0 != .tiff && UTType($0.rawValue)?.conforms(to: .image) == true
+            }
+    }
+
+    @MainActor
+    static func promisePNG(on item: NSPasteboardItem, from data: Data) {
+        item.setDataProvider(PNGPromise(data), forTypes: [.png])
     }
 
     /// Encodes only when a reader asks; the pasteboard retains it until done with the promise.

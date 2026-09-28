@@ -233,10 +233,10 @@ JPEG or HEIC gets the bytes as kept. A JPEG or HEIC blob also **promises** `publ
 `NSPasteboardItemDataProvider` that encodes only when a reader asks: a PNG-only reader still gets an
 image, as it did when every blob was PNG, and a reader that never asks costs nothing. The encode runs
 in the provider callback on the main thread — 0.35 to 0.7 s for a 12 MP image, measured on synthetic
-photos — and `NSImage(pasteboard:)` asks for PNG first, so an AppKit reader pays it too. So does
-anything that reads every type an item lists: `PasteboardSnapshot`, behind a long snippet's lease and
-a quick action's copy, forces the encode and restores the PNG eagerly, and quitting Tinycast while
-the promise stands fulfils it. The pasteboard retains the provider until
+photos — and `NSImage(pasteboard:)` asks for PNG first, so an AppKit reader pays it too, as does
+quitting Tinycast while the promise stands. `PasteboardSnapshot`, behind a long snippet's lease and a
+quick action's copy, does not: `Paster.promisesPNG` recognises our own write, so the snapshot skips
+the derived PNG and TIFF and restores the blob with a fresh promise, which `snippets-test` pins. The pasteboard retains the provider until
 `pasteboardFinishedWithDataProvider`, so nothing else has to. TIFF is
 never declared: AppKit derives `public.tiff` from the blob for any reader that asks, so an eager or
 promised TIFF would only cost a decode and tens of megabytes in Tinycast. `pasteboard-test` checks

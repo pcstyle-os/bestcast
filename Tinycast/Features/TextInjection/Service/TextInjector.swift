@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import UniformTypeIdentifiers
 
 /// Its own shape, not a caller's result type, so the injector stays owned by no one feature.
 struct InjectedText: Equatable, Sendable {
@@ -1129,6 +1130,8 @@ final class TemporaryPasteboardLease {
 struct PasteboardSnapshot {
     struct Item {
         let values: [(type: NSPasteboard.PasteboardType, data: Data)]
+        /// Reading a promised PNG would encode it on the main thread just to restore it.
+        var pngSource: Data?
     }
 
     let items: [Item]
@@ -1143,15 +1146,23 @@ struct PasteboardSnapshot {
         var items: [Item] = []
         for pasteboardItem in pasteboard.pasteboardItems ?? [] {
             var values: [(type: NSPasteboard.PasteboardType, data: Data)] = []
-            for type in pasteboardItem.types {
+            let promisesPNG = Paster.promisesPNG(pasteboardItem.types)
+            for type in pasteboardItem.types where !(promisesPNG && [.png, .tiff].contains(type)) {
                 guard let data = pasteboardItem.data(forType: type) else { return nil }
                 values.append((type: type, data: data))
             }
-            items.append(Item(values: values))
+            let source = promisesPNG ? Self.imageData(in: values) : nil
+            items.append(Item(values: values, pngSource: source))
         }
         guard pasteboard.changeCount == changeCount else { return nil }
         self.items = items
         self.changeCount = changeCount
+    }
+
+    private static func imageData(
+        in values: [(type: NSPasteboard.PasteboardType, data: Data)]
+    ) -> Data? {
+        values.first { UTType($0.type.rawValue)?.conforms(to: .image) == true }?.data
     }
 
     /// A kept `public.html` is the flavour a Chromium editor prefers, so we lend the text alone.
@@ -1171,6 +1182,7 @@ struct PasteboardSnapshot {
             for value in item.values {
                 guard pasteboardItem.setData(value.data, forType: value.type) else { return nil }
             }
+            if let source = item.pngSource { Paster.promisePNG(on: pasteboardItem, from: source) }
             pasteboardItems.append(pasteboardItem)
         }
         return pasteboardItems

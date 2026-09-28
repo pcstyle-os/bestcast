@@ -877,6 +877,27 @@ struct SnippetsTests {
             supersededLease?.restoreIfOwned() == .superseded
                 && pasteboard.string(forType: .string) == "Newer copy")
 
+        let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0, 0x07])
+        let ownImage = NSPasteboardItem()
+        ownImage.setData(jpeg, forType: .init("public.jpeg"))
+        ownImage.setData(Data(), forType: ClipboardManager.internalType)
+        let promise = CountingPNGPromise()
+        ownImage.setDataProvider(promise, forTypes: [.png])
+        _ = pasteboard.replaceObjects([ownImage])
+        let ownImageLease = TemporaryPasteboardLease.begin(
+            text: "Temporary over an image",
+            pasteboard: pasteboard)
+        check(
+            "lending over Tinycast's own image never encodes its promised PNG",
+            ownImageLease != nil && promise.calls == 0)
+        _ = ownImageLease?.restoreIfOwned()
+        let restoredImage = pasteboard.pasteboardItems?.first
+        check(
+            "restoring Tinycast's own image keeps the blob and promises the PNG again",
+            restoredImage?.data(forType: .init("public.jpeg")) == jpeg
+                && restoredImage?.types.contains(.png) == true
+                && promise.calls == 0)
+
         _ = pasteboard.replaceObjects([])
         let emptyLease = TemporaryPasteboardLease.begin(
             text: "Temporary from empty",
@@ -2301,6 +2322,34 @@ enum Paster {
     static let tinycastEventTag: Int64 = 0x54494E59
     @MainActor static func postCommandV(toPid pid: pid_t? = nil) {}
     @MainActor static func postCommandC(toPid pid: pid_t? = nil) {}
+    @MainActor static func promisesPNG(_ types: [NSPasteboard.PasteboardType]) -> Bool {
+        types.contains(ClipboardManager.internalType) && types.contains(.init("public.jpeg"))
+    }
+    @MainActor static func promisePNG(on item: NSPasteboardItem, from data: Data) {
+        item.setDataProvider(CountingPNGPromise(), forTypes: [.png])
+    }
+}
+
+/// Counts encodes; the lock is why it is `@unchecked Sendable`.
+final class CountingPNGPromise: NSObject, NSPasteboardItemDataProvider, @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var calls: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func pasteboard(
+        _ pasteboard: NSPasteboard?, item: NSPasteboardItem,
+        provideDataForType type: NSPasteboard.PasteboardType
+    ) {
+        lock.lock()
+        count += 1
+        lock.unlock()
+        item.setData(Data([0x89, 0x50]), forType: type)
+    }
 }
 
 /// Deterministic `{uuid}` source; the lock is why it is `@unchecked Sendable`.
