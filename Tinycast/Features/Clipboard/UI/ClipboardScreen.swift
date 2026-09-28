@@ -27,8 +27,7 @@ struct ClipboardScreen: PaletteScreen {
 
     func actions(at selection: Int) -> PopoverMenuContent? {
         guard let item = item(at: selection) else { return nil }
-        return ClipboardActionsMenu.content(
-            item: item, core: core, store: store, target: vm.pasteTarget)
+        return ClipboardActionsMenu.content(item: item, core: core, target: vm.pasteTarget)
     }
 
     func activate(at selection: Int) {
@@ -49,6 +48,10 @@ struct ClipboardScreen: PaletteScreen {
         case .copyText:
             guard let item = item(at: selection), item.offersTextExtraction else { return false }
             core.clipboardCoordinator.copyImageText(item)
+            return true
+        case .togglePasteQueue:
+            guard let item = item(at: selection) else { return false }
+            core.clipboardCoordinator.toggleQueued(item)
             return true
         default: return false
         }
@@ -92,7 +95,7 @@ struct ClipboardScreen: PaletteScreen {
     /// ⌘⌫ / ⌃X — the screen owns the chord whether or not a row sits under the selection.
     private func delete(at selection: Int) {
         guard let item = item(at: selection) else { return }
-        store.remove(item)
+        core.clipboardCoordinator.deleteClip(item)
     }
 
     /// ⌃⇧X — mirrors the Actions row, confirmation included; pinned entries go with the rest.
@@ -136,6 +139,7 @@ struct ClipboardScreen: PaletteScreen {
                 ClipboardList(
                     results: rows,
                     selectedID: selected?.id,
+                    pasteQueue: core.clipboardCoordinator.pasteQueue,
                     scroll: scroll,
                     onSelect: { item in vm.selection = rows.firstIndex(of: item) ?? 0 },
                     onActivate: { activate(at: vm.selection) },
@@ -166,7 +170,7 @@ private struct ClipFollowKey: Equatable {
 @MainActor
 enum ClipboardActionsMenu {
     static func content(
-        item: ClipboardItem, core: AppCore, store: ClipboardStore, target: PasteTarget?
+        item: ClipboardItem, core: AppCore, target: PasteTarget?
     ) -> PopoverMenuContent {
         let defaultAction = core.settings.clipboardDefaultAction
         // Chord order puts the default first, beside the ↵ it answers.
@@ -202,6 +206,7 @@ enum ClipboardActionsMenu {
                     core.clipboardCoordinator.togglePinnedClip(item)
                 })
         }
+        items += queueItems(item: item, coordinator: core.clipboardCoordinator, target: target)
         if item.offersTextExtraction {
             items.append(
                 PopoverMenuItem(
@@ -235,7 +240,7 @@ enum ClipboardActionsMenu {
                 title: "Delete Entry", systemImage: "trash", startsSection: true, shortcut: "⌃X",
                 isDestructive: true
             ) {
-                store.remove(item)
+                core.clipboardCoordinator.deleteClip(item)
             })
         items.append(
             PopoverMenuItem(
@@ -245,6 +250,40 @@ enum ClipboardActionsMenu {
                 Task { await core.clipboardCoordinator.deleteAllClips() }
             })
         return PopoverMenuContent(header: headerText(item), items: items)
+    }
+
+    /// The mark on this row, then the run's own rows once anything is waiting to paste.
+    private static func queueItems(
+        item: ClipboardItem, coordinator: ClipboardCoordinator, target: PasteTarget?
+    ) -> [PopoverMenuItem] {
+        let queue = coordinator.pasteQueue
+        let isQueued = queue.position(of: item.id) != nil
+        var items = [
+            PopoverMenuItem(
+                title: isQueued ? "Remove from Paste Queue" : "Add to Paste Queue",
+                systemImage: isQueued ? "text.badge.minus" : "text.badge.plus",
+                startsSection: true, shortcut: "⇧⌘A"
+            ) {
+                coordinator.toggleQueued(item)
+            }
+        ]
+        guard queue.hasPending else { return items }
+        items.append(
+            PopoverMenuItem(
+                title: "Paste Sequentially", icon: .paste(target, fallback: "list.number"),
+                detail: "\(queue.pending.count) queued"
+            ) {
+                coordinator.pasteNextQueued()
+            })
+        items.append(
+            PopoverMenuItem(title: "Paste All", icon: .paste(target, fallback: "text.append")) {
+                coordinator.pasteAllQueued()
+            })
+        items.append(
+            PopoverMenuItem(title: "Clear Paste Queue", systemImage: "xmark.circle") {
+                coordinator.clearPasteQueue()
+            })
+        return items
     }
 
     private static func icon(

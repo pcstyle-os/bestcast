@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import UniformTypeIdentifiers
 
 enum Paster {
     /// Stamped on Tinycast's own synthetic keystrokes so the snippet keyword tap can skip them.
@@ -14,10 +15,11 @@ enum Paster {
     /// Write the item and paste it into `previousApp`, activating it so ⌘V lands there.
     @MainActor @discardableResult
     static func paste(
-        _ item: ClipboardItem, store: ClipboardStore, previousApp: NSRunningApplication?
+        _ item: ClipboardItem, store: ClipboardStore, previousApp: NSRunningApplication?,
+        promoting: Bool = true
     ) -> Bool {
         guard write(item, store: store) else { return false }
-        store.promote(item)
+        if promoting { store.promote(item) }
         previousApp?.activate()
         DispatchQueue.main.asyncAfter(deadline: .now() + activationDelay) {
             postCommandV()
@@ -129,9 +131,10 @@ enum Paster {
             else {
                 return false
             }
+            let type = imageType(of: url)
             pb.clearContents()
-            pb.declareTypes([.png, ClipboardManager.internalType], owner: nil)
-            pb.setData(data, forType: .png)
+            pb.declareTypes([type, ClipboardManager.internalType], owner: nil)
+            pb.setData(data, forType: type)
         case .file:
             guard let url = store.fileURL(for: item),
                 FileManager.default.fileExists(atPath: url.path)
@@ -144,6 +147,14 @@ enum Paster {
         }
         pb.setData(Data(), forType: ClipboardManager.internalType)
         return true
+    }
+
+    /// The blob's own type, alone: AppKit derives TIFF from any image type for readers that ask.
+    private static func imageType(of url: URL) -> NSPasteboard.PasteboardType {
+        let type = UTType(filenameExtension: url.pathExtension).flatMap {
+            $0.conforms(to: .image) ? $0 : nil
+        }
+        return NSPasteboard.PasteboardType((type ?? .png).identifier)
     }
 
     /// Synthesize ⌘V, to `pid` alone when given, else through the system tap.

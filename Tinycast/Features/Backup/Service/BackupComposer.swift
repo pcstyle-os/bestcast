@@ -126,7 +126,7 @@ enum BackupComposer {
             if !BackupBundle.isSafeName(name)
                 || FileManager.default.fileExists(atPath: destination.path)
             {
-                name = UUID().uuidString + ".png"
+                name = UUID().uuidString + "." + source.pathExtension
                 destination = bundle.clipboardImagesDirectory.appendingPathComponent(name)
             }
             if (try? FileManager.default.linkItem(at: source, to: destination)) == nil {

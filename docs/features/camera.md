@@ -26,7 +26,7 @@ controller and footer are all that stay in [calendar.md](calendar.md).
   — the preview layer's, and the photo output's at capture time — never a `scaleEffect` on the view,
   which would hand back a photo that is not what the user framed.
 - **A photo reaches the clipboard as PNG.** The camera's own encoding is decoded and re-encoded off
-  main, because `ClipboardManager` records `.png` and `.tiff` and nothing else.
+  main, and `ClipboardManager` then keeps that PNG byte for byte.
 - **`AVCaptureSession` is not `Sendable`, and only `CaptureBox` crosses that line.** The blocking
   calls — `startRunning`, `stopRunning`, and the begin/commit around a device swap — run in
   `Task.detached` behind that one `@unchecked Sendable` box, which is private to `CameraSession.swift`.
