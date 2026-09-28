@@ -41,6 +41,7 @@ jobs:
       # one solo rerun; passing only on the rerun is reported as flaky, never hidden.
       - name: Harnesses
         run: |
+          set -o pipefail
           if ./Scripts/run-tests.sh 2>&1 | tee "$RUNNER_TEMP/tests.log"; then exit 0; fi
           FAILED="$(sed -n 's/.*harness(es) failed in [0-9]*s: //p' "$RUNNER_TEMP/tests.log" \
             | sed 's/\x1b\[[0-9;]*m//g')"
