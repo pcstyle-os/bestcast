@@ -285,6 +285,66 @@ final class LauncherCoordinator {
         AppLauncher.showInFinder(app.url)
     }
 
+    /// An extension command opens on its own extension's row, which the Extensions pane reveals.
+    func configure(_ app: AppEntry) {
+        guard app.kind != .extensionCommand else {
+            extensionCoordinator.showExtensionSettings(for: app)
+            return
+        }
+        paletteCoordinator.hidePalette(restoreFocus: false)
+        settingsCoordinator.showSettings(tab: app.settingsPane)
+    }
+
+    /// The palette stays up behind the dialog, dimmed, so the list is still there after it.
+    func recordHotKey(for app: AppEntry) {
+        guard let action = app.hotKeyAction else { return }
+        let hotKeys = core.hotKeys
+        let before = hotKeys.binding(for: action)
+        Task {
+            await core.recordHotKey(for: action, name: app.name)
+            let after = hotKeys.binding(for: action)
+            guard after != before else { return }
+            core.showMessage(after == nil ? "Hotkey removed" : "Hotkey set")
+        }
+    }
+
+    func editAlias(for app: AppEntry) {
+        let aliases = core.aliases
+        Task {
+            guard
+                let alias = await core.editAlias(
+                    for: app.name, current: aliases.alias(for: app.preferenceKey))
+            else { return }
+            aliases.setAlias(alias, for: app.preferenceKey)
+        }
+    }
+
+    /// Unlike a hide, the hotkey stops too; the checkbox in its Settings pane turns it back on.
+    func disable(_ app: AppEntry) {
+        switch app.kind {
+        case .customCommand:
+            guard let id = CustomCommand.id(fromEntryID: app.id) else { return }
+            customCommandCoordinator.setCustomCommandEnabled(false, id: id)
+        case .quicklink:
+            guard let id = Quicklink.id(fromEntryID: app.id) else { return }
+            quicklinkCoordinator.setQuicklinkEnabled(false, id: id)
+        default:
+            return
+        }
+        core.showMessage("Disabled \(app.name)")
+    }
+
+    func copyName(_ app: AppEntry) {
+        Paster.copyPlainText(app.name)
+        core.showMessage("Copied name")
+    }
+
+    func copyBundleID(_ app: AppEntry) {
+        guard app.kind == .application, let bundleID = app.bundleID else { return }
+        Paster.copyPlainText(bundleID)
+        core.showMessage("Copied bundle ID")
+    }
+
     /// Focus is never handed back: the relaunch takes it, or the app that refused has it.
     func restart(_ app: AppEntry) {
         guard app.kind == .application, let bundleID = app.bundleID else { return }

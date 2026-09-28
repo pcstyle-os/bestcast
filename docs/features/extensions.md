@@ -570,6 +570,7 @@ command always takes over the palette, so it launches as `userInitiated`. The ow
 scoped install matches by `owner/extension` first and falls back to the bare slug, so short links
 keep working. Anything else on a claimed scheme just reopens the palette, and an unknown command says
 so rather than failing silently. `ExtensionDeepLink` owns the claimed schemes and the parsing,
+and `url(manifestName:author:commandName:)` builds the `tinycast://` link ⌘K's **Copy Deeplink** copies,
 covered by `Tests/ext-test.swift`; an extension's own `open("raycast://…")` resolves through the same
 `ExtensionManager.resolve(_:)` instead of launching Raycast.
 

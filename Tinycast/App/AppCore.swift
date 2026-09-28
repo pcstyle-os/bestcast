@@ -845,4 +845,14 @@ final class AppCore {
     ) async -> [String: String]? {
         await dialogs.fillSnippetArguments(snippetName: snippetName, arguments: arguments)
     }
+
+    /// The alias prompt, for the same reason.
+    func editAlias(for name: String, current: String?) async -> String? {
+        await dialogs.editAlias(for: name, current: current)
+    }
+
+    /// The hotkey recorder's dialog, for the same reason.
+    func recordHotKey(for action: HotKeyAction, name: String) async {
+        await dialogs.recordHotKey(for: action, name: name, hotKeys: hotKeys)
+    }
 }

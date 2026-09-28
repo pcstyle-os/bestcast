@@ -340,6 +340,7 @@
 		74BE9E8319C8302EF525E6B2 /* QuicklinkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 685FB7FD7E4E5BE6606440D0 /* QuicklinkStore.swift */; };
 		753FEBB891DBCE13C4C59935 /* AIConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE1B6753513C787B3FFE423 /* AIConnection.swift */; };
 		758558CAADB5A358C290364C /* UnitCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF447647B325A119F2B3BCD1 /* UnitCategory.swift */; };
+		75A5FF01EA160D94C4D64733 /* ShortcutCaptureField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA8760C74BCABA21B325DD7 /* ShortcutCaptureField.swift */; };
 		75AED41394E66D6E9CBDA7EA /* NotesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F84B7743B803F55C41D5C4A /* NotesRepository.swift */; };
 		75EF3CFF00A2215D57A4FBFF /* FavoriteSlots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FE591549F24AE554C13CD0C /* FavoriteSlots.swift */; };
 		76056E33DD554E1153BB3DD0 /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA2EC0303BFCB1212E69B54 /* AISettingsView.swift */; };
@@ -1089,6 +1090,7 @@
 		6D594CB90475093D58A2AB1E /* NoteSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteSearch.swift; sourceTree = "<group>"; };
 		6DA4145CFBB855DF1699C744 /* BackupCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupCategory.swift; sourceTree = "<group>"; };
 		6E06AA30E7BA44BC211B667F /* SnippetsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsScreen.swift; sourceTree = "<group>"; };
+		6EA8760C74BCABA21B325DD7 /* ShortcutCaptureField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutCaptureField.swift; sourceTree = "<group>"; };
 		6EBB9959DB6CA493D241080C /* AIAttachmentPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAttachmentPolicy.swift; sourceTree = "<group>"; };
 		6F2CBDE3042FDA4FCA561857 /* MCPComposerAddress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPComposerAddress.swift; sourceTree = "<group>"; };
 		6F7D0725CF7068879F86F0AA /* NoteRevealPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteRevealPolicy.swift; sourceTree = "<group>"; };
@@ -1992,6 +1994,7 @@
 			children = (
 				A5DFA4E0FDAC12379F2D38B5 /* CalloutPlacement.swift */,
 				92AF20F1007F7F3DC1013C2A /* CalloutShape.swift */,
+				6EA8760C74BCABA21B325DD7 /* ShortcutCaptureField.swift */,
 				E9D41B9E6F2C617D28C83AFF /* ShortcutRecorder.swift */,
 				5DADE9F769787D44F72A2071 /* ShortcutRecorderPopover.swift */,
 			);
@@ -4115,6 +4118,7 @@
 				26DB736F18280E1BE6C6B8BE /* SettingsTab.swift in Sources */,
 				23F808ECC9100FFCBE5DA0F7 /* SettingsWindowChrome.swift in Sources */,
 				4109B5CF37DCA4BCDAE46412 /* ShellCommandRunner.swift in Sources */,
+				75A5FF01EA160D94C4D64733 /* ShortcutCaptureField.swift in Sources */,
 				3891DA96CC148D13893F4494 /* ShortcutCaptureSession.swift in Sources */,
 				5FED92BC16B1463EBDE38D77 /* ShortcutRecorder.swift in Sources */,
 				54FC1A629F03AE0F234A01B2 /* ShortcutRecorderPopover.swift in Sources */,

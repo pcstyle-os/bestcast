@@ -8,10 +8,12 @@ enum PaletteShortcut: Equatable {
     case delete
     /// ⌃⇧X.
     case deleteAll
-    /// ⇧⌘C.
+    /// ⇧⌘C: the file, or where a row has none, the deeplink that runs it.
     case copyFile
     /// ⌥⌘C.
     case copyName
+    /// ⇧⌘B.
+    case copyBundleID
     /// ⌃⌘C.
     case copyPath
     /// ⇧⌘T.
@@ -28,6 +30,14 @@ enum PaletteShortcut: Equatable {
     case toggleFavorite
     /// ⇧⌘H.
     case hideFromSearch
+    /// ⇧⌘D, which unlike a hide also silences the row's hotkey.
+    case disableCommand
+    /// ⇧⌘,, the Settings pane that lists the highlighted row.
+    case configureCommand
+    /// ⌥⌘R.
+    case recordHotKey
+    /// ⌥⌘A.
+    case editAlias
     /// ⌃⇧Q.
     case quit
     /// ⌘R.
@@ -57,14 +67,19 @@ enum PaletteShortcut: Equatable {
         if command, shift, matches("v") { return .pasteFile }
         if command, shift, matches("t") { return .copyText }
         if command, shift, matches("a") { return .togglePasteQueue }
+        if command, option, matches("a") { return .editAlias }
+        if command, shift, matches("b") { return .copyBundleID }
         if command, matches("y") { return .quickLook }
         if control, matches("x") { return shift ? .deleteAll : .delete }
         if command, shift, matches("f") { return .toggleFavorite }
         if command, shift, matches("h") { return .hideFromSearch }
+        if command, shift, matches("d") { return .disableCommand }
         if control, shift, matches("q") { return .quit }
+        if command, option, matches("r") { return .recordHotKey }
         if command, matches("r") { return .restart }
         if command, !shift, matches("n") { return .newItem }
         if command, option, matches(",") { return .settings }
+        if command, shift, matches(",") { return .configureCommand }
         if command, matches("j") { return .continueInChat }
         return nil
     }
@@ -72,8 +87,9 @@ enum PaletteShortcut: Equatable {
     /// The compact bar shows no selection, so a chord aimed at a highlighted row waits for the list.
     var requiresExpanded: Bool {
         switch self {
-        case .copyFile, .copyName, .copyPath, .copyText, .togglePasteQueue, .pasteFile, .quickLook,
-            .toggleFavorite, .hideFromSearch, .quit, .restart:
+        case .copyFile, .copyName, .copyBundleID, .copyPath, .copyText, .togglePasteQueue,
+            .pasteFile, .quickLook, .toggleFavorite, .hideFromSearch, .disableCommand,
+            .configureCommand, .recordHotKey, .editAlias, .quit, .restart:
             true
         case .commandDelete, .delete, .deleteAll, .pin, .favoriteSlot, .continueInChat, .newItem,
             .settings, .copyCalculation:
@@ -83,8 +99,9 @@ enum PaletteShortcut: Equatable {
 
     var closesMenu: Bool {
         switch self {
-        case .delete, .deleteAll, .copyFile, .copyName, .copyPath, .copyText, .togglePasteQueue,
-            .copyCalculation, .quickLook, .toggleFavorite, .hideFromSearch, .newItem, .settings:
+        case .delete, .deleteAll, .copyFile, .copyName, .copyBundleID, .copyPath, .copyText,
+            .togglePasteQueue, .copyCalculation, .quickLook, .toggleFavorite, .hideFromSearch,
+            .disableCommand, .configureCommand, .recordHotKey, .editAlias, .newItem, .settings:
             true
         case .commandDelete, .pasteFile, .quit, .restart, .pin, .favoriteSlot, .continueInChat:
             false

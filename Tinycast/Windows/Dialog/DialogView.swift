@@ -56,6 +56,10 @@ struct DialogView: View {
                 case .volume(let volume): VolumeSlider(state: volume)
                 case .eventDraft(let draft): EventDraftFields(state: draft)
                 case .snippetArguments(let arguments): SnippetArgumentFields(state: arguments)
+                case .text(let text): DialogTextInput(state: text)
+                case .hotKey(let action, let hotKeys):
+                    ShortcutCaptureField(action: action) { onChoose(request.cancelIndex) }
+                        .environment(hotKeys)
                 case nil: EmptyView()
                 }
             }

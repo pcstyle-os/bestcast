@@ -22,6 +22,17 @@ struct ExtensionDeepLink: Sendable, Equatable {
         return manifestName.split(separator: "/").last?.lowercased() == extensionName.lowercased()
     }
 
+    /// The link `parse` reads back to this command; a scoped manifest name carries its own owner.
+    static func url(manifestName: String, author: String, commandName: String) -> URL? {
+        let owner = manifestName.contains("/") || author.isEmpty ? [] : [author]
+        let segments = owner + manifestName.split(separator: "/").map(String.init) + [commandName]
+        var components = URLComponents()
+        components.scheme = "tinycast"
+        components.host = "extensions"
+        components.path = "/" + segments.joined(separator: "/")
+        return components.url
+    }
+
     static func claims(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased() else { return false }
         return ["raycast", "tinycast", "com.raycast", "raycastinternal"].contains(scheme)

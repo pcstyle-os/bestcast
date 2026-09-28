@@ -638,7 +638,9 @@ it would couple two unrelated surfaces.
 
 A dialog carries at most one control beyond its buttons, and `DialogAccessory` makes that structural
 rather than a convention — `.volume` for the Set Volume prompt, `.eventDraft` for New Event,
-`.snippetArguments` for a snippet's `{argument}` values. Text fields take `dialogTextField()`;
+`.snippetArguments` for a snippet's `{argument}` values, `.text` for a one-line answer such as
+⌘K's alias, and `.hotKey` for ⌘K's Record Hotkey, whose `ShortcutCaptureField` ends the dialog when
+recording stops. Text fields take `dialogTextField()`;
 New Event groups its fixed start and duration values into two local segmented bars, while a snippet's
 inline enumerated arguments remain `DialogChip`s. Two things follow from the enum:
 
@@ -825,7 +827,8 @@ See [features/window-layouts.md](features/window-layouts.md#the-editor).
 `ShortcutRecorder` is a **120pt** field showing only the binding — a combo's modifiers collapse into
 one cap (`HotKeyBinding.compactKeycaps`), so any shortcut fits in two chips. Recording is narrated by
 `ShortcutRecorderPopover`, a small **132 × 82** callout above it: caps, one label line, an `esc` cap in
-the top-left corner. Its fixed frame shows the prompt (`⌥ A` at half opacity, "Type a
+the top-left corner. Its body is `ShortcutCaptureReadout`, which ⌘K's Record Hotkey dialog shows too. The
+fixed frame shows the prompt (`⌥ A` at half opacity, "Type a
 shortcut"), live held keys, a pending second Globe tap, or a conflict (rejected caps + owner, orange).
 
 - **An ancestor draws it.** The open recorder publishes its bounds via `ShortcutRecorderAnchorKey`;

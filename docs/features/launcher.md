@@ -271,9 +271,9 @@ re-written so `github.com` and `https://…` mean the same thing here as they do
 entry is an ordinary `.command`, so `VisibilityStore` still gates it — Commands off hides the row —
 and its `url` carries the destination instead of the catalog's `tinycast://` placeholder. Nothing
 learns from it and nothing pins it: `LauncherCoordinator.launch` records no visit for a contextual
-row, since a pasted URL is not a term any row should rank under; and ⇧⌘F and ⇧⌘H are both refused,
-because a favorite — or a hidden-item key — the empty query can never resolve is dead state a backup
-would then carry.
+row, since a pasted URL is not a term any row should rank under; and ⇧⌘F, ⇧⌘H and the rest of
+⌘K's Manage and Copy chords are refused, because a favorite, alias, hotkey or hidden-item key the
+empty query can never resolve is dead state a backup would then carry.
 
 The row prints `AppEntry.subtitle` beside its name — the one field for an entry whose name alone
 can't say what it acts on.
@@ -344,10 +344,10 @@ memos on the store's revision.
 A launcher row shows its entry's alias as a small chip after the name, so what a badge-bearing
 result will answer to is visible without opening anything.
 
-Editing lives in Settings only — an alias is one-time configuration like a shortcut, not a
-per-invocation action, so the ⌘K menu stays out of it. Visibility is the one exception, and only in
-one direction: an unwanted result is noticed while searching, so ⌘K can hide a row, but putting it
-back is still the pane's checkbox. Every pane built
+An alias is set from the row itself too: ⌘K's **Add / Edit Alias** (⌥⌘A) opens a text dialog
+through `DialogController.editAlias` and writes the same `AliasStore.setAlias` Settings does, so a
+blank answer clears it. Visibility still goes only one way from ⌘K — it can hide or disable a row,
+but putting it back is the pane's checkbox (see [the ⌘K menu](#the-k-menu)). Every pane built
 on `LauncherItemsSection` puts an `AliasField` on each row, dressed like the `ShortcutRecorder`
 beside it; edits store as typed and trim when the field loses focus, and a blank means none. That
 list filters by **membership only**, keeping the index's name order — re-ranking it per keystroke
@@ -643,6 +643,38 @@ contents alone, so a path-only key served the bitmap decoded first for the rest 
 `AppIndex.scan` reads the stamp off-main into `AppEntry.iconStamp`, `EntryIcon.file` carries it, and
 because it is part of `iconKey` the re-scan on the next palette open re-decodes exactly the apps
 whose icon moved.
+
+## The ⌘K menu
+
+`AppActionsMenu` builds a row's menu in Raycast's groups, each row carrying the chord
+`LauncherScreen.perform` answers, so the hint and the key can't drift:
+
+| Group | Rows |
+| --- | --- |
+| Open | the kind's verb ↵, Show in Finder ⌘↵ |
+| Manage | Add / Remove from Favorites ⇧⌘F and the moves, Configure ⇧⌘,, Record / Change Hotkey ⌥⌘R, Add / Edit Alias ⌥⌘A, Reset Ranking, Hide from Search ⇧⌘H, Disable Command ⇧⌘D |
+| Copy | Copy Name ⌥⌘C, Copy Bundle ID ⇧⌘B (applications), Copy Deeplink ⇧⌘C (extension commands) |
+| App / Extension | Restart, Quit, Uninstall; background refresh, Configure Extension ⇧⌘,, Uninstall Extension |
+
+A query-driven row gets none of Manage or Copy, for the reason it can't be a favorite.
+
+- **Configure** opens `AppEntry.settingsPane`: the `settingsOwner` a feature pane claimed through
+  `SettingsTab.ownedCommands`, otherwise the kind's own pane. An extension command's Configure
+  Extension row answers the same chord and reveals its extension's row instead.
+- **Record Hotkey** is offered wherever `AppEntry.hotKeyAction` is non-nil, an extension command
+  included, and shows the current binding as the row's detail. The dialog hosts no recorder of its own:
+  `DialogController.recordHotKey` sets `HotKeyManager.recordingAction` a turn after the panel is key,
+  so the one `ShortcutCaptureSession` binds, clears on Delete or cancels on Esc exactly as Settings
+  does, and `ShortcutCaptureField` closes the dialog whenever that session stops.
+- **Pin is Favorites.** There is no second concept; ⇧⌘F is the pin.
+- **Hide from Search and Disable Command are different acts.** A hide ticks the pane's search checkbox
+  and leaves the hotkey firing; a disable turns off the item's own enabled switch, which also silences
+  its hotkey. Only custom commands and quicklinks have such a switch (`AppEntry.canDisable`), and the
+  checkbox on their Settings row turns them back on. Every other kind already has Hide, or its
+  feature's master switch, and a third per-item flag would be a preference nothing else reads.
+- **Copy Deeplink** is extension-only: `tinycast://extensions/<author>/<extension>/<command>` from
+  `ExtensionDeepLink.url`, which `parse` reads back. Built-in commands have no URL that runs them —
+  their `tinycast://command/…` is a catalog placeholder — so they are offered no deeplink.
 
 ## Favorites
 

@@ -237,7 +237,8 @@ struct LauncherScreen: PaletteScreen {
                     // Reset can move the item; keep the highlight on the item whose action ran.
                     if let index = rows.firstIndex(of: .entry(app)) { vm.selection = index }
                 },
-                onHideFromSearch: { _ = hideFromSearch(at: selection) })
+                onHideFromSearch: { _ = hideFromSearch(at: selection) },
+                onDisable: { _ = disable(at: selection) })
         case .fallback(let fallback, let app):
             return FallbackActionsMenu.content(
                 fallback: fallback, entry: app, query: vm.query, core: core)
@@ -296,8 +297,38 @@ struct LauncherScreen: PaletteScreen {
         case .restart: return restart(at: selection)
         case .favoriteSlot(let index): return launchFavorite(at: index)
         case .copyCalculation: return copyCalculation(at: selection)
+        case .disableCommand: return disable(at: selection)
+        case .configureCommand, .recordHotKey, .editAlias, .copyName, .copyBundleID, .copyFile:
+            return performRowAction(shortcut, at: selection)
         default: return false
         }
+    }
+
+    /// Each chord answers only where ⌘K lists its row, so a menu hint never promises a no-op.
+    private func performRowAction(_ shortcut: PaletteShortcut, at selection: Int) -> Bool {
+        guard let app = entry(at: selection), !CommandCatalog.isQueryDriven(app) else { return false }
+        let launcher = core.launcherCoordinator
+        switch shortcut {
+        case .configureCommand: launcher.configure(app)
+        case .recordHotKey where app.hotKeyAction != nil: launcher.recordHotKey(for: app)
+        case .editAlias: launcher.editAlias(for: app)
+        case .copyName: launcher.copyName(app)
+        case .copyBundleID where app.kind == .application && app.bundleID != nil:
+            launcher.copyBundleID(app)
+        case .copyFile where app.kind == .extensionCommand:
+            core.extensionCoordinator.copyDeepLink(for: app)
+        default: return false
+        }
+        return true
+    }
+
+    /// ⇧⌘D: like a hide, the row leaves the list, so the highlight takes the place it vacated.
+    private func disable(at selection: Int) -> Bool {
+        guard let app = entry(at: selection), app.canDisable, let index = results.firstIndex(of: app)
+        else { return false }
+        core.launcherCoordinator.disable(app)
+        select(row: min(index, max(reorderedResults().entries.count - 1, 0)))
+        return true
     }
 
     private func copyCalculation(at selection: Int) -> Bool {

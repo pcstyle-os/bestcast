@@ -80,6 +80,22 @@ struct PaletteShortcutTests {
         expect(resolve("r", command: true), .restart, "⌘R restarts the app")
         expect(resolve("r", command: true, shift: true), .restart, "an extra Shift still reads ⌘R")
 
+        expect(resolve("r", command: true, option: true), .recordHotKey, "⌥⌘R records a hotkey")
+        expect(resolve("a", command: true, option: true), .editAlias, "⌥⌘A edits the alias")
+        expect(
+            resolve("a", command: true, shift: true, option: true), .togglePasteQueue,
+            "Shift is read before Option on A")
+        expect(resolve("b", command: true, shift: true), .copyBundleID, "⇧⌘B copies the bundle ID")
+        expect(resolve("b", command: true), nil, "⌘B is not the bundle ID chord")
+        expect(resolve("d", command: true, shift: true), .disableCommand, "⇧⌘D disables the row")
+        expect(resolve("d", command: true), nil, "⌘D is not the disable chord")
+        expect(
+            resolve(",", command: true, shift: true), .configureCommand,
+            "⇧⌘, opens the row's Settings pane")
+        expect(
+            resolve(",", command: true, shift: true, option: true), .settings,
+            "Option is read before Shift on the comma")
+
         expect(resolve("j", command: true), .continueInChat, "⌘J continues Quick AI in AI Chat")
         expect(resolve("n", command: true), .newItem, "⌘N starts a new one")
         expect(resolve("n", command: true, shift: true), nil, "⇧⌘N is not the new-item chord")
@@ -91,9 +107,9 @@ struct PaletteShortcutTests {
         expect(resolve("a"), nil, "typing is never a chord")
 
         let expanded: [PaletteShortcut] = [
-            .copyFile, .copyName, .copyPath, .copyText, .togglePasteQueue, .pasteFile, .quickLook,
-            .toggleFavorite,
-            .hideFromSearch, .quit, .restart
+            .copyFile, .copyName, .copyBundleID, .copyPath, .copyText, .togglePasteQueue, .pasteFile,
+            .quickLook, .toggleFavorite, .hideFromSearch, .disableCommand, .configureCommand,
+            .recordHotKey, .editAlias, .quit, .restart
         ]
         let anywhere: [PaletteShortcut] = [
             .commandDelete, .delete, .deleteAll, .pin, .favoriteSlot(0), .continueInChat, .newItem,
@@ -107,9 +123,9 @@ struct PaletteShortcutTests {
         }
 
         let closing: [PaletteShortcut] = [
-            .delete, .deleteAll, .copyFile, .copyName, .copyPath, .copyText, .togglePasteQueue,
-            .copyCalculation,
-            .quickLook, .toggleFavorite, .hideFromSearch, .newItem, .settings
+            .delete, .deleteAll, .copyFile, .copyName, .copyBundleID, .copyPath, .copyText,
+            .togglePasteQueue, .copyCalculation, .quickLook, .toggleFavorite, .hideFromSearch,
+            .disableCommand, .configureCommand, .recordHotKey, .editAlias, .newItem, .settings
         ]
         let leaving: [PaletteShortcut] = [
             .commandDelete, .pasteFile, .quit, .restart, .pin, .favoriteSlot(0), .continueInChat

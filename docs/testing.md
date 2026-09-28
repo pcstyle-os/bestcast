@@ -104,6 +104,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `palette-placement-test` | `DesignSystem/Theme.swift`, `Palette/PalettePlacement.swift` |
 | `hotkey-test` | `HotKeys/Model/DoubleTapModifier.swift`, `DoubleTapDetector.swift`, `GlobeTapDetector.swift`, `HotKeyBinding.swift`, `HotKeySpelling.swift`, `HyperKey.swift`, `HyperKeyRewriter.swift`, `HotKeyAction.swift`, `HotKeyRegistrationIssue.swift`, `Service/KeyShortcut.swift`, and the command→action mapping in `Launcher/Model/CommandID.swift` |
 | `fallback-test` | `Launcher/Model/Fallback.swift`, plus the `CommandID` and `Quicklink` ids it is built from |
+| `command-owner-test` | `SettingsTab.ownedCommands` and `CommandID.owner` in `Launcher/Model/CommandID.swift` — the pane ⌘K's Configure Command opens for a built-in |
 | `dictionary-test` | `Dictionary/Model/DictionaryEntry.swift`, `DictionaryMarkup.swift` — a real XHTML record and the plain-text fallback, read into page blocks |
 | `callout-test` | `DesignSystem/Theme.swift`, `HotKeys/UI/CalloutPlacement.swift` |
 | `system-action-test` | `SystemActions/Model/SystemAction.swift` |

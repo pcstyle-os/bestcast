@@ -104,6 +104,16 @@ final class ExtensionCoordinator {
         showExtensionSettings(for: owner)
     }
 
+    func copyDeepLink(for app: AppEntry) {
+        guard let (owner, command) = extensions.resolve(app),
+            let url = ExtensionDeepLink.url(
+                manifestName: owner.manifest.name, author: owner.manifest.author,
+                commandName: command.name)
+        else { return }
+        Paster.copyPlainText(url.absoluteString)
+        core.showMessage("Copied deeplink")
+    }
+
     /// The palette hides before the dialog: it floats, and a sheet behind it is unreachable.
     func confirmUninstall(_ app: AppEntry) {
         guard let (owner, _) = extensions.resolve(app) else { return }
