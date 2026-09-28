@@ -59,7 +59,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         Signposts.interval("PaletteWindowController.show") {
             isPoppedToRoot = false
             // Summoned over one of our own windows: there is no external paste or focus target.
-            let frontmost = NSWorkspace.shared.frontmostApplication
+            let frontmost = FrontmostApplication.current()
             let ownPID = NSRunningApplication.current.processIdentifier
             previousApp = frontmost?.processIdentifier == ownPID ? nil : frontmost
             // Recorded even when another app is frontmost: our panels take key without activating.

@@ -589,7 +589,12 @@ claims focus is private and several levels down — there is nothing to override
 ## Focus restoration (load-bearing)
 
 `PaletteWindowController` records `previousApp` (the frontmost app) on show. Paste then targets that
-app:
+app. It is read through `FrontmostApplication.current()`, which asks Accessibility for the focused
+application first: `NSWorkspace.frontmostApplication` only moves once our run loop delivers the
+activation notification, so a summon that races an app switch would name the app before it. When the
+focused app is Tinycast — one of our non-activating panels holds key — the workspace's answer stands.
+`PaletteCoordinator.targetApp` reads it the same way while the palette is hidden, so Paste Next and
+every hotkey-driven action land in the app that is in front at the press.
 
 - `Paster.paste` activates it and posts a synthetic ⌘V via `CGEvent`.
 - `Paster.pasteInPlace` posts ⌘V straight to the app's PID _without_ activating it, so the palette can

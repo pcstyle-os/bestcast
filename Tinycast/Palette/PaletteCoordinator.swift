@@ -42,7 +42,7 @@ final class PaletteCoordinator {
     /// The app an action acts on: the one displaced, else what a hotkey found frontmost.
     var targetApp: NSRunningApplication? {
         windowController.isVisible
-            ? windowController.previousApp : NSWorkspace.shared.frontmostApplication
+            ? windowController.previousApp : FrontmostApplication.current()
     }
 
     /// The own window the palette covered, for anything acting on it after the palette hides.
