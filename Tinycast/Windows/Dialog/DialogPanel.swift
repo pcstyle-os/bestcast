@@ -18,6 +18,8 @@ final class DialogPanel: NSPanel {
     var onKey: ((Key) -> Bool)?
     /// Arrows are a control's keys, not the panel's; a text field needs them for its caret.
     var handlesArrowKeys = false
+    /// Under Keyboard Navigation the key loop already reaches these controls, so ⇥ stays AppKit's.
+    var hostsControls = false
 
     init(content: NSView, cornerRadius: CGFloat) {
         super.init(
@@ -64,11 +66,15 @@ final class DialogPanel: NSPanel {
             return .decrement
         case kVK_RightArrow where handlesArrowKeys, kVK_UpArrow where handlesArrowKeys:
             return .increment
-        case kVK_Tab where !isEditingText:
+        case kVK_Tab where !isEditingText && !keyLoopOwnsTab:
             return event.modifierFlags.contains(.shift) ? .focusPrevious : .focusNext
         case kVK_Space where !isEditingText: return .activateFocused
         default: return nil
         }
+    }
+
+    private var keyLoopOwnsTab: Bool {
+        hostsControls && NSApp.isFullKeyboardAccessEnabled
     }
 
     override var canBecomeKey: Bool { true }

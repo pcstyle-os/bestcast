@@ -131,6 +131,7 @@ final class DialogController: NSObject, NSWindowDelegate {
             panel.title = request.title
             panel.setAccessibilitySubrole(.dialog)
             panel.handlesArrowKeys = request.accessory?.claimsArrowKeys ?? false
+            panel.hostsControls = request.accessory != nil
             panel.delegate = self
             panel.onKey = { [weak self] key in
                 guard let self else { return false }

@@ -502,7 +502,9 @@ sole owner rule) and is the only presenter, so every confirmation in the app loo
   `DialogView.ButtonFocus` through `DialogRequest.visualOrder`, wrapping at either end, and Space
   presses the button it rests on, as on any native control. Return and Escape keep their jobs, so
   Escape still resolves the cancel action and never whichever button holds the ring. While a text
-  field is editing, ⇥ and Space stay the field's. The ring is `ModalActionButtonStyle`'s
+  field is editing, ⇥ and Space stay the field's, and so does ⇥ everywhere in a dialog with an
+  accessory while Keyboard Navigation is on (`hostsControls`): the key loop already walks its
+  fields, chips and buttons, and taking ⇥ would strand the reader on the buttons. The ring is `ModalActionButtonStyle`'s
   `showsFocus`: a `focusRing` capsule, `Size.focusRing` wide, just outside the button — drawn too
   when AppKit focuses the button itself, so a Settings editor's buttons show it under Keyboard
   Navigation. VoiceOver hears the button's title when the ring lands.
