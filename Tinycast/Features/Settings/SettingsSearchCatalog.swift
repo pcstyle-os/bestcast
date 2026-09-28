@@ -463,7 +463,7 @@ enum SettingsSearchCatalog {
             keywords: ["disable", "turn off", "monitor", "record", "privacy"]),
         .init(
             group: .clipboardCommands, "Clipboard commands",
-            keywords: ["shortcut", "hotkey", "launcher", "paste", "browser"]),
+            keywords: ["shortcut", "hotkey", "launcher", "paste", "browser", "queue", "sequential"]),
         .init(
             .clipboardHistory, "Keep history for",
             keywords: ["retention", "delete", "privacy", "expire"]),

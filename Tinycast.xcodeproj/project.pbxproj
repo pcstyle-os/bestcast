@@ -469,6 +469,7 @@
 		A32AA27F342C56AA0D5B9F92 /* ExtensionImageSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E822B51C86FD49ADF858784 /* ExtensionImageSize.swift */; };
 		A32BE15F664FB1215BE084BC /* ExtensionFormMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D1A8D93DEC49E4EA11C449 /* ExtensionFormMetrics.swift */; };
 		A33EA048BC22D7313F4D480C /* EventDraftFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D8553E1626E985013046C47 /* EventDraftFields.swift */; };
+		A3B3206D15B4C4438DAA4CEF /* PasteQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93CC5689925073E4E76B4000 /* PasteQueue.swift */; };
 		A41185C975CBF97A8C6EAC19 /* SystemPromptEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF36BDC9ACE867DCC2CCF746 /* SystemPromptEditor.swift */; };
 		A47E49315D60D94CF75E22C9 /* PaletteDropGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 418527DD2F2370A1B82A13B7 /* PaletteDropGuideView.swift */; };
 		A500AF3BF8910B335A7A936C /* HUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1752929BA1ACC0BC54865C /* HUDPanel.swift */; };
@@ -1197,6 +1198,7 @@
 		934DBE501F116131DC1BF5CE /* CalcExpressionParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalcExpressionParser.swift; sourceTree = "<group>"; };
 		936C0D68CC32D90E590F712C /* ExtensionPickerField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionPickerField.swift; sourceTree = "<group>"; };
 		93CBB4251C94C31DE1BE6937 /* InjectableTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectableTextView.swift; sourceTree = "<group>"; };
+		93CC5689925073E4E76B4000 /* PasteQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteQueue.swift; sourceTree = "<group>"; };
 		943495E91C0D09B633746515 /* ChatGPTSubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTSubscriptionManager.swift; sourceTree = "<group>"; };
 		94507F8F095D3EBD1A9B3007 /* DialogController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialogController.swift; sourceTree = "<group>"; };
 		946ABF992DAD60387381968C /* RoomSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomSession.swift; sourceTree = "<group>"; };
@@ -3374,6 +3376,7 @@
 				025D7D760DE2FD02C0D7D9D2 /* ColorFormat.swift */,
 				8756FBB625DFAE931D8D5D9D /* ColorSpaces.swift */,
 				CA9287418DC6C04437FB4BAF /* ColorValue.swift */,
+				93CC5689925073E4E76B4000 /* PasteQueue.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -3977,6 +3980,7 @@
 				3C2812B921530D45B802B44C /* PaletteTabAction.swift in Sources */,
 				52C4F57BB26F420CCD22C1D7 /* PaletteWindowController.swift in Sources */,
 				E4B18EBFFD009B2CAFF4BA9B /* PanelTransition.swift in Sources */,
+				A3B3206D15B4C4438DAA4CEF /* PasteQueue.swift in Sources */,
 				1E04684F05DFA84A8B667F20 /* PasteboardFiles.swift in Sources */,
 				FD4DDDCDC32AF921CDBCFB18 /* Paster.swift in Sources */,
 				94887F8E18AB2C08A8273897 /* Permissions.swift in Sources */,

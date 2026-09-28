@@ -2,6 +2,7 @@ import AppKit
 
 /// Owns clipboard-history actions: paste, copy, reveal, pin — and the selection that follows.
 @MainActor
+@Observable
 final class ClipboardCoordinator {
     private let clipboardStore: ClipboardStore
     private let clipboardManager: ClipboardManager
@@ -13,7 +14,9 @@ final class ClipboardCoordinator {
     /// Dialogs, for the one action here that can't be undone.
     private unowned let core: AppCore
     /// One Copy Text at a time: a newer trigger cancels the helper an older one is waiting on.
-    private var textTask: Task<Void, Never>?
+    @ObservationIgnored private var textTask: Task<Void, Never>?
+    /// In memory only: a run outlives the palette hiding between presses, never a relaunch.
+    private(set) var pasteQueue = PasteQueue()
 
     init(
         clipboardStore: ClipboardStore,
@@ -37,8 +40,9 @@ final class ClipboardCoordinator {
 
     /// Off means the poller stops, the database closes and nothing new is ever recorded.
     func applyEnabled() {
-        appIndex.setCommandsVisible([.clipboardHistory], settings.clipboardEnabled)
+        appIndex.setCommandsVisible([.clipboardHistory, .pasteNextQueuedClip], settings.clipboardEnabled)
         guard settings.clipboardEnabled else {
+            pasteQueue = PasteQueue()
             core.applyClipboardTextSearch()
             clipboardManager.stop()
             if palette.mode == .clipboard { palette.prepare(mode: .launcher) }
@@ -112,6 +116,43 @@ final class ClipboardCoordinator {
         if !windowController.pasteKeepingWindowOpen(item, store: clipboardStore) {
             reportUnavailable(item)
         }
+    }
+
+    /// ⇧⌘A and its menu row: marks the entry at the end of the run, or takes it back out.
+    func toggleQueued(_ item: ClipboardItem) {
+        pasteQueue.toggle(item.id)
+    }
+
+    func clearPasteQueue() {
+        pasteQueue = PasteQueue()
+    }
+
+    /// The global chord, the launcher row and the ⌘K row alike: the next queued entry, pasted.
+    func pasteNextQueued() {
+        // The chord registers whatever the feature switch says, so the switch is read here.
+        guard settings.clipboardEnabled else { return }
+        let target = paletteCoordinator.targetApp
+        if paletteCoordinator.isVisible { paletteCoordinator.hidePalette(restoreFocus: false) }
+        guard let step = pasteQueue.advance(resolve: { clipboardStore.item(withID: $0) }) else {
+            return core.showMessage("Nothing queued to paste", tone: .neutral)
+        }
+        // Unpromoted, so a run leaves the history in the order it was picked from.
+        if Paster.paste(step.item, store: clipboardStore, previousApp: target, promoting: false) {
+            core.showMessage(step.message)
+        } else {
+            core.showMessage("\(step.message) · Entry no longer available", tone: .danger)
+        }
+    }
+
+    /// Every pending entry's text in one paste, a line each; images have none and are left out.
+    func pasteAllQueued() {
+        let target = windowController.previousApp
+        paletteCoordinator.hidePalette(restoreFocus: false)
+        guard let text = pasteQueue.joinedText(resolve: { clipboardStore.item(withID: $0) }) else {
+            return core.showMessage("Nothing queued has text to paste", tone: .neutral)
+        }
+        pasteQueue = PasteQueue()
+        Paster.pasteString(text, previousApp: target)
     }
 
     /// A write only fails on a vanished file, and a palette that just closes explains nothing.

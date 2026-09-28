@@ -196,6 +196,8 @@ final class ClipboardStore {
     @ObservationIgnored private var textSearchFilter: ClipboardFilter?
     @ObservationIgnored private var textSearchRequest: UUID?
     @ObservationIgnored private var textSearchMatches: [ClipboardItem] = []
+    /// Digests being written, so a second copy of an image still in flight adds no second row.
+    @ObservationIgnored private var pendingImageDigests: Set<String> = []
 
     var maxAge: TimeInterval = ClipboardRetention.threeMonths.maxAge
 
@@ -374,14 +376,40 @@ final class ClipboardStore {
         prune()
     }
 
-    func addImage(_ data: Data, sourceBundleID: String?) {
-        let url = imagesDir.appendingPathComponent(UUID().uuidString + ".png")
-        let item = ClipboardItem(imagePath: url.path, sourceBundleID: sourceBundleID)
-        // The blob write is multi-MB I/O; only the row insert returns to the main actor.
-        Task.detached(priority: .utility) { [weak self] in
-            guard (try? data.write(to: url, options: .atomic)) != nil else { return }
-            await self?.insert(item)
+    /// A re-copied image re-recencies the row holding it rather than writing a second blob.
+    func addImage(
+        _ data: Data, digest: String, fileExtension: String, sourceBundleID: String?
+    ) async {
+        if let existing = items.first(where: { holdsImage($0, digest: digest) }) {
+            promote(existing)
+            return
         }
+        guard pendingImageDigests.insert(digest).inserted else { return }
+        defer { pendingImageDigests.remove(digest) }
+        // Unique per capture, so deleting one row's blob can never strand another row.
+        let name = "\(digest)-\(UUID().uuidString.prefix(8)).\(fileExtension)"
+        let url = imagesDir.appendingPathComponent(name)
+        // The blob write is multi-MB I/O; only the row insert returns to the main actor.
+        let written = await Task.detached(priority: .utility) {
+            (try? data.write(to: url, options: .atomic)) != nil
+        }.value
+        guard written else { return }
+        insert(ClipboardItem(imagePath: url.path, sourceBundleID: sourceBundleID))
+    }
+
+    /// The entry as it stands now, reaching past the window; nil once it has been deleted.
+    func item(withID id: ClipboardItem.ID) -> ClipboardItem? {
+        if let resident = items.first(where: { $0.id == id }) { return resident }
+        guard
+            let stmt = prepare(
+                """
+                SELECT id, kind, text, image_path, created_at, source_app, pinned_at
+                FROM items WHERE id = ?1
+                """)
+        else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, id.uuidString, -1, SQLITE_TRANSIENT)
+        return sqlite3_step(stmt) == SQLITE_ROW ? Self.row(stmt) : nil
     }
 
     /// Bulk-insert from an import: original timestamps, external image paths, deduped.
@@ -842,6 +870,12 @@ final class ClipboardStore {
     /// Whether a path is inside our images directory; only those are ours to delete.
     private func owns(_ path: String) -> Bool {
         path.hasPrefix(imagesDir.path + "/")
+    }
+
+    /// Resident rows only: an older duplicate costs one more blob, never a table scan per capture.
+    private func holdsImage(_ item: ClipboardItem, digest: String) -> Bool {
+        guard item.kind == .image, let path = item.imagePath, owns(path) else { return false }
+        return URL(filePath: path).lastPathComponent.hasPrefix(digest + "-")
     }
 
     private func prune() {

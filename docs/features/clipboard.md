@@ -44,6 +44,15 @@
   it extracts fresh in the helper and puts the text on the pasteboard — the `item_text` table
   itself is still never copied from. What an entry *is* still comes from the content that was
   captured.
+- **A paste queue runs in marking order, and `PasteQueue` alone decides what comes next.** It
+  holds ids, never copies; an entry deleted since it was marked leaves the run before the run is
+  counted, so the press that says **Queue finished** really is the last, and that press empties it.
+  The queue is in memory on `ClipboardCoordinator`: it outlives the palette hiding between
+  presses, never a relaunch, and switching the feature off clears it.
+- **An image is kept in the representation the app offered**, in the order PNG, JPEG, HEIC, TIFF;
+  only a TIFF-only board is re-encoded, to lossless PNG. Its blob is named by content —
+  `<digest>-<8 random hex>.<ext>` — so a re-copy of a resident image promotes that row instead of
+  writing again, and the random tail means two rows never share, or delete, one file.
 - **No recognition ever runs in the app process.** `ClipboardTextWorker` spawns one bundled
   `ClipboardTextHelper` per item and reaps it, which is the whole reason Vision's and PDFKit's
   allocations do not accumulate in Tinycast. The helper is handed a path and answers with text.
@@ -87,8 +96,9 @@ who turns the feature off can still erase what it kept.
 ## Store
 
 `ClipboardStore` is SQLite-backed: rows plus a trigram FTS5 index in `clipboard.sqlite3`, with image
-blobs as loose PNG files, all under `~/Library/Application Support/<bundle-id>/`. The newest 1000 rows
-are mirrored in the observable `items` window; FTS search reaches older rows.
+blobs as loose PNG, JPEG or HEIC files (see [Image blobs](#image-blobs)), all under
+`~/Library/Application Support/<bundle-id>/`. The newest 1000 rows are mirrored in the observable
+`items` window; FTS search reaches older rows.
 
 **Application Support, not Caches.** `~/Library/Caches` is excluded from Time Machine and the system
 may reclaim it at any time without telling the app, so a history kept there survives neither a restore
@@ -97,9 +107,10 @@ nor a full disk — while the retention setting offers **Forever** and a pin is 
 A database that won't open is deleted and recreated (worst case the store degrades to session-only
 in-memory history).
 
-Image capture (TIFF→PNG re-encode + blob write) runs off the main actor via detached tasks; row
-inserts, original-text search, and pruning stay on the main actor.
-Image copy uses Foundation’s `mappedIfSafe` hint before publishing the original PNG and marker.
+Image capture (a TIFF-only board's PNG re-encode, the content digest and the blob write) runs off
+the main actor via detached tasks; row inserts, original-text search, and pruning stay on the main
+actor. Image copy uses Foundation’s `mappedIfSafe` hint before publishing the blob under its own
+type and the marker.
 
 **A backup reads the whole table, not `items`.** `forEachStoredItem(inDatabaseAt:)` is `nonisolated`
 and opens a second connection, because the resident window stops at 1000 rows while the table is
@@ -197,6 +208,56 @@ Strips never split a line across columns, and each keeps only the lines centred 
 overlap, so a line is read once and the text keeps its reading order. A referenced file is read once
 when it is indexed; editing it later does not refresh the historical search text. Backups carry the
 original content and references, and a restored entry is recognized again.
+
+## Image blobs
+
+`ClipboardManager.image(on:)` picks one representation by `imageTypes` — PNG, JPEG, HEIC, then
+TIFF — and reads only that one, so a browser's TIFF+JPEG pair never pulls its 35 MB TIFF across.
+`storedImage` keeps those bytes untouched unless they are TIFF, which is re-encoded to PNG, and
+names them by the first 128 bits of their SHA-256. `ClipboardStore.addImage` promotes a resident
+image row whose blob carries that digest, skips a digest already being written, and otherwise
+writes `<digest>-<8 random hex>.<ext>`. The dedupe looks only at the resident window: a duplicate
+older than the newest 1000 rows costs one more blob, never a table scan per capture. Blobs from
+before this naming keep their UUID names and simply never match. The digest lives in the file name
+because a new column would be a migration, which this store does not carry.
+
+`Paster.write` puts the blob on the pasteboard under its own type and nothing else. AppKit derives
+`public.tiff` from PNG, JPEG and HEIC for any reader that asks, so an eager TIFF would only cost a
+decode and tens of megabytes per paste; `pasteboard-test` checks that a written JPEG still reads as
+TIFF and is never labelled PNG.
+
+Measured with synthetic images pushed through the capture decision, before and after (MB on disk):
+
+| Copied | Offered (smallest) | Before | After |
+| --- | --- | --- | --- |
+| Screenshot, PNG + TIFF | 0.09 | 0.09 | 0.09 |
+| 12 MP photo, TIFF only | 34.89 | 14.39 | 14.39 |
+| 12 MP photo, TIFF + JPEG (browser) | 5.44 | 14.39 | 5.44 |
+| 12 MP photo, TIFF + HEIC | 4.23 | 14.39 | 4.23 |
+| 1600×1200 with alpha, PNG | 3.92 | 3.92 | 3.92 |
+| 1600×1200 with alpha, TIFF only | 7.33 | 3.92 | 3.92 |
+| The screenshot, copied twice | 0.09 | 0.19 | 0.09 |
+
+A TIFF-only board was never the inflation: PNG is already under half the TIFF. The waste was
+re-encoding the TIFF an app offers *beside* its own compressed original, and one blob per repeat.
+
+## Paste Sequentially
+
+Mark entries on the Clipboard screen with **⇧⌘A** or the ⌘K row **Add to Paste Queue**; a marked
+row shows its number, which is the number its paste will report. **Paste Next Queued Clip** is a
+command in the launcher and in Settings ▸ Clipboard, so it takes a global shortcut like any other
+command. Each press pastes the next marked entry into the frontmost app — or the app behind the
+palette, which it hides — with a HUD saying **Pasted 2 of 5**, and **Pasted 5 of 5 · Queue
+finished** on the last. A press with nothing queued says so. The ⌘K menu adds **Paste
+Sequentially**, which is the same first press, **Paste All**, and **Clear Paste Queue** while
+anything is waiting.
+
+Any kind can be queued; an image pastes as an image where it was marked. A run pastes without
+promoting, like ⌥↵, so the history keeps the order the run was picked from. **Paste All** writes the
+pending entries' `plainText` joined with newlines — a file as its path, an image left out — as one
+marked paste, and clears the queue. Marking a row again unmarks it; marking one already pasted in
+this run queues it again at the end. `clipboard-test` drives `PasteQueue` over deliberately uneven
+entries — edge whitespace, a tab and newline, unicode, a file and an image in the middle.
 
 ## Copy Text from an image
 
@@ -357,7 +418,8 @@ visible change.
 
 Paste and Keep Window Open (⌥↵) does not promote any entry. The rows hold still under the
 selection, so ↓ then ⌥↵ pastes a run of entries in order. `Paster.write` therefore only writes the
-pasteboard; `paste` and `copy` promote after it, and `pasteInPlace` does not.
+pasteboard; `paste` and `copy` promote after it, and `pasteInPlace` does not. A queued run passes
+`promoting: false` for the same reason.
 
 The ten palette slots shared with launcher favorites address this visible Pinned block too. A slot
 uses the current query and type filter, so its first entry is the first visible pin; a missing slot is

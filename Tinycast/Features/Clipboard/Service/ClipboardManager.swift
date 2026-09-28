@@ -1,4 +1,6 @@
 import AppKit
+import CryptoKit
+import UniformTypeIdentifiers
 
 @MainActor
 final class ClipboardManager {
@@ -154,18 +156,48 @@ final class ClipboardManager {
             return
         }
 
-        if let type = pb.availableType(from: [.png, .tiff]), let data = pb.data(forType: type) {
-            let isPNG = type == .png
+        if let image = Self.image(on: pb) {
             let store = store
             // A big TIFF→PNG re-encode can take 100ms+, so keep the poll off that path.
             Task.detached(priority: .utility) {
-                let png =
-                    isPNG
-                    ? data
-                    : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
-                guard let png else { return }
-                await store.addImage(png, sourceBundleID: sourceBundleID)
+                guard let blob = Self.storedImage(image.data, typeIdentifier: image.typeIdentifier)
+                else { return }
+                await store.addImage(
+                    blob.data, digest: blob.digest, fileExtension: blob.fileExtension,
+                    sourceBundleID: sourceBundleID)
             }
         }
+    }
+
+    /// Preference order: an app's own compressed bytes beat a TIFF of the same pixels.
+    static let imageTypes = [UTType.png, .jpeg, .heic, .tiff].map {
+        NSPasteboard.PasteboardType($0.identifier)
+    }
+
+    /// The one representation capture keeps; a board that also carries TIFF never reads it.
+    static func image(on pasteboard: NSPasteboard) -> (data: Data, typeIdentifier: String)? {
+        guard let type = pasteboard.availableType(from: imageTypes),
+            let data = pasteboard.data(forType: type)
+        else { return nil }
+        return (data, type.rawValue)
+    }
+
+    /// What a captured image stores as, and the content digest its blob is named by.
+    struct StoredImage: Sendable {
+        let data: Data
+        let fileExtension: String
+        let digest: String
+    }
+
+    /// Offered bytes are kept as they came; only a TIFF re-encodes, losslessly, to PNG.
+    nonisolated static func storedImage(_ data: Data, typeIdentifier: String) -> StoredImage? {
+        let type = UTType(typeIdentifier) ?? .tiff
+        let kept =
+            type == .tiff
+            ? NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) : data
+        guard let kept else { return nil }
+        let fileExtension = type == .tiff ? "png" : type.preferredFilenameExtension ?? "png"
+        let digest = SHA256.hash(data: kept).prefix(16).map { String(format: "%02x", $0) }.joined()
+        return StoredImage(data: kept, fileExtension: fileExtension, digest: digest)
     }
 }

@@ -6,6 +6,7 @@ struct ClipboardList: View {
     @Environment(\.metrics) private var metrics
     let results: [ClipboardItem]
     let selectedID: ClipboardItem.ID?
+    let pasteQueue: PasteQueue
     /// Changes only when the list should scroll, so mouse selection never yanks it.
     let scroll: ScrollIntent
     let onSelect: (ClipboardItem) -> Void
@@ -62,7 +63,8 @@ struct ClipboardList: View {
                         case .item(let item, let slot):
                             ClipboardRow(
                                 item: item, selected: item.id == selectedID,
-                                imageURL: store.imageURL(for: item), slot: slot
+                                imageURL: store.imageURL(for: item), slot: slot,
+                                queuePosition: pasteQueue.position(of: item.id)
                             )
                             .selectionFrame(item.id == selectedID)
                             .contentShape(Rectangle())
@@ -132,6 +134,8 @@ private struct ClipboardRow: View {
     let imageURL: URL?
     /// This row's ⌘-digit, or nil when it is not among the first ten visible pins.
     let slot: Character?
+    /// Where Paste Sequentially will paste this row, or nil when it is not waiting in the queue.
+    let queuePosition: Int?
     @Environment(PaletteState.self) private var palette
     @State private var hovered = false
 
@@ -150,6 +154,9 @@ private struct ClipboardRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 0)
+            if let queuePosition {
+                QueueBadge(position: queuePosition)
+            }
             if let slot, palette.commandHeld {
                 HStack(spacing: metrics.spacing.xxs) {
                     KeyCapChip(text: "⌘", style: .outline)
@@ -236,6 +243,25 @@ private struct ClipboardRow: View {
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.secondary)
             )
+    }
+}
+
+/// A queued row's place in the run, the number its paste's HUD will say.
+private struct QueueBadge: View {
+    /// SF Symbols draws a numbered circle only up to this; past it the badge is a plain dot.
+    private static let highestNumberedSymbol = 50
+
+    @Environment(\.metrics) private var metrics
+    let position: Int
+
+    var body: some View {
+        Image(
+            systemName: position <= Self.highestNumberedSymbol
+                ? "\(position).circle.fill" : "circle.fill"
+        )
+        .font(metrics.typography.menuRow)
+        .foregroundStyle(Theme.Colors.primaryAction)
+        .accessibilityLabel("Queued to paste, number \(position)")
     }
 }
 

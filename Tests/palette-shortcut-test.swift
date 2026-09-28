@@ -58,6 +58,8 @@ struct PaletteShortcutTests {
         expect(
             resolve("t", command: true, shift: true, option: true), .copyText,
             "an extra Option still reads ⇧⌘T")
+        expect(resolve("a", command: true, shift: true), .togglePasteQueue, "⇧⌘A queues the clip")
+        expect(resolve("a", command: true), nil, "bare ⌘A stays select-all in the search field")
         expect(resolve("y", command: true), .quickLook, "⌘Y toggles Quick Look")
         expect(resolve("y", command: true, shift: true), .quickLook, "an extra Shift still reads ⌘Y")
 
@@ -89,7 +91,8 @@ struct PaletteShortcutTests {
         expect(resolve("a"), nil, "typing is never a chord")
 
         let expanded: [PaletteShortcut] = [
-            .copyFile, .copyName, .copyPath, .copyText, .pasteFile, .quickLook, .toggleFavorite,
+            .copyFile, .copyName, .copyPath, .copyText, .togglePasteQueue, .pasteFile, .quickLook,
+            .toggleFavorite,
             .hideFromSearch, .quit, .restart
         ]
         let anywhere: [PaletteShortcut] = [
@@ -104,7 +107,8 @@ struct PaletteShortcutTests {
         }
 
         let closing: [PaletteShortcut] = [
-            .delete, .deleteAll, .copyFile, .copyName, .copyPath, .copyText, .copyCalculation,
+            .delete, .deleteAll, .copyFile, .copyName, .copyPath, .copyText, .togglePasteQueue,
+            .copyCalculation,
             .quickLook, .toggleFavorite, .hideFromSearch, .newItem, .settings
         ]
         let leaving: [PaletteShortcut] = [

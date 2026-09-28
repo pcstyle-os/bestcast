@@ -2,6 +2,7 @@
 // Every case drives `NSPasteboard.withUniqueName()`: writing to `.general` would land in the
 // reader's own running Tinycast as a genuine copy.
 import AppKit
+import UniformTypeIdentifiers
 
 @main
 @MainActor
@@ -22,6 +23,8 @@ struct PasteboardTests {
         aModernFileURLSuppressesTheLegacyFallback()
         fileEntriesWriteBackAsFiles()
         aVanishedFileWritesNothing()
+        imageCaptureKeepsTheOfferedBytes()
+        imagesWriteBackInTheirOwnType()
 
         print("\(passes)/\(passes + failures) passed")
         if failures > 0 { exit(1) }
@@ -304,6 +307,109 @@ struct PasteboardTests {
             expect(!Paster.write(store.items[0], store: store, to: pb), "a vanished file refuses")
             expect(pb.string(forType: .string) == "untouched", "and leaves the pasteboard alone")
         }
+    }
+
+    // MARK: - Images
+
+    /// A browser's TIFF+JPEG pair keeps the JPEG as sent; only a TIFF-only board is re-encoded.
+    static func imageCaptureKeepsTheOfferedBytes() {
+        let image = picture()
+        let jpeg = encoded(image, as: .jpeg)
+        let png = encoded(image, as: .png)
+        let tiff = NSBitmapImageRep(cgImage: image).tiffRepresentation ?? Data()
+
+        let browser = board(offering: [(.tiff, tiff), (jpegType, jpeg)])
+        let read = ClipboardManager.image(on: browser)
+        expect(read?.data == jpeg, "the JPEG is read rather than the TIFF declared before it")
+        let kept = read.flatMap { ClipboardManager.storedImage($0.data, typeIdentifier: $0.typeIdentifier) }
+        expect(kept?.data == jpeg && kept?.fileExtension == "jpeg", "and stored byte for byte")
+
+        let screenshot = board(offering: [(.png, png), (.tiff, tiff)])
+        expect(ClipboardManager.image(on: screenshot)?.data == png, "a PNG is kept as it came")
+
+        let tiffOnly = board(offering: [(.tiff, tiff)])
+        let converted = ClipboardManager.image(on: tiffOnly).flatMap {
+            ClipboardManager.storedImage($0.data, typeIdentifier: $0.typeIdentifier)
+        }
+        let decoded = converted.flatMap { NSBitmapImageRep(data: $0.data) }
+        expect(converted?.fileExtension == "png", "a TIFF-only board is stored as PNG")
+        expect(converted.map { $0.data.count < tiff.count } == true, "which is smaller than the TIFF")
+        expect(
+            decoded?.pixelsWide == image.width && decoded?.pixelsHigh == image.height,
+            "at the size it was copied")
+        expect(decoded?.hasAlpha == true, "with its transparency")
+
+        let again = ClipboardManager.storedImage(jpeg, typeIdentifier: jpegType.rawValue)
+        expect(again?.digest == kept?.digest, "the same bytes always name the same digest")
+        expect(again?.digest != converted?.digest, "and different bytes a different one")
+        expect(kept?.digest.count == 32, "a 128-bit prefix, spelled in hex")
+    }
+
+    /// A blob goes back out as the type it was kept in; AppKit still serves TIFF from either.
+    static func imagesWriteBackInTheirOwnType() {
+        withScratch { dir in
+            let store = ClipboardStore(directory: dir.appendingPathComponent("store"))
+            let image = picture()
+            let jpeg = encoded(image, as: .jpeg)
+            let png = encoded(image, as: .png)
+            let jpegURL = store.imagesDir.appendingPathComponent("0a1b-photo.jpeg")
+            let pngURL = store.imagesDir.appendingPathComponent("2c3d-shot.png")
+            try? jpeg.write(to: jpegURL)
+            try? png.write(to: pngURL)
+
+            let photoBoard = board()
+            let photo = ClipboardItem(imagePath: jpegURL.path, sourceBundleID: nil)
+            expect(Paster.write(photo, store: store, to: photoBoard), "a JPEG blob writes")
+            expect(photoBoard.data(forType: jpegType) == jpeg, "as the JPEG it was kept as")
+            let tiff = photoBoard.data(forType: .tiff).flatMap(NSBitmapImageRep.init(data:))
+            expect(tiff?.pixelsWide == image.width, "and still reads as TIFF for readers that want one")
+            expect(photoBoard.data(forType: .png) == nil, "never mislabelled as PNG")
+            expect(
+                photoBoard.types?.contains(ClipboardManager.internalType) == true,
+                "marked, so the poller skips our own write")
+
+            let shotBoard = board()
+            let shot = ClipboardItem(imagePath: pngURL.path, sourceBundleID: nil)
+            expect(Paster.write(shot, store: store, to: shotBoard), "a PNG blob writes")
+            expect(shotBoard.data(forType: .png) == png, "as itself")
+            expect(shotBoard.data(forType: jpegType) == nil, "and nothing else")
+        }
+    }
+
+    static let jpegType = NSPasteboard.PasteboardType("public.jpeg")
+
+    /// Synthetic and uneven: odd sides, a gradient and partial alpha, so a swap or flatten shows.
+    static func picture() -> CGImage {
+        let width = 37
+        let height = 23
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+            let context = CGContext(
+                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { fatalError("no bitmap context") }
+        for x in 0..<width {
+            context.setFillColor(
+                CGColor(red: CGFloat(x) / CGFloat(width), green: 0.3, blue: 0.7, alpha: 0.4))
+            context.fill(CGRect(x: x, y: 0, width: 1, height: height - x % 5))
+        }
+        guard let image = context.makeImage() else { fatalError("no image") }
+        return image
+    }
+
+    static func encoded(_ image: CGImage, as type: UTType) -> Data {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil)
+        else { return Data() }
+        CGImageDestinationAddImage(destination, image, nil)
+        CGImageDestinationFinalize(destination)
+        return data as Data
+    }
+
+    static func board(offering representations: [(NSPasteboard.PasteboardType, Data)]) -> NSPasteboard {
+        let pb = board()
+        pb.declareTypes(representations.map { $0.0 }, owner: nil)
+        for (type, data) in representations { pb.setData(data, forType: type) }
+        return pb
     }
 
     // MARK: - Harness

@@ -7,7 +7,7 @@ struct ClipboardTests {
     static var failures = 0
     static var passes = 0
 
-    static func main() {
+    static func main() async {
         pinOrder()
         unpinRejoinsAsNewest()
         pasteLeavesPinsAlone()
@@ -34,6 +34,12 @@ struct ClipboardTests {
         defaultActionChords()
         plainTextSkipsTheFile()
         offersTextExtraction()
+        pasteQueuePastesInMarkingOrder()
+        pasteQueueSkipsWhatWasDeleted()
+        pasteQueueToggles()
+        pasteAllJoinsTheText()
+        itemLookupReachesPastTheWindow()
+        await reCopiedImagesShareOneBlob()
 
         print("\(passes)/\(passes + failures) passed")
         if failures > 0 { exit(1) }
@@ -731,6 +737,186 @@ struct ClipboardTests {
             !ClipboardItem(filePath: "/Users/me/report.pdf", sourceBundleID: nil)
                 .offersTextExtraction,
             "a PDF stays a background-indexing capability")
+    }
+
+    // MARK: - Paste queue
+
+    /// Asymmetric on purpose: distinct lengths, edge whitespace, unicode, a newline, an image.
+    static let queueEntries: [ClipboardItem] = [
+        ClipboardItem(text: "  leading two", sourceBundleID: nil),
+        ClipboardItem(text: "zażółć gęślą jaźń 🎉", sourceBundleID: nil),
+        ClipboardItem(imagePath: "/tmp/queued-shot.png", sourceBundleID: nil),
+        ClipboardItem(text: "multi\nline\ttext  ", sourceBundleID: nil),
+        ClipboardItem(filePath: "/Users/someone/Report Final.pdf", sourceBundleID: nil),
+        ClipboardItem(text: "x", sourceBundleID: nil)
+    ]
+
+    static func resolver(
+        _ entries: [ClipboardItem]
+    ) -> (ClipboardItem.ID) -> ClipboardItem? {
+        let byID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        return { byID[$0] }
+    }
+
+    /// Marking order, not history order, decides the run; the image pastes where it was marked.
+    static func pasteQueuePastesInMarkingOrder() {
+        let e = queueEntries
+        var queue = PasteQueue()
+        for index in [3, 0, 2, 5, 1] { queue.toggle(e[index].id) }
+        expect(queue.position(of: e[3].id) == 1, "the first mark is number one")
+        expect(queue.position(of: e[1].id) == 5, "the last mark is the last number")
+        expect(queue.position(of: e[4].id) == nil, "an unmarked entry has no number")
+
+        let resolve = resolver(e)
+        var pasted: [String] = []
+        var messages: [String] = []
+        while let step = queue.advance(resolve: resolve) {
+            pasted.append(step.item.text ?? step.item.imagePath ?? "?")
+            messages.append(step.message)
+        }
+        expect(
+            pasted == ["multi\nline\ttext  ", "  leading two", "/tmp/queued-shot.png", "x",
+                "zażółć gęślą jaźń 🎉"],
+            "each press pastes the next mark, whitespace and all, image in its place")
+        expect(
+            messages == [
+                "Pasted 1 of 5", "Pasted 2 of 5", "Pasted 3 of 5", "Pasted 4 of 5",
+                "Pasted 5 of 5 · Queue finished"
+            ], "the HUD counts up and says when the run is over")
+        expect(!queue.hasPending && queue.ids.isEmpty, "the last press empties the queue")
+        expect(queue.advance(resolve: resolve) == nil, "a press past the end pastes nothing")
+    }
+
+    /// A deleted entry leaves the run before counting, so the last paste still says it is last.
+    static func pasteQueueSkipsWhatWasDeleted() {
+        let e = queueEntries
+        var queue = PasteQueue()
+        for entry in e.prefix(4) { queue.toggle(entry.id) }
+        let first = queue.advance(resolve: resolver(e))
+        expect(first?.item.id == e[0].id && first?.message == "Pasted 1 of 4", "the run starts")
+
+        let survivors = e.filter { $0.id != e[1].id && $0.id != e[3].id }
+        let second = queue.advance(resolve: resolver(survivors))
+        expect(second?.item.id == e[2].id, "a deleted mark is skipped")
+        expect(second?.message == "Pasted 2 of 2 · Queue finished", "and the total shrinks with it")
+        expect(queue.ids.isEmpty, "which ends the run")
+
+        var gone = PasteQueue()
+        gone.toggle(e[5].id)
+        expect(gone.advance(resolve: resolver([])) == nil, "a run of deleted entries pastes nothing")
+        expect(gone.ids.isEmpty, "and is cleared")
+    }
+
+    static func pasteQueueToggles() {
+        let e = queueEntries
+        var queue = PasteQueue()
+        for entry in e.prefix(3) { queue.toggle(entry.id) }
+        queue.toggle(e[1].id)
+        expect(queue.ids == [e[0].id, e[2].id], "a second press unmarks")
+        queue.toggle(e[1].id)
+        expect(queue.position(of: e[1].id) == 3, "and a third marks again, at the end")
+
+        _ = queue.advance(resolve: resolver(e))
+        expect(queue.position(of: e[0].id) == nil, "a pasted entry is no longer waiting")
+        queue.toggle(e[0].id)
+        expect(
+            queue.ids == [e[2].id, e[1].id, e[0].id] && queue.pasted == 0,
+            "marking a pasted entry again queues it behind the rest")
+    }
+
+    /// Paste All takes the pending text a line each: a file as its path, an image not at all.
+    static func pasteAllJoinsTheText() {
+        let e = queueEntries
+        var queue = PasteQueue()
+        for index in [1, 2, 4, 3, 0] { queue.toggle(e[index].id) }
+        let joined = [
+            "zażółć gęślą jaźń 🎉", "/Users/someone/Report Final.pdf", "multi\nline\ttext  ",
+            "  leading two"
+        ].joined(separator: "\n")
+        expect(
+            queue.joinedText(resolve: resolver(e)) == joined,
+            "every pending text in marking order, untrimmed, the image left out")
+
+        _ = queue.advance(resolve: resolver(e))
+        expect(
+            queue.joinedText(resolve: resolver(e))?.hasPrefix("/Users/someone/") == true,
+            "what a run already pasted is not pasted again")
+
+        var images = PasteQueue()
+        images.toggle(e[2].id)
+        expect(images.joinedText(resolve: resolver(e)) == nil, "an image-only queue has no text")
+    }
+
+    /// The queue resolves by id, and a marked row can come from a search past the window.
+    static func itemLookupReachesPastTheWindow() {
+        withStore { store, _ in
+            let total = 1_010
+            let oldest = ClipboardItem(
+                id: UUID(), kind: .text, text: "oldest of all", imagePath: nil,
+                createdAt: Date().addingTimeInterval(-Double(total + 1)), sourceBundleID: nil)
+            store.importEntries(
+                [oldest]
+                    + (0..<total).map {
+                        entry("filler \($0)", at: Date().addingTimeInterval(TimeInterval($0 - total)))
+                    })
+            expect(!store.items.contains { $0.id == oldest.id }, "the oldest row is off the window")
+            expect(store.item(withID: oldest.id)?.text == "oldest of all", "and is still found")
+
+            store.addText("resident", sourceBundleID: nil)
+            let resident = item(store, "resident")
+            expect(store.item(withID: resident.id) == resident, "a resident row is found")
+            store.remove(resident)
+            expect(store.item(withID: resident.id) == nil, "a deleted row is not")
+        }
+    }
+
+    // MARK: - Image blobs
+
+    /// Same bytes, same digest: a re-copy re-recencies one row and one file instead of adding both.
+    static func reCopiedImagesShareOneBlob() async {
+        let dir = scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = ClipboardStore(directory: dir)
+        let blobs = {
+            ((try? FileManager.default.contentsOfDirectory(atPath: store.imagesDir.path)) ?? []).sorted()
+        }
+        let shot = Data("synthetic screenshot bytes".utf8)
+
+        await store.addImage(shot, digest: "d1aa", fileExtension: "png", sourceBundleID: nil)
+        store.addText("between", sourceBundleID: nil)
+        await store.addImage(shot, digest: "d1aa", fileExtension: "png", sourceBundleID: nil)
+        expect(store.items.count == 2, "the second copy adds no row")
+        expect(store.items.first?.kind == .image, "it moves the image back to the top")
+        expect(blobs().count == 1 && blobs()[0].hasPrefix("d1aa-"), "and writes no second file")
+        let firstPath = store.items.first?.imagePath
+        expect(
+            (try? Data(contentsOf: URL(fileURLWithPath: firstPath ?? ""))) == shot,
+            "the blob holds the bytes it was given")
+
+        await store.addImage(
+            Data("a photo".utf8), digest: "e2bb", fileExtension: "jpeg", sourceBundleID: nil)
+        expect(store.items.count == 3, "different bytes are a new row")
+        expect(blobs().contains { $0.hasPrefix("e2bb-") && $0.hasSuffix(".jpeg") }, "kept as JPEG")
+
+        async let one: Void = store.addImage(
+            Data("burst".utf8), digest: "f3cc", fileExtension: "png", sourceBundleID: nil)
+        async let two: Void = store.addImage(
+            Data("burst".utf8), digest: "f3cc", fileExtension: "png", sourceBundleID: nil)
+        _ = await (one, two)
+        expect(
+            blobs().filter { $0.hasPrefix("f3cc-") }.count == 1,
+            "a copy still being written is not doubled")
+
+        guard let image = store.items.first(where: { $0.imagePath == firstPath }) else {
+            return fail("the deduped image row is missing")
+        }
+        store.remove(image)
+        await store.addImage(shot, digest: "d1aa", fileExtension: "png", sourceBundleID: nil)
+        let again = store.items.first?.imagePath
+        expect(again != nil && again != firstPath, "after a delete the same bytes get a fresh name")
+        expect(
+            again.map { FileManager.default.fileExists(atPath: $0) } == true,
+            "so a late delete of the old blob cannot take the new one")
     }
 
     // MARK: - Harness

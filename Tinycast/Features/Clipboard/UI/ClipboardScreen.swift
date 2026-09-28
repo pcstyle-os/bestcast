@@ -50,6 +50,10 @@ struct ClipboardScreen: PaletteScreen {
             guard let item = item(at: selection), item.offersTextExtraction else { return false }
             core.clipboardCoordinator.copyImageText(item)
             return true
+        case .togglePasteQueue:
+            guard let item = item(at: selection) else { return false }
+            core.clipboardCoordinator.toggleQueued(item)
+            return true
         default: return false
         }
     }
@@ -136,6 +140,7 @@ struct ClipboardScreen: PaletteScreen {
                 ClipboardList(
                     results: rows,
                     selectedID: selected?.id,
+                    pasteQueue: core.clipboardCoordinator.pasteQueue,
                     scroll: scroll,
                     onSelect: { item in vm.selection = rows.firstIndex(of: item) ?? 0 },
                     onActivate: { activate(at: vm.selection) },
@@ -202,6 +207,7 @@ enum ClipboardActionsMenu {
                     core.clipboardCoordinator.togglePinnedClip(item)
                 })
         }
+        items += queueItems(item: item, coordinator: core.clipboardCoordinator, target: target)
         if item.offersTextExtraction {
             items.append(
                 PopoverMenuItem(
@@ -245,6 +251,40 @@ enum ClipboardActionsMenu {
                 Task { await core.clipboardCoordinator.deleteAllClips() }
             })
         return PopoverMenuContent(header: headerText(item), items: items)
+    }
+
+    /// The mark on this row, then the run's own rows once anything is waiting to paste.
+    private static func queueItems(
+        item: ClipboardItem, coordinator: ClipboardCoordinator, target: PasteTarget?
+    ) -> [PopoverMenuItem] {
+        let queue = coordinator.pasteQueue
+        let isQueued = queue.position(of: item.id) != nil
+        var items = [
+            PopoverMenuItem(
+                title: isQueued ? "Remove from Paste Queue" : "Add to Paste Queue",
+                systemImage: isQueued ? "text.badge.minus" : "text.badge.plus",
+                startsSection: true, shortcut: "⇧⌘A"
+            ) {
+                coordinator.toggleQueued(item)
+            }
+        ]
+        guard queue.hasPending else { return items }
+        items.append(
+            PopoverMenuItem(
+                title: "Paste Sequentially", icon: .paste(target, fallback: "list.number"),
+                detail: "\(queue.pending.count) queued"
+            ) {
+                coordinator.pasteNextQueued()
+            })
+        items.append(
+            PopoverMenuItem(title: "Paste All", icon: .paste(target, fallback: "text.append")) {
+                coordinator.pasteAllQueued()
+            })
+        items.append(
+            PopoverMenuItem(title: "Clear Paste Queue", systemImage: "xmark.circle") {
+                coordinator.clearPasteQueue()
+            })
+        return items
     }
 
     private static func icon(
