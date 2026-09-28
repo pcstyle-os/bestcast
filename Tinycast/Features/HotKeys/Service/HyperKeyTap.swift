@@ -20,7 +20,9 @@ private func hyperKeyEventTapCallback(
 
     let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
     let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-    let isSynthetic = event.getIntegerValueField(.eventSourceUserData) == HyperKeyTap.syntheticTag
+    let userData = event.getIntegerValueField(.eventSourceUserData)
+    // A paste or keystroke Tinycast posts carries exact flags; a held Hyper must not add the chord.
+    let isSynthetic = userData == HyperKeyTap.syntheticTag || userData == Paster.tinycastEventTag
     let flags = event.flags.rawValue
 
     let decision = MainActor.assumeIsolated {
