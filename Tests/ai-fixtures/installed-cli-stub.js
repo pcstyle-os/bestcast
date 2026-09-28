@@ -13,6 +13,41 @@ function record(name, value) {
 
 record(command + "-args.log", JSON.stringify(args));
 
+const toolsIndex = args.indexOf("--tools");
+const searchesWeb = toolsIndex >= 0 && args[toolsIndex + 1].includes("WebSearch");
+
+/** A search and a failed fetch, as Claude Code reports its own web tools in stream-json. */
+function claudeWebCalls(emit) {
+  emit({
+    type: "assistant",
+    message: {
+      content: [
+        { type: "text", text: "Looking…" },
+        { type: "tool_use", id: "toolu_search", name: "WebSearch", input: { query: "  Łódź weather\n" } },
+      ],
+    },
+  });
+  emit({
+    type: "user",
+    message: { content: [{ type: "tool_result", tool_use_id: "toolu_search", content: "3 results" }] },
+  });
+  emit({
+    type: "assistant",
+    message: {
+      content: [{
+        type: "tool_use", id: "toolu_fetch", name: "WebFetch",
+        input: { url: "https://example.org/łódź?q=1", prompt: "summarise" },
+      }],
+    },
+  });
+  emit({
+    type: "user",
+    message: {
+      content: [{ type: "tool_result", tool_use_id: "toolu_fetch", is_error: true, content: "403" }],
+    },
+  });
+}
+
 // Claude's tool loop, answered on the pipe the turn came in on; synchronous, so stalls are real.
 if (command === "claude" && args.includes("--permission-prompt-tool")) {
   claudeToolLoop();
@@ -42,6 +77,7 @@ function claudeToolLoop() {
 
   emit({ type: "control_request", request_id: "req_unknown", request: { subtype: "unknown" } });
   record("claude-unknown.log", read.next().value ?? "{}");
+  if (searchesWeb) claudeWebCalls(emit);
 
   const id = "toolu_stub";
   emit({
@@ -252,6 +288,7 @@ if (command === "opencode") {
     usage: { input_tokens: 8, output_tokens: 2 }
   }));
 } else {
+  if (searchesWeb) claudeWebCalls((message) => console.log(JSON.stringify(message)));
   console.log(JSON.stringify({
     type: "stream_event", event: { delta: { type: "text_delta", text: "Claude reply" } }
   }));

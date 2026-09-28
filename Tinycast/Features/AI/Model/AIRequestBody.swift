@@ -61,15 +61,20 @@ enum AIRequestBody {
             "stream": true
         ]
         if !systemParts.isEmpty { body["system"] = systemParts.joined(separator: "\n\n") }
-        if !input.tools.isEmpty {
-            body["tools"] = input.tools.map {
-                [
-                    "name": $0.name, "description": $0.description,
-                    "input_schema": $0.parameters.jsonObject
-                ]
-            }
+        var tools: [[String: Any]] = input.tools.map {
+            [
+                "name": $0.name, "description": $0.description,
+                "input_schema": $0.parameters.jsonObject
+            ]
         }
+        if input.webSearch { tools.append(anthropicWebSearch) }
+        if !tools.isEmpty { body["tools"] = tools }
         return body
+    }
+
+    /// The basic tool, as every model takes it; `max_uses` keeps its loop short of a `pause_turn`.
+    static var anthropicWebSearch: [String: Any] {
+        ["type": "web_search_20250305", "name": "web_search", "max_uses": 5]
     }
 
     /// Plain text stays a string; only a message with images takes the content-part array.

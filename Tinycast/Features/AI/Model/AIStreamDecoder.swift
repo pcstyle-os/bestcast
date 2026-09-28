@@ -60,6 +60,9 @@ struct AIStreamDecoder: Sendable {
     private var parser = SSEParser()
     private var usage = AIUsage()
     private var partialToolCalls: [Int: PartialToolCall] = [:]
+    /// Anthropic's own searches by block index, each gathering its query as the JSON streams in.
+    private var searchQueries: [Int: String] = [:]
+    private var citations = AnthropicCitations()
     private(set) var isTerminal = false
 
     init(shape: AIHTTPConfiguration.APIShape) {
@@ -156,24 +159,46 @@ struct AIStreamDecoder: Sendable {
             throw AIProviderError.malformedResponse
         }
 
+        let index = event.index ?? 0
         switch event.type {
         case "content_block_start":
-            guard event.contentBlock?.type == "tool_use" else { return [] }
-            partialToolCalls[event.index ?? 0] = PartialToolCall(
-                id: event.contentBlock?.id ?? "", name: event.contentBlock?.name ?? "",
-                arguments: "")
+            switch event.contentBlock?.type {
+            case "tool_use":
+                partialToolCalls[index] = PartialToolCall(
+                    id: event.contentBlock?.id ?? "", name: event.contentBlock?.name ?? "",
+                    arguments: "")
+            case "server_tool_use" where event.contentBlock?.name == "web_search":
+                searchQueries[index] = ""
+            case "web_search_tool_result":
+                return [.searched(nil)]
+            default:
+                break
+            }
             return []
         case "content_block_delta":
             if event.delta?.type == "text_delta", let text = event.delta?.text, !text.isEmpty {
-                return [.text(text)]
+                let shown = citations.release(text, in: index)
+                return shown.isEmpty ? [] : [.text(shown)]
             }
             if event.delta?.type == "input_json_delta" {
-                partialToolCalls[event.index ?? 0]?.arguments += event.delta?.partialJSON ?? ""
+                let fragment = event.delta?.partialJSON ?? ""
+                partialToolCalls[index]?.arguments += fragment
+                searchQueries[index]? += fragment
+                return []
+            }
+            if event.delta?.type == "citations_delta", let citation = event.delta?.citation {
+                citations.cite(url: citation.url, title: citation.title, in: index)
                 return []
             }
             guard event.delta?.type == "thinking_delta" else { return [] }
             guard let thinking = event.delta?.thinking, !thinking.isEmpty else { return [.thinking] }
             return [.thinking, .reasoning(thinking)]
+        case "content_block_stop":
+            // The query is whole once its block closes; the search itself runs after that.
+            if let query = searchQueries.removeValue(forKey: index) {
+                return [.searching(Self.searchQuery(query))]
+            }
+            return citations.close(index).map { [.text($0)] } ?? []
         case "message_start":
             let reported = event.message?.usage
             usage.inputTokens = reported?.inputTokens ?? usage.inputTokens
@@ -195,6 +220,11 @@ struct AIStreamDecoder: Sendable {
         default:
             return []
         }
+    }
+
+    private static func searchQuery(_ json: String) -> String? {
+        let query = JSONValue(data: Data(json.utf8))?.objectValue?["query"]?.stringValue
+        return query?.isEmpty == false ? query : nil
     }
 
     private static func anthropicErrorMessage(_ type: String?) -> String {
@@ -283,16 +313,73 @@ private struct OpenAIChunk: Decodable {
     let error: ErrorBody?
 }
 
+/// A text block's web citations, closed into the Markdown links `ChatReferences` lists as sources.
+private struct AnthropicCitations {
+    private static let heldBack = CharacterSet.whitespacesAndNewlines
+        .union(CharacterSet(charactersIn: ".,;:!?"))
+
+    private var index: Int?
+    private var sources: [(url: String, title: String)] = []
+    /// A cited block's closing punctuation, so its link lands before the full stop, not after it.
+    private var held = ""
+
+    mutating func cite(url: String?, title: String?, in index: Int) {
+        guard let source = Self.source(url: url, title: title) else { return }
+        if self.index != index {
+            self = AnthropicCitations()
+            self.index = index
+        }
+        guard !sources.contains(where: { $0.url == source.url }) else { return }
+        sources.append(source)
+    }
+
+    /// What of `text` may be shown now; an uncited block passes straight through.
+    mutating func release(_ text: String, in index: Int) -> String {
+        guard self.index == index, !sources.isEmpty else { return text }
+        let scalars = (held + text).unicodeScalars
+        let tail = scalars.reversed().prefix { Self.heldBack.contains($0) }.count
+        let split = scalars.index(scalars.endIndex, offsetBy: -tail)
+        held = String(scalars[split...])
+        return String(scalars[..<split])
+    }
+
+    mutating func close(_ index: Int) -> String? {
+        guard self.index == index else { return nil }
+        defer { self = AnthropicCitations() }
+        guard !sources.isEmpty else { return nil }
+        let links = sources.map { "[\($0.title)](\($0.url))" }.joined(separator: ", ")
+        return " (" + links + ")" + held
+    }
+
+    /// A title that cannot close its own brackets, and a URL that cannot close its parenthesis.
+    private static func source(url: String?, title: String?) -> (url: String, title: String)? {
+        guard let url, !url.contains(where: \.isWhitespace), let parsed = URL(string: url),
+            let host = parsed.host(), ["http", "https"].contains(parsed.scheme?.lowercased())
+        else { return nil }
+        let safeURL = url.replacingOccurrences(of: "(", with: "%28")
+            .replacingOccurrences(of: ")", with: "%29")
+        let name = (title ?? "").replacing(#/\s*[\[\]\n\r]+\s*/#, with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return (safeURL, name.isEmpty ? host : name)
+    }
+}
+
 private struct AnthropicEvent: Decodable {
     struct Delta: Decodable {
+        struct Citation: Decodable {
+            let url: String?
+            let title: String?
+        }
+
         let type: String?
         let text: String?
         let thinking: String?
         let partialJSON: String?
         let stopReason: String?
+        let citation: Citation?
 
         enum CodingKeys: String, CodingKey {
-            case type, text, thinking
+            case type, text, thinking, citation
             case partialJSON = "partial_json"
             case stopReason = "stop_reason"
         }

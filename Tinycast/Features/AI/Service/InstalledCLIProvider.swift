@@ -31,6 +31,14 @@ private final class InstalledCLITurnRunner {
         supplied with this request. Do not read files, inspect the environment, access external \
         resources, or modify anything else.
         """
+    /// The boundary once the reader turned search on: the web tools join whatever MCP supplied.
+    private static let webSafetyInstructions = """
+        You are generating text inside Tinycast. The only tools you may use are WebSearch, \
+        WebFetch and any MCP tools supplied with this request. Do not read files, inspect the \
+        environment, or modify anything. Search when the answer depends on current or external \
+        information, and cite a source as a markdown link whose text is the publication's name, \
+        never "Read more" or a URL.
+        """
     private static let openCodeConfiguration = """
         {"permission":"deny","share":"disabled","agent":{"build":{"permission":"deny"},\
         "plan":{"permission":"deny"}}}
@@ -64,6 +72,9 @@ private final class InstalledCLITurnRunner {
     private var activeExecutable: URL?
     /// What this turn armed, empty on every route and every turn that offers no server.
     private var activeServers: [AIToolServer] = []
+    /// Only Claude is ever handed the web tools, and only on a turn the reader opted into.
+    private var searchesWeb = false
+    private var searchCalls: Set<String> = []
     private var mcpConfigURL: URL?
     private var input: FileHandle?
     private var consents: [Task<Void, Never>] = []
@@ -144,6 +155,8 @@ private final class InstalledCLITurnRunner {
         }
 
         activeServers = await resolvedToolServers()
+        searchesWeb = kind == .claude && request.webSearch
+        searchCalls = []
         let prompt = prompt(for: request)
         var configURL: URL?
         if !activeServers.isEmpty {
@@ -288,7 +301,16 @@ private final class InstalledCLITurnRunner {
     }
 
     /// Nothing to call is one request; an armed turn takes the reader's cap, which may be none.
-    private var roundCap: Int? { activeServers.isEmpty ? 1 : toolServers?.rounds }
+    private var roundCap: Int? {
+        guard activeServers.isEmpty else { return toolServers?.rounds }
+        return searchesWeb ? ClaudeWebSearchLaunch.searchTurns : 1
+    }
+
+    /// What the model is told it may do; the flags are what actually hold it to that.
+    private var boundary: String {
+        if searchesWeb { return Self.webSafetyInstructions }
+        return activeServers.isEmpty ? Self.safetyInstructions : Self.toolSafetyInstructions
+    }
 
     private func arguments(promptFile: URL? = nil, mcpConfig: URL? = nil) -> [String] {
         switch kind {
@@ -304,19 +326,17 @@ private final class InstalledCLITurnRunner {
                 "--include-partial-messages",
                 "--no-session-persistence",
                 "--disable-slash-commands",
-                "--tools", "",
                 // `--bare` is not among these: it refuses the OAuth sign-in this whole route reuses.
                 "--no-chrome",
-                "--system-prompt",
-                mcpConfig == nil ? Self.safetyInstructions : Self.toolSafetyInstructions
+                "--system-prompt", boundary
             ]
+            result += ClaudeWebSearchLaunch.builtInArguments(webSearch: searchesWeb)
             if let mcpConfig {
                 result += ClaudeMCPLaunch.arguments(
                     configurationPath: mcpConfig.path, handles: activeServers.map(\.handle),
                     rounds: roundCap)
             } else {
-                // A route with nothing to call keeps every tool off and the turn to one request.
-                result += ["--disallowedTools", "*", "--max-turns", "1"]
+                result += ClaudeWebSearchLaunch.argumentsWithoutServers(webSearch: searchesWeb)
                 result += InstalledAIManager.claudeWithoutMCPArguments
             }
             if let effort { result += ["--effort", effort] }
@@ -385,9 +405,7 @@ private final class InstalledCLITurnRunner {
     }
 
     private func prompt(for request: AIRequest) -> String {
-        var sections = [
-            activeServers.isEmpty ? Self.safetyInstructions : Self.toolSafetyInstructions
-        ]
+        var sections = [boundary]
         if let instructions = request.instructions?.trimmingCharacters(in: .whitespacesAndNewlines),
             !instructions.isEmpty
         {
@@ -419,9 +437,10 @@ private final class InstalledCLITurnRunner {
             }
             outputBuffer.removeSubrange(...newline)
             guard !line.isEmpty else { continue }
-            apply(
-                InstalledAIStreamDecoder.decode(
-                    Data(line), kind: kind, servers: activeServers), token: token)
+            let frame = InstalledAIStreamDecoder.decode(
+                Data(line), kind: kind, servers: activeServers, searches: searchCalls)
+            searchCalls.formUnion(frame.startedSearches)
+            apply(frame, token: token)
         }
         if outputBuffer.count > Self.maximumPartialLineBytes {
             fail(kind.title + " returned an oversized response.")
@@ -605,6 +624,8 @@ private final class InstalledCLITurnRunner {
         removePrivateFiles()
         activeExecutable = nil
         activeServers = []
+        searchesWeb = false
+        searchCalls = []
         write(Data(), closing: true)
     }
 }
