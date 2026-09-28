@@ -317,7 +317,7 @@ from `agent --list-models` after `agent status --format json` confirms a login.
 Turning thinking off is a reasoning effort, not a second control: `reasoningOptions(for:)` answers with
 the connection's catalogued efforts, or — for a connection with no catalog to publish one — `Default`
 and `None`. `takesThinkingField` decides who gets that pair: an OpenAI-shaped preset whose base URL is
-not that preset's own (`targetsOwnAPI` false), because a preset pointed away from its own API is a
+not on that preset's own host (`targetsOwnAPI` false), because a preset pointed away from its own API is a
 gateway, and a gateway is the only destination Tinycast can offer the switch to honestly. The same
 fact gates Anthropic's web search the other way: only a connection still on Anthropic's own API is
 offered the server tool. Picking `None` sends
@@ -663,7 +663,7 @@ transport code at all.
 | OpenRouter | `plugins: [{id: "web"}]` — OpenRouter's own layer, any model | `image_url` part, only for models whose catalog lists the `image` modality | never yet — its catalog publishes a `file` modality Tinycast does not read | `tools` + `role: "tool"` turns |
 | OpenAI | not offered — Chat Completions has no search switch for a general model (below) | `image_url` part, assumed supported | `file` part with `filename` and a `file_data` data URL | `tools` + `role: "tool"` turns |
 | Gemini / compatible | not offered | `image_url` part, assumed supported | never — a gateway that has not implemented the part bills the upload before rejecting it | `tools` + `role: "tool"` turns |
-| Anthropic | the `web_search_20250305` server tool, `max_uses: 5` — on Anthropic's own base URL only | base64 `image` block | base64 `document` block, ahead of the text block | `tools` + `tool_use` / `tool_result` blocks |
+| Anthropic | the `web_search_20250305` server tool, `max_uses: 5` — on Anthropic's own host only | base64 `image` block | base64 `document` block, ahead of the text block | `tools` + `tool_use` / `tool_result` blocks |
 
 A search is part of the reply, not a status: `item/started` for a `webSearch` item appends a
 `ChatSearch` to the streaming message pinned at the text length so far, `item/completed` (or the
@@ -690,7 +690,8 @@ an HTTP error — a single `web_search_tool_result_error` object (`max_uses_exce
 and only that object fails the row: an empty list is a search that found nothing. A search still
 open when `message_delta` names the stop reason never ran in this response and never will, since
 Tinycast resends no server block, so it is failed there too. The tool is offered only when the
-connection's base URL is Anthropic's own (`AIConnection.targetsOwnAPI`): a server tool runs on
+connection's base URL is on Anthropic's own host (`AIConnection.targetsOwnAPI`, which compares
+hosts, so a trailing slash or an explicit `/v1/messages` keeps it): a server tool runs on
 Anthropic's servers, and an Anthropic-shaped gateway may reject it, bill it differently or drop it,
 so turning search on for another route never reaches one. The tool is the
 basic `web_search_20250305` rather than a dynamic-filtering version, which 400s on models older

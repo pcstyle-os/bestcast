@@ -343,10 +343,12 @@ struct AIProviderTests {
                 !connection.capabilities(for: "m").webSearch && !connection.targetsOwnAPI,
                 "an Anthropic-shaped gateway is never offered the server tool (\(gateway))")
         }
-        expect(
-            AIConnection(provider: .anthropic, baseURL: " https://api.anthropic.com\n", models: ["m"])
-                .capabilities(for: "m").webSearch,
-            "Anthropic's own API keeps it, stray whitespace and all")
+        for own in [" https://api.anthropic.com\n", "https://api.anthropic.com/v1/messages"] {
+            expect(
+                AIConnection(provider: .anthropic, baseURL: own, models: ["m"])
+                    .capabilities(for: "m").webSearch,
+                "Anthropic's own API keeps it, however its endpoint is spelled (\(own))")
+        }
         expect(
             AIModelCapabilities.claudeCommand.webSearch && AIModelCapabilities.codex.webSearch
                 && !AIModelCapabilities.appleIntelligence.webSearch,

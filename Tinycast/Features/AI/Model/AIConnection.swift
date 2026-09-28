@@ -79,7 +79,8 @@ struct AIConnection: Codable, Equatable, Identifiable, Sendable {
 
     /// A preset pointed away from its own API is a gateway, however faithfully it copies the shape.
     var targetsOwnAPI: Bool {
-        baseURL.trimmingCharacters(in: .whitespacesAndNewlines) == provider.defaultBaseURL
+        let host = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines))?.host()
+        return host?.lowercased() == URL(string: provider.defaultBaseURL)?.host()
     }
 
     /// Only a gateway takes a thinking field.
