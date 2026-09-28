@@ -20,12 +20,16 @@ struct SnippetsTests {
         try await testDeliveryQueueAndPasteboard()
         await testCopySelectionFallback()
         try await testStoreWatcher()
+        try await testStoreEditingRoundTrip()
         testTemplateExpansion()
         testDynamicPlaceholders()
         testTemplateEncodingAndSelectionAlias()
         testKeywordPolicy()
+        testForeignKeyboardInput()
+        testTypedTextFromEvents()
         testKeywordLifecycle()
         await testKeywordListenerLifecycle()
+        await testKeywordListenerFollowsEdits()
         testOwnEditorInjection()
 
         print(failures == 0 ? "\nALL PASSED" : "\n\(failures) FAILED")
@@ -1875,6 +1879,277 @@ struct SnippetsTests {
         check(
             "real listener rapid on and off leaves no tap",
             listener.status == .off && tap.state == .absent)
+    }
+
+    /// Dictation, autocomplete and Hyper tools share the stream: phrases, their own backspaces.
+    private static func testForeignKeyboardInput() {
+        let base = Date(timeIntervalSince1970: 5_000)
+        var elapsed = 0.0
+        var policy = SnippetKeywordPolicy(keywords: [
+            .init(snippetID: "/tmp/sig.md", value: ";sig"),
+            .init(snippetID: "/tmp/addr.md", value: "!addr"),
+            .init(snippetID: "/tmp/thumbs.md", value: ":👍🏽"),
+            .init(snippetID: "/tmp/family.md", value: "fam👩‍👩‍👧"),
+            .init(snippetID: "/tmp/cafe.md", value: "café"),
+            .init(snippetID: "/tmp/option.md", value: "∂å")
+        ])
+        func feed(_ inputs: [SnippetKeywordPolicy.Input]) -> [SnippetKeywordPolicy.Match] {
+            var matches: [SnippetKeywordPolicy.Match] = []
+            for input in inputs {
+                elapsed += 0.05
+                if let match = policy.process(input, at: base.addingTimeInterval(elapsed)) {
+                    matches.append(match)
+                }
+            }
+            return matches
+        }
+        let sig = SnippetKeywordPolicy.Match(
+            snippetID: "/tmp/sig.md", keyword: ";sig", deletionCount: 4)
+
+        check(
+            "a phrase posted as one keyDown matches the keyword it ends with",
+            feed([.text("Thanks for the update ;sig")]) == [sig])
+        check(
+            "a keyword finished by an injected string still matches, once",
+            feed([.text(";"), .text("s"), .text("ig")]) == [sig])
+        check(
+            "a keyword in the middle of an injected phrase is not at the caret",
+            feed([.text("x;sig y")]).isEmpty && policy.buffer == "x;sig y")
+        check(
+            "the buffer keeps going after a phrase that did not match",
+            feed([.text("!addr")]).map(\.snippetID) == ["/tmp/addr.md"])
+        check(
+            "the 16-unit prefix of a longer phrase cannot trigger on its own",
+            feed([.text("hello world ;sig and more")]).isEmpty)
+        _ = feed([.reset])
+        check(
+            "a foreign backspace between keystrokes edits the buffer, not the match",
+            feed([.text(";sx"), .deleteBackward, .text("ig")]) == [sig])
+        check(
+            "more foreign backspaces than buffered text neither trap nor block the next keyword",
+            feed([.text("ab")] + Array(repeating: .deleteBackward, count: 5) + [.text(";sig")])
+                == [sig] && policy.buffer.isEmpty)
+        check(
+            "an autocomplete correction (two backspaces, a replacement) completes the keyword",
+            feed([.text(";sgi"), .deleteBackward, .deleteBackward, .text("ig")]) == [sig])
+        check(
+            "a correction that eats into the keyword leaves it unmatched",
+            feed([.text(";si"), .deleteBackward, .deleteBackward, .text("ig")]).isEmpty)
+        _ = feed([.reset])
+        check(
+            "a four-unit emoji in one keyDown deletes as one character",
+            feed([.text(":"), .text("👍🏽")])
+                == [.init(snippetID: "/tmp/thumbs.md", keyword: ":👍🏽", deletionCount: 2)])
+        check(
+            "a ZWJ family is one character to match and to delete",
+            feed([.text("fa"), .text("m👩‍👩‍👧")])
+                == [.init(snippetID: "/tmp/family.md", keyword: "fam👩‍👩‍👧", deletionCount: 4)])
+        _ = feed([.text("x👩‍👩‍👧"), .deleteBackward])
+        check("a backspace removes a whole ZWJ cluster from the buffer", policy.buffer == "x")
+        _ = feed([.reset])
+        check(
+            "a combining accent sent as its own keyDown completes a precomposed keyword",
+            feed([.text("cafe"), .text("\u{301}")])
+                == [.init(snippetID: "/tmp/cafe.md", keyword: "café", deletionCount: 4)])
+
+        let optionTyped = ["∂", "å"].map {
+            SnippetKeywordPolicy.classifyInput(
+                text: $0, isSynthetic: false, secureEventInputEnabled: false,
+                isFlagsChanged: false, isKeyDown: true, hasCommandOrControl: false,
+                isResetKey: false, isDeleteBackward: false)
+        }
+        check(
+            "characters typed with Right Option held build a keyword",
+            feed(optionTyped).map(\.snippetID) == ["/tmp/option.md"])
+        let hyperized = SnippetKeywordPolicy.classifyInput(
+            text: "s", isSynthetic: false, secureEventInputEnabled: false,
+            isFlagsChanged: false, isKeyDown: true, hasCommandOrControl: true,
+            isResetKey: false, isDeleteBackward: false)
+        check(
+            "a Hyper chord keystroke resets rather than types",
+            feed([.text(";si"), hyperized, .text("g")]).isEmpty && policy.buffer == "g")
+    }
+
+    /// The listener's own read of a real `CGEvent`, as another process would post it.
+    private static func testTypedTextFromEvents() {
+        func keyDown(_ text: String) -> CGEvent? {
+            var units = Array(text.utf16)
+            let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true)
+            event?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: &units)
+            return event
+        }
+        func read(_ text: String) -> String? {
+            keyDown(text).flatMap(SnippetKeywordListener.typedText(in:))
+        }
+
+        check("a single keystroke reads as itself", read("q") == "q")
+        let phrase = "hello world ;sig and more"
+        check(
+            "a phrase is read whole, not cut at the old 16-unit buffer",
+            String(decoding: Array(phrase.utf16.prefix(16)), as: UTF16.self) == "hello world ;sig"
+                && read(phrase) == phrase)
+        let straddling = String(repeating: "k", count: 15) + "👍🏽z"
+        check(
+            "an emoji straddling unit 16 survives intact",
+            read(straddling) == straddling && read(straddling)?.contains("\u{FFFD}") == false)
+        let long = String(repeating: "Ωx", count: 150) + " ;sig"
+        check("a 305-unit dictation burst is read whole", read(long) == long)
+        check("an empty keystroke string reads as no text", read("") == nil)
+
+        var policy = SnippetKeywordPolicy(keywords: [.init(snippetID: "/tmp/sig.md", value: ";sig")])
+        let now = Date(timeIntervalSince1970: 9_000)
+        check(
+            "a whole phrase whose prefix ends in a keyword does not expand",
+            policy.process(.text(read(phrase) ?? ""), at: now) == nil)
+        check(
+            "the same burst ending in the keyword does",
+            policy.process(.text(read(long) ?? ""), at: now)?.deletionCount == 4)
+    }
+
+    /// Create, edit (keyword, body, name), conflict, delete and move folders through the store.
+    private static func testStoreEditingRoundTrip() async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(
+            "tinycast-snippets-editing-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: root) }
+        let repository = SnippetRepository(
+            bundleIdentifier: "com.example.editing", applicationSupportRoot: root)
+        let store = SnippetsStore(repository: repository)
+        await store.start()
+
+        func onDisk(_ record: StoredSnippet) -> Snippet? {
+            guard let content = try? String(contentsOf: record.fileURL, encoding: .utf8) else {
+                return nil
+            }
+            return try? SnippetMarkdownSerializer.parse(content: content, fileURL: record.fileURL)
+        }
+        func markdownFiles(in directory: URL) -> [String] {
+            ((try? fm.contentsOfDirectory(atPath: directory.path)) ?? [])
+                .filter { $0.hasSuffix(".md") }.sorted()
+        }
+
+        let body = "  Dear {argument name=\"Who\"},\n\n\tThanks — ✓ 雪 \"quoted\"\n---\n  "
+        let original = Snippet(
+            name: " Sign-off ✍️ ", text: body, keyword: ";sig", showsConfirmation: true)
+        let created = try await store.create(original)
+        check(
+            "create writes Markdown that parses back to the exact snippet",
+            onDisk(created) == original && store.record(id: created.id)?.snippet == original)
+
+        var edited = created
+        edited.snippet.name = "Sign-off (formal)"
+        edited.snippet.keyword = "!signoff"
+        edited.snippet.text = "Best,\r\nA."
+        edited.snippet.showsConfirmation = false
+        let saved = try await store.save(edited)
+        check(
+            "an edit renames the keyword and body in place, under the same identity",
+            saved.id == created.id && onDisk(saved) == edited.snippet
+                && store.snippets.filter { $0.id == created.id }.count == 1
+                && markdownFiles(in: repository.snippetsDirectory).count == 1)
+        let bare = Snippet(name: saved.snippet.name, text: "", keyword: nil)
+        let bareSaved = try await store.save(
+            StoredSnippet(
+                fileURL: saved.fileURL, snippet: bare, sourceRevision: saved.sourceRevision))
+        check(
+            "a keyword can be cleared and the body emptied",
+            bareSaved.snippet == bare && onDisk(bareSaved) == bare)
+        guard let cleared = store.record(id: created.id) else {
+            check("the cleared snippet stays in the store", false)
+            store.stop()
+            return
+        }
+
+        try SnippetMarkdownSerializer.serialize(Snippet(name: "Changed elsewhere", text: "ext"))
+            .write(to: cleared.fileURL, atomically: true, encoding: .utf8)
+        var staleEdit = cleared
+        staleEdit.snippet.text = "mine"
+        do {
+            _ = try await store.save(staleEdit)
+            check("an editor over an externally changed file gets a conflict", false)
+        } catch SnippetRepository.RepositoryError.conflict {
+            check(
+                "an editor over an externally changed file gets a conflict",
+                store.operationError != nil && onDisk(cleared)?.name == "Changed elsewhere")
+        }
+        await settle { store.record(id: created.id)?.snippet.name == "Changed elsewhere" }
+        check(
+            "reopening after a conflict shows what is on disk",
+            store.record(id: created.id)?.snippet.text == "ext")
+
+        try await store.delete(id: created.id)
+        check(
+            "delete removes the file and the record",
+            !fm.fileExists(atPath: created.fileURL.path) && store.record(id: created.id) == nil)
+
+        let kept = try await store.create(Snippet(name: "Kept Behind", text: "old folder"))
+        let otherFolder = root.appendingPathComponent("elsewhere/snippets", isDirectory: true)
+        try fm.createDirectory(at: otherFolder, withIntermediateDirectories: true)
+        let seededURL = otherFolder.appendingPathComponent("seeded.md")
+        try SnippetMarkdownSerializer.serialize(
+            Snippet(name: "Seeded", text: " waiting\n", keyword: "!seed")
+        ).write(to: seededURL, atomically: true, encoding: .utf8)
+        await store.relocate(
+            to: SnippetRepository(
+                bundleIdentifier: "com.example.editing", applicationSupportRoot: root,
+                snippetsDirectory: otherFolder))
+        check(
+            "changing folder lists only the new folder and leaves the old file where it was",
+            store.snippets.map(\.snippet.name) == ["Seeded"]
+                && fm.fileExists(atPath: kept.fileURL.path))
+        let movedIn = try await store.create(Snippet(name: "Kept Behind", text: "new folder"))
+        check(
+            "a snippet created after the move lands in the new folder",
+            movedIn.fileURL.deletingLastPathComponent().standardizedFileURL.path
+                == otherFolder.standardizedFileURL.path
+                && movedIn.fileURL.lastPathComponent == "kept-behind.md")
+        store.stop()
+    }
+
+    /// The listener sees each save: a renamed keyword stops the old one expanding at all.
+    private static func testKeywordListenerFollowsEdits() async {
+        let tap = FakeSnippetKeywordTapController()
+        let listener = SnippetKeywordListener(
+            tapController: tap, accessibilityTrusted: { true }, secureEventInputEnabled: { false },
+            now: { Date(timeIntervalSince1970: 2_000) }, syntheticEventTag: 77,
+            logsTapFailures: false)
+        var matches: [(id: String, deletionCount: Int)] = []
+        listener.start(
+            onUserActivity: {},
+            onMatch: { id, _, count, _ in matches.append((id, count)) })
+        func type(_ keystrokes: [String], tag: Int64 = 0) async {
+            for text in keystrokes {
+                listener.processEvent(
+                    typeRaw: CGEventType.keyDown.rawValue, keyCode: 0, flagsRaw: 0, text: text,
+                    eventUserData: tag, secureEventInputEnabled: false)
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        let path = "/tmp/follow.md"
+        listener.update([record(path, Snippet(name: "Follow", text: "x", keyword: ";sig"))])
+        await type([";", "s", "i", "g"])
+        check("the saved keyword expands", matches.map(\.deletionCount) == [4])
+
+        listener.update([record(path, Snippet(name: "Follow", text: "x", keyword: " !SignOff "))])
+        await type([";sig"])
+        check("a renamed keyword's old spelling no longer expands", matches.count == 1)
+        await type(["Best regards !signoff"])
+        check(
+            "the new keyword expands from a phrase, deleting only its own length",
+            matches.count == 2 && matches.last?.deletionCount == 8)
+        await type(["!signoff"], tag: 77)
+        check("Tinycast's own typed expansion never re-triggers it", matches.count == 2)
+
+        listener.update([
+            record(path, Snippet(name: "Follow", text: "x", keyword: "!signoff", isEnabled: false))
+        ])
+        await type(["!signoff"])
+        check("a disabled snippet's keyword does nothing", matches.count == 2)
+        listener.update([record(path, Snippet(name: "Follow", text: "x", keyword: nil))])
+        await type(["!signoff"])
+        check("a cleared keyword does nothing", matches.count == 2)
+        listener.stop()
     }
 
     private static func record(_ path: String, _ snippet: Snippet) -> StoredSnippet {
