@@ -129,7 +129,9 @@ feature's doc, under its own `## Invariants`.
 Each item is explained in [testing.md](docs/testing.md#definition-of-done).
 
 - `./Scripts/run-tests.sh` passes.
-- The Debug build compiles with **no new warnings**.
+- The Debug build compiles with **no new warnings**. Without Xcode, CI's `build.yml` run on your
+  pushed commit is that check — see
+  [development.md](docs/development.md#without-xcode-the-ci-build).
 - `./Scripts/lint.sh` is clean.
 - `grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Tinycast/Features/*/Model/` returns nothing.
 - Any doc your change made wrong is fixed in the same commit.

@@ -70,6 +70,30 @@ Consequences worth knowing:
 - The Hyper Key's Caps Lock remap is `hidutil` state, which is **system-wide, not per-bundle**: quitting
   one build clears the remap for the other, which then needs a rebind or a relaunch to restore it.
 
+### Without Xcode: the CI build
+
+`.github/workflows/build.yml` runs the whole definition of done on `macos-26` for every push and
+uploads `Tinycast-Dev-<sha>.zip` (with a `BUILD_INFO.txt` naming the commit) as the run's artifact:
+a Release-optimised build on the dev channel's name and bundle id, ad-hoc signed. On a Mac with only
+the Command Line Tools this is the only compile check — the harnesses still run locally, except the
+eight whose shipped sources use SwiftUI macros (`@Entry`), whose plugin ships with Xcode alone.
+
+Re-sign it with `Tinycast Self-Signed` before installing, or macOS ties the Accessibility grant to
+the ad-hoc signature and forgets it with the next build:
+
+```sh
+gh run download <run-id> -R pcstyle-os/tinycast -D build/ci
+ditto -x -k build/ci/*/Tinycast-Dev-*.zip build/ci
+APP="build/ci/Tinycast Dev.app"
+codesign --force --options runtime --timestamp=none --sign "Tinycast Self-Signed" \
+  "$APP/Contents/Helpers/ClipboardTextHelper"
+codesign --force --options runtime --timestamp=none --sign "Tinycast Self-Signed" \
+  --entitlements Tinycast/Tinycast.entitlements "$APP"
+ditto "$APP" ~/Applications/"Tinycast Dev.app"
+```
+
+Keep the install path fixed; the grant follows the path, the bundle id and the certificate.
+
 ## Editor
 
 Xcode works out of the box and needs nothing here. Everything below is optional, and which editor you
