@@ -78,6 +78,22 @@ shipped a thin arm64 build to Intel users once already, and it also keeps the Ap
 from silently gaining a slice it never needs. A thin helper inside a universal app is the quiet form
 of the same bug: the app boots on Intel and only clipboard OCR stops working.
 
+### A stable build without publishing
+
+To get a stable-channel `Bestcast.app` (`com.bestcast.app`) without a release, run **Build** from the
+Actions tab with **channel** `stable`, or:
+
+```sh
+gh workflow run build.yml -R pcstyle-os/bestcast --ref <branch> -f channel=stable
+```
+
+It runs the whole definition of done, builds Release for arm64 at `project.yml`'s version, applies the
+thin-slice and `verify-signature.sh` checks from `release.yml`, and uploads
+`Bestcast-<version>-<sha>.zip` (a `ditto` zip, `ClipboardTextHelper` included) as the run's artifact.
+Nothing is tagged, released, cask-bumped or announced. The build is ad-hoc signed: re-sign it with
+`Bestcast Self-Signed` as in [development.md](development.md#without-xcode-the-ci-build), using
+`Bestcast.app` and `/Applications/Bestcast.app`, before installing.
+
 ### Release notes
 
 `Scripts/release-notes.sh` composes the release body, and CI runs it just before `gh release create`.

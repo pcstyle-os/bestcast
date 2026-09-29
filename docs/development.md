@@ -74,7 +74,8 @@ Consequences worth knowing:
 
 `.github/workflows/build.yml` runs the whole definition of done on `macos-26` for every push and
 uploads `Bestcast-Dev-<sha>.zip` (with a `BUILD_INFO.txt` naming the commit) as the run's artifact:
-a Release-optimised build on the dev channel's name and bundle id, ad-hoc signed. On a Mac with only
+a Release-optimised build on the dev channel's name and bundle id, ad-hoc signed. A manual run with
+`channel=stable` builds `Bestcast.app` instead, see [release.md](release.md). On a Mac with only
 the Command Line Tools this is the only compile check — the harnesses still run locally, except the
 eight whose shipped sources use SwiftUI macros (`@Entry`), whose plugin ships with Xcode alone.
 
