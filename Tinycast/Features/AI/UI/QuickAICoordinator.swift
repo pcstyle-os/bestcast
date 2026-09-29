@@ -225,12 +225,13 @@ final class QuickAICoordinator {
 
     /// ↑ on an empty composer: the last question comes back, with what it carried, to be re-sent.
     func editLastMessage() -> Bool {
-        guard !chat.isStreaming,
+        guard !chat.isStreaming, chat.pendingAttachments.isEmpty,
             let question = chat.session.messages.last(where: { $0.role == .user })
         else { return false }
         chat.clearAttachments()
+        // No preview: the chip would decode the full-size image on every header render.
         for image in question.images {
-            chat.attach(ChatAttachment(payload: .image(image), name: "Image", preview: image.data))
+            chat.attach(ChatAttachment(payload: .image(image), name: "Image", preview: nil))
         }
         for document in question.documents {
             chat.attach(
@@ -265,7 +266,11 @@ final class QuickAICoordinator {
     func pasteLastResponse() -> Bool {
         guard hasFinishedReply, let text = chat.lastAssistantText else { return false }
         let reply = ChatChoices.split(text).text
-        let target = paletteCoordinator.targetApp
+        guard targetAppName != nil, let target = paletteCoordinator.targetApp else {
+            Paster.copyPlainText(reply)
+            core.showMessage("No app to paste into — reply copied")
+            return true
+        }
         paletteCoordinator.hidePalette(restoreFocus: false)
         core.textInjector.replaceSelection(
             with: reply, in: target,

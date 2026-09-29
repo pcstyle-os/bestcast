@@ -283,7 +283,7 @@ struct LauncherScreen: PaletteScreen {
     func secondary(at selection: Int) -> Bool {
         let asks =
             core.settings.aiEnabled && core.aiSettings.askAIFromRootSearch
-            && !vm.query.trimmingCharacters(in: .whitespaces).isEmpty
+            && vm.argumentEntryID == nil && !vm.query.trimmingCharacters(in: .whitespaces).isEmpty
         if let app = entry(at: selection), app.canRevealInFinder,
             !(asks && QuickAIQuestion.looksLikeQuestion(vm.query))
         {

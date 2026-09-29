@@ -760,8 +760,8 @@ no such menu item.
 ## Reveal in Finder
 
 Application and System Settings results expose **Show in Finder** in their ⌘K Actions menu and on
-**⌘↵**. A query that reads as a question hands ⌘↵ to Ask AI instead. Synthetic command results have no filesystem location, so neither the menu row nor the
-shortcut is available for them. `AppEntry.canRevealInFinder` is the one rule both the menu row and
+**⌘↵**. A query that reads as a question hands ⌘↵ to Ask AI instead. Synthetic command results
+have no filesystem location, so neither the menu row nor the shortcut is available for them. `AppEntry.canRevealInFinder` is the one rule both the menu row and
 the key handler read, so the advertised chord can't drift from the behavior.
 
 ## Dragging an application out

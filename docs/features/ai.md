@@ -405,9 +405,9 @@ staging generation, so one that lands after the chat moved on is dropped.
 
 **Reply actions.** With the composer empty and a reply finished, ⌘↵ pastes the reply (its choices
 fence stripped) into the app the palette covered, through `TextInjector.replaceSelection` like a Quick
-Action's Paste; a refused paste copies it and says so. Copy Code Block (`⌥⌘C`) copies the reply's last
-fenced block. ↑ in an empty composer takes the last question back with its attachments; sending it
-then replaces that exchange (`ChatSession.dropLastExchange`, applied inside `AIChatState.send` only
+Action's Paste; a refused paste copies it and says so, as does ⌘↵ when the palette covered no other
+app. Copy Code Block (`⌥⌘C`) copies the reply's last fenced block. ↑ in an empty composer with
+nothing staged takes the last question back with its attachments; sending it then replaces that exchange (`ChatSession.dropLastExchange`, applied inside `AIChatState.send` only
 after the send's guards pass, so a refused send loses nothing).
 
 **Follow-ups.** With `quickAIFollowUps` on (the default), each Quick AI turn's instructions ask for a
