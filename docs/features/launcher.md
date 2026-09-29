@@ -714,6 +714,7 @@ A query-driven row gets none of Manage or Copy, for the reason it can't be a fav
   before `ExtensionDeepLink`, and `LauncherCoordinator.runDeepLink` runs the row through
   `HotKeyManager.perform` — the hotkey funnel — so a link obeys every switch its chord does and a
   disabled row answers with a HUD instead. A key nothing answers gets a HUD too, never a silent no-op.
+  A disabled extension command refuses its `tinycast://extensions/…` or `raycast://` link the same way.
 
 `launcher-actions-test` covers `LauncherDeepLink` and `LauncherPins`; the menu itself is a manual
 check.

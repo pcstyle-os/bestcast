@@ -474,6 +474,10 @@ final class AppCore {
     /// A disabled row keeps its binding, so re-enabling it brings the hotkey back unchanged.
     private func isDisabledEntry(_ action: HotKeyAction) -> Bool {
         guard !visibility.disabledItemKeys.isEmpty else { return false }
+        // Extension rows leave the index when hidden from the launcher; their ID is their key.
+        if case .extensionCommand(let entryID) = action {
+            return visibility.disabledItemKeys.contains(entryID)
+        }
         return appIndex.apps.contains { $0.hotKeyAction == action && visibility.isDisabled($0) }
     }
 

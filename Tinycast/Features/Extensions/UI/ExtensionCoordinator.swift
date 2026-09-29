@@ -91,6 +91,12 @@ final class ExtensionCoordinator {
             core.showMessage("No installed extension provides '\(link.commandName)'", tone: .danger)
             return
         }
+        let reference = ExtensionCommandRef(
+            extensionName: owner.manifest.name, commandName: command.name)
+        guard !core.visibility.disabledItemKeys.contains(reference.entryID) else {
+            core.showMessage("\(command.title) is disabled", tone: .danger)
+            return
+        }
         run(
             owner, command: command, arguments: link.arguments, fallbackText: link.fallbackText,
             launchType: link.launchType)
