@@ -293,8 +293,21 @@ struct AICommandTests {
                 provider: provider, baseURL: URL(string: "https://example.com")!, model: model)
         }
         expect(
-            AITemperaturePolicy.value(0.6, for: config(.anthropic, "claude-x")) == 0.6,
-            "Anthropic takes a temperature")
+            AITemperaturePolicy.value(0.6, for: config(.anthropic, "claude-sonnet-4-6")) == 0.6,
+            "an older Claude takes a temperature")
+        expect(
+            AITemperaturePolicy.value(0.6, for: config(.anthropic, "claude-haiku-4-5-20251001"))
+                == 0.6,
+            "a date suffix is not read as a version")
+        for model in [
+            "claude-opus-4-7", "claude-opus-5-5", "claude-sonnet-5", "claude-fable-5-1",
+            "anthropic/claude-opus-4.8"
+        ] {
+            expect(
+                AITemperaturePolicy.value(0.6, for: config(.anthropic, model)) == nil
+                    && AITemperaturePolicy.value(0.6, for: config(.openRouter, model)) == nil,
+                "\(model) rejects sampling parameters, so the hint is dropped")
+        }
         expect(
             AITemperaturePolicy.value(0.6, for: config(.openAI, "gpt-4.1")) == 0.6,
             "a GPT-4 model takes one")

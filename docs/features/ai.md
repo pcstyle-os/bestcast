@@ -338,8 +338,9 @@ messages in the OpenAI message array.
 
 `AIRequest.temperature` is an optional hint, and only AI Commands set it. `AITemperaturePolicy`
 decides whether an HTTP body carries it. Anthropic, Gemini, OpenRouter and non-reasoning
-OpenAI-compatible models get a value clamped to 0…1. OpenAI's reasoning models reject the field, so
-it is dropped for them. Apple Intelligence passes it to `GenerationOptions`, and the installed CLI
+OpenAI-compatible models get a value clamped to 0…1. OpenAI's reasoning models and current Claude
+models (Opus 4.7 and later, Sonnet 5 and later, Fable, Mythos) reject the field with a 400, on any
+route, so it is dropped for them. Apple Intelligence passes it to `GenerationOptions`, and the installed CLI
 routes ignore it. Chat never sets one.
 
 `AIProviderFactory` resolves the selection, validates an API endpoint, reads an API key at the last

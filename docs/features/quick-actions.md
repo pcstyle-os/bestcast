@@ -210,7 +210,7 @@ It is still the reader's own gesture: the prompt only leaves the Mac because the
 Low, Medium and High map to `AIRequest.temperature` of 0.2, 0.6 and 1.0. The value is a hint.
 `AITemperaturePolicy` sends it to Anthropic, Gemini, OpenRouter and non-reasoning OpenAI-compatible
 models, clamped to 0…1. Apple Intelligence takes it through `GenerationOptions`. OpenAI's reasoning
-models (`o*`, `gpt-5*`) reject the field, and installed CLI routes have no such knob, so there it is
+models (`o*`, `gpt-5*`) and current Claude models (Opus 4.7+, Sonnet 5+, Fable) reject the field, and installed CLI routes have no such knob, so there it is
 dropped without a word rather than failing the run. Built-in actions send no temperature.
 
 ### Library, import and export
