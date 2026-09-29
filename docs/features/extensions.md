@@ -46,10 +46,14 @@ produces, rendered natively into the palette. No Electron, no browser, no Node.j
   `extension-triggers.json` alone, so no settings backup and no `settings.json` mirror can carry a
   grant. Every trigger starts off, and uninstall forgets the extension's triggers, its shortcuts and
   every approval it gave or received.
-- **An automation never shows UI by itself.** Its one-shot host refuses windows, alerts, paste,
-  selection reads and OAuth sign-in; a toast becomes a HUD at most once per trigger every ten
-  seconds, and an error lands in Settings, never in a dialog. The one exception is the approval a
-  person's own foreground command asks for when it first calls another extension's export.
+- **A trigger fires only after its own opt-in.** Turning one on asks first, and the consent names
+  the event it was given for, so an update that changes a trigger's `on` leaves it off until asked
+  again.
+- **An automation never shows UI by itself.** Its one-shot host refuses windows, alerts, `open`,
+  clipboard reads, paste, selection reads, OAuth sign-in and launching another extension's commands;
+  a toast becomes a HUD at most once per trigger every ten seconds, and an error lands in Settings,
+  never in a dialog. The one exception is the approval a person's own foreground command asks for
+  when it first calls another extension's export.
 - **`SymbolCatalog` reads a system bundle, not API.** The list comes from `CoreGlyphs.bundle` at
   runtime; every read stays optional and falls back to `SymbolCatalog.suggested`, and Apple's restricted
   marks are never offered.
@@ -670,25 +674,31 @@ ignores the key, so the same package still builds and runs there.
   (`{every: "15m"}` or `{at: "09:30", weekdays: [1, 5]}`, ISO weekdays), `system.wake`,
   `system.sleep`, `network.changed` (reachability only, never the network's name), `selection.hotkey`
   and `deeplink` (`bestcast://extensions/<extension>/trigger/<name>?…`, query items in
-  `payload.query`). `bundleIds` narrows the app events; `filter` narrows the clipboard by `kind` and
-  a `match` regex.
+  `payload.query`; any app, script or web page can open one). `bundleIds` narrows the app events;
+  `filter` narrows the clipboard by `kind` and a `match` regex.
 - **Targets:** `export` names a prebuilt CommonJS file inside the extension whose default export
   receives `{trigger, type, payload, previous?}`; each `then` step gets the previous step's result as
   `previous`. `command` names a `no-view` command instead, launched as `background` with
   `launchContext.bestcastTrigger` set to the event. `ray build` compiles only commands, so an export
   file has to be built already; install copies every file a trigger or export names.
-- **Consent:** each trigger has its own switch under its extension in Settings, off until turned on.
-  A clipboard trigger sees only the kind of copy unless Share copied text is on, and concealed copies
-  never reach it. `replacesSelection` types a string result over the selection only while Type the
-  result is on. Settings › Extensions › Automations pauses everything, and so does turning extensions
-  off.
+- **Consent:** each trigger has its own switch under its extension in Settings, off until turned on,
+  and turning it on first shows a dialog saying what it will learn and when it runs. A clipboard
+  trigger sees only the kind of copy unless Share copied text is on, concealed copies never reach it,
+  and no one-shot run may read the clipboard itself. `replacesSelection` counts only on a
+  `selection.hotkey`, and types a string result over the selection only while Type the result is on
+  and the same app is still in front. Settings › Extensions › Automations lists every trigger that is
+  on or failing and pauses everything, and so does turning extensions off.
+- **Settings:** each trigger row shows its last run, a schedule's next run, the last error and a Run
+  Now button that skips the throttle and backoff but never the switch or the pause.
 - **Failure:** three failures in a row turn a trigger off with one HUD; before that it backs off for
   1, 5 and 30 minutes. The last error shows in the Automations section and under the trigger.
 - **Composition:** `@bestcast/api/compose` gives `callExport(extension, name, input)` and
   `listExports()`. An extension calls its own exports freely; another extension's must be `public`,
   and the first call asks once — "<A> wants to use <B>’s shorten" — then remembers the answer as an
-  approved caller, revocable under the target extension. A call from a background run cannot ask, so
-  it fails until approved. Chains stop at four exports deep and refuse a cycle.
+  approved caller, revocable under the target extension. A call from a background run, including one
+  reached through an awaited `launchCommand`, cannot ask, so it fails until approved. Chains stop at
+  four exports deep and refuse a cycle. A one-shot run may still launch its own extension's commands
+  in the background, where they run like any background launch.
 
 Each fired trigger runs in a fresh one-shot runtime at utility priority, one at a time: at most 16
 events wait, and the oldest are dropped past that. Clipboard triggers ride the clipboard history, so

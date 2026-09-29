@@ -189,7 +189,7 @@ private final class ExtensionTriggerHost: ExtensionHostContext {
     func confirmAlert(_ alert: ExtensionAlert) async -> Bool { false }
     func openWithPicker(path: String) async {}
 
-    /// Only a background launch: a trigger never brings up UI on its own.
+    /// Only its own commands, in the background: no UI, and no reaching past compose's approvals.
     func launch(
         command: String, extensionName: String?, arguments: [String: String],
         fallbackText: String?, launchType: ExtensionLaunchType, launchContext: [String: RenderValue]
@@ -197,8 +197,11 @@ private final class ExtensionTriggerHost: ExtensionHostContext {
         guard launchType == .background else {
             throw ExtensionLaunchError.unsupported("A trigger can only launch in the background.")
         }
+        guard (extensionName ?? owner.manifest.name) == owner.manifest.name else {
+            throw ExtensionLaunchError.unsupported("An automation can only launch its own commands.")
+        }
         try manager?.launch(
-            command: command, extensionName: extensionName ?? owner.manifest.name,
+            command: command, extensionName: owner.manifest.name,
             arguments: arguments, fallbackText: fallbackText, launchType: launchType,
             launchContext: launchContext)
     }

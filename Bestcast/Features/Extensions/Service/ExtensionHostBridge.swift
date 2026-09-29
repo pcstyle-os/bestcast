@@ -200,8 +200,9 @@ final class ExtensionHostBridge: ExtensionHostAPI {
     // MARK: - Clipboard
 
     private func clipboard(method: String, arguments: [RenderValue]) throws -> Any? {
-        if method == "paste", context?.isUnattended == true {
-            throw ExtensionHostError.unsupported("Clipboard.paste from an automation")
+        // A clipboard trigger's text arrives only through its own opt-in, never by reading it here.
+        if ["paste", "read", "readText"].contains(method), context?.isUnattended == true {
+            throw ExtensionHostError.unsupported("Clipboard.\(method) from an automation")
         }
         switch method {
         case "copy", "paste":
@@ -397,6 +398,10 @@ final class ExtensionHostBridge: ExtensionHostAPI {
 
     private func system(method: String, arguments: [RenderValue]) async throws -> Any? {
         switch method {
+        case "open" where context?.isUnattended == true,
+            "showInFinder" where context?.isUnattended == true:
+            throw ExtensionHostError.unsupported("Opening windows from an automation")
+
         case "open":
             guard let target = arguments.first?.stringValue else { return nil }
             open(target: target, application: arguments[safe: 1]?.stringValue)
@@ -465,7 +470,8 @@ final class ExtensionHostBridge: ExtensionHostAPI {
             {
                 let value = try await compose.runCommand(
                     name, of: caller, arguments: launchArguments, launchType: launchType,
-                    launchContext: options["context"]?.objectValue ?? [:])
+                    launchContext: options["context"]?.objectValue ?? [:],
+                    isBackground: context?.activeLaunchType == .background)
                 return ["result": value]
             }
             try context?.launch(

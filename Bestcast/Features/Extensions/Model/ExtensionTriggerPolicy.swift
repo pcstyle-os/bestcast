@@ -3,6 +3,8 @@ import Foundation
 /// One trigger's consent and run history, as `extension-triggers.json` keeps it.
 struct ExtensionTriggerState: Sendable, Codable, Equatable {
     var enabled = false
+    /// The `on` the person agreed to; an update that changes it needs their agreement again.
+    var consentedEvent: String?
     /// A clipboard trigger sees copied text only with this second opt-in; otherwise just its kind.
     var sharesClipboardText = false
     /// `replacesSelection` types into another app only once this is on.
@@ -34,6 +36,8 @@ enum ExtensionTriggerPolicy {
     static let composeDepthLimit = 4
     /// Events waiting behind a running trigger; past this, the oldest are dropped.
     static let pendingLimit = 16
+    /// An extension writes its own error text; Settings and the file keep only this much of it.
+    static let errorLength = 300
 
     enum Verdict: Equatable, Sendable {
         case fire
@@ -47,7 +51,7 @@ enum ExtensionTriggerPolicy {
         trigger: ExtensionTrigger, state: ExtensionTriggerState, isPaused: Bool, now: Date
     ) -> Verdict {
         if isPaused { return .paused }
-        guard state.enabled else { return .off }
+        guard isOn(trigger, state: state) else { return .off }
         if let throttle = trigger.throttle, let last = state.lastFired, now < last.addingTimeInterval(throttle) {
             return .throttled
         }
@@ -57,6 +61,10 @@ enum ExtensionTriggerPolicy {
             return .backingOff
         }
         return .fire
+    }
+
+    static func isOn(_ trigger: ExtensionTrigger, state: ExtensionTriggerState) -> Bool {
+        state.enabled && state.consentedEvent == trigger.event.rawValue
     }
 
     static func backoffDelay(failures: Int) -> TimeInterval {
@@ -75,7 +83,7 @@ enum ExtensionTriggerPolicy {
             next.lastError = nil
             return (next, false)
         }
-        next.lastError = error
+        next.lastError = String(error.prefix(errorLength))
         next.failureCount += 1
         guard next.failureCount >= failureLimit, next.enabled else { return (next, false) }
         next.enabled = false
@@ -84,9 +92,12 @@ enum ExtensionTriggerPolicy {
     }
 
     /// Turning a trigger on again starts its history over.
-    static func enabling(_ state: ExtensionTriggerState) -> ExtensionTriggerState {
+    static func enabling(
+        _ state: ExtensionTriggerState, for trigger: ExtensionTrigger
+    ) -> ExtensionTriggerState {
         var next = state
         next.enabled = true
+        next.consentedEvent = trigger.event.rawValue
         next.autoDisabled = false
         next.failureCount = 0
         next.lastError = nil

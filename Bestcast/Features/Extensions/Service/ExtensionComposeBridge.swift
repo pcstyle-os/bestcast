@@ -44,7 +44,7 @@ final class ExtensionComposeBridge {
 
     func runCommand(
         _ name: String, of caller: String, arguments: [String: String],
-        launchType: ExtensionLaunchType, launchContext: [String: RenderValue]
+        launchType: ExtensionLaunchType, launchContext: [String: RenderValue], isBackground: Bool
     ) async throws -> Any {
         guard let engine, let manager = engine.manager, let owner = manager.extensionNamed(caller),
             let command = owner.command(named: name)
@@ -58,6 +58,7 @@ final class ExtensionComposeBridge {
         ])
         var scope = scope
         scope.chain.append(key)
+        scope.canPrompt = scope.canPrompt && !isBackground
         return try await engine.runner.runCommand(command, of: owner, props: props, scope: scope)
             .get().jsonObject
     }

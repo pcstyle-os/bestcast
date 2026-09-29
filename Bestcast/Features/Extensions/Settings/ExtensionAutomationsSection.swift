@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Settings › Extensions › Automations: the master pause, and every trigger that stopped on an error.
+/// Settings › Extensions › Automations: the master pause, and every trigger that is on or failing.
 struct ExtensionAutomationsSection: View {
     @Environment(AppCore.self) private var core
 
-    private struct Problem: Identifiable {
+    private struct Row: Identifiable {
         let id: String
         let title: String
-        let owner: String
-        let trigger: String
+        let owner: InstalledExtension
+        let trigger: ExtensionTrigger
         let state: ExtensionTriggerState
     }
 
@@ -27,14 +27,16 @@ struct ExtensionAutomationsSection: View {
                 )
                 .labelsHidden()
             }
-            ForEach(problems(store)) { problem in
+            ForEach(rows(store)) { row in
                 SettingsRow(
-                    title: problem.title, subtitle: problem.state.lastError, subtitleLineLimit: 2
+                    title: row.title, subtitle: row.state.lastError ?? row.trigger.event.title,
+                    subtitleLineLimit: 2
                 ) {
-                    if problem.state.autoDisabled {
+                    if row.state.autoDisabled {
                         Button("Turn On") {
-                            engine.setEnabled(true, trigger: problem.trigger, of: problem.owner)
+                            Task { await engine.setEnabled(true, trigger: row.trigger, of: row.owner) }
                         }
+                        .accessibilityLabel("Turn on \(row.title)")
                     }
                 }
             }
@@ -43,15 +45,17 @@ struct ExtensionAutomationsSection: View {
         }
     }
 
-    private func problems(_ store: ExtensionTriggerStore) -> [Problem] {
+    private func rows(_ store: ExtensionTriggerStore) -> [Row] {
         core.extensions.installed.flatMap { owner in
-            owner.manifest.triggers.compactMap { trigger -> Problem? in
+            owner.manifest.triggers.compactMap { trigger -> Row? in
                 let state = store.state(extension: owner.manifest.name, trigger: trigger.name)
-                guard state.lastError != nil || state.autoDisabled else { return nil }
-                return Problem(
+                guard ExtensionTriggerPolicy.isOn(trigger, state: state) || state.lastError != nil
+                    || state.autoDisabled
+                else { return nil }
+                return Row(
                     id: ExtensionTriggerEngine.key(extension: owner.manifest.name, trigger: trigger.name),
-                    title: "\(owner.title): \(trigger.title)", owner: owner.manifest.name,
-                    trigger: trigger.name, state: state)
+                    title: "\(owner.title): \(trigger.title)", owner: owner, trigger: trigger,
+                    state: state)
             }
         }
     }

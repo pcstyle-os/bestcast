@@ -49,7 +49,11 @@ struct ExtensionTriggersTest {
         expect(shout?.then == ["src/wrap.js"], "`then` lists the chained exports")
         expect(shout?.throttle == 5, "`throttle` parses below the refresh floor")
         expect(shout?.filter == ExtensionTriggerFilter(kind: "text", match: "^h"), "`filter` is read")
-        expect(shout?.replacesSelection == true, "`replacesSelection` is read")
+        expect(shout?.replacesSelection == false, "only a selection hotkey may replace the selection")
+        let fix = ExtensionTrigger(json: [
+            "name": "fix", "on": "selection.hotkey", "export": "a.js", "replacesSelection": true
+        ])
+        expect(fix?.replacesSelection == true, "`replacesSelection` is read on a selection hotkey")
         expect(shout?.title == "Shout Copied Text", "`title` is read")
         let morning = triggers.last
         expect(morning?.target == .command("echo"), "`command` is the other kind of target")
@@ -137,7 +141,7 @@ struct ExtensionTriggersTest {
         expect(
             ExtensionTriggerPolicy.verdict(trigger: throttled, state: state, isPaused: false, now: now) == .off,
             "a trigger does nothing until it is turned on")
-        state = ExtensionTriggerPolicy.enabling(state)
+        state = ExtensionTriggerPolicy.enabling(state, for: throttled)
         expect(
             ExtensionTriggerPolicy.verdict(trigger: throttled, state: state, isPaused: true, now: now) == .paused,
             "the master pause wins over consent")
@@ -156,7 +160,7 @@ struct ExtensionTriggersTest {
         expect(
             [0, 1, 2, 3, 9].map { ExtensionTriggerPolicy.backoffDelay(failures: $0) } == [0, 60, 300, 1800, 1800],
             "backoff is 1m, 5m, 30m")
-        var failing = ExtensionTriggerPolicy.enabling(ExtensionTriggerState())
+        var failing = ExtensionTriggerPolicy.enabling(ExtensionTriggerState(), for: trigger())
         var disabledAt: Int?
         for attempt in 1...3 {
             let result = ExtensionTriggerPolicy.recording(error: "boom", in: failing, now: now)
@@ -165,7 +169,7 @@ struct ExtensionTriggersTest {
         }
         expect(disabledAt == 3, "the third failure in a row switches it off, once")
         expect(!failing.enabled && failing.autoDisabled && failing.lastError == "boom", "and says why")
-        var retry = ExtensionTriggerPolicy.enabling(ExtensionTriggerState())
+        var retry = ExtensionTriggerPolicy.enabling(ExtensionTriggerState(), for: trigger())
         retry = ExtensionTriggerPolicy.recording(error: "boom", in: retry, now: now).state
         expect(
             ExtensionTriggerPolicy.verdict(trigger: trigger(), state: retry, isPaused: false, now: now.addingTimeInterval(59))
@@ -173,8 +177,23 @@ struct ExtensionTriggersTest {
             "a failure backs the next run off")
         retry = ExtensionTriggerPolicy.recording(error: nil, in: retry, now: now).state
         expect(retry.failureCount == 0 && retry.lastError == nil, "a success clears the streak")
-        let revived = ExtensionTriggerPolicy.enabling(failing)
+        let revived = ExtensionTriggerPolicy.enabling(failing, for: trigger())
         expect(revived.enabled && !revived.autoDisabled && revived.failureCount == 0, "turning it on starts over")
+        let moved = trigger(["on": "app.activated"])
+        expect(
+            ExtensionTriggerPolicy.verdict(trigger: moved, state: revived, isPaused: false, now: now) == .off,
+            "consent given to one event does not carry to another after an update")
+        var bare = ExtensionTriggerState()
+        bare.enabled = true
+        expect(!ExtensionTriggerPolicy.isOn(trigger(), state: bare), "a switch without a consented event is off")
+        let long = ExtensionTriggerPolicy.recording(
+            error: String(repeating: "x", count: 5000), in: revived, now: now)
+        expect(
+            long.state.lastError?.count == ExtensionTriggerPolicy.errorLength,
+            "an extension's error text is capped before it is kept")
+        expect(
+            ExtensionTriggerConsent.explanation(for: trigger(["on": "deeplink"])).contains("web page"),
+            "the opt-in says a link trigger can be opened by anything")
 
         expect(ExtensionTriggerPolicy.allowsHUD(lastShown: nil, now: now), "a first HUD shows")
         expect(!ExtensionTriggerPolicy.allowsHUD(lastShown: now.addingTimeInterval(-9), now: now), "HUDs are spaced")
@@ -241,7 +260,7 @@ struct ExtensionTriggersTest {
             .appendingPathComponent("ext-triggers-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: file) }
         let store = ExtensionTriggerStore(fileURL: file)
-        store.update(extension: "a", trigger: "t") { $0 = ExtensionTriggerPolicy.enabling($0) }
+        store.update(extension: "a", trigger: "t") { $0 = ExtensionTriggerPolicy.enabling($0, for: trigger()) }
         store.update(extension: "b", trigger: "t") { $0.enabled = true }
         store.approve(caller: "a", extension: "b", export: "shorten")
         store.approve(caller: "b", extension: "a", export: "wrap")

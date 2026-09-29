@@ -77,7 +77,8 @@ struct ExtensionTrigger: Sendable, Hashable, Identifiable {
         }
         throttle = ExtensionRefreshPolicy.parse(dict["throttle"] as? String, floor: 0)
         bundleIds = dict["bundleIds"] as? [String] ?? []
-        replacesSelection = dict["replacesSelection"] as? Bool ?? false
+        // Only the hotkey knows whose selection it read; any other event would type blind.
+        replacesSelection = event == .selectionHotkey && dict["replacesSelection"] as? Bool == true
     }
 }
 
@@ -99,6 +100,29 @@ struct ExtensionExport: Sendable, Hashable, Identifiable {
         self.path = path
         isPublic = dict["public"] as? Bool ?? false
         description = dict["description"] as? String ?? ""
+    }
+}
+
+/// What the opt-in dialog tells a person a trigger will learn, and when its code will run.
+enum ExtensionTriggerConsent {
+    static func explanation(for trigger: ExtensionTrigger) -> String {
+        let apps = trigger.bundleIds.isEmpty ? "any app" : trigger.bundleIds.joined(separator: ", ")
+        let when: String
+        switch trigger.event {
+        case .clipboardChanged:
+            when = "It runs each time you copy something and learns only its kind. "
+                + "Turn on Share copied text to send the text too."
+        case .appActivated: when = "It runs and learns the app's name whenever \(apps) comes forward."
+        case .appDeactivated: when = "It runs and learns the app's name whenever \(apps) goes back."
+        case .schedule: when = "It runs on its schedule while Bestcast is open."
+        case .systemWake: when = "It runs each time the Mac wakes."
+        case .systemSleep: when = "It runs each time the Mac goes to sleep."
+        case .networkChanged:
+            when = "It runs when the Mac goes online or offline, never learning which network."
+        case .selectionHotkey: when = "It runs with the selected text when you press its shortcut."
+        case .deeplink: when = "It runs whenever any app, script or web page opens its link."
+        }
+        return when + " It runs in the background with no window, until you turn it off here."
     }
 }
 

@@ -313,6 +313,15 @@ final class ExtensionCoordinator {
             confirmRole: .standard, dismissTitle: "Don’t Allow")
     }
 
+    /// A trigger's opt-in: what it will hear and when it runs, said before it ever does.
+    func confirmTrigger(_ trigger: ExtensionTrigger, of extensionTitle: String) async -> Bool {
+        await core.confirm(
+            title: "Let \(extensionTitle) run “\(trigger.title)”?",
+            message: ExtensionTriggerConsent.explanation(for: trigger),
+            symbol: "puzzlepiece.extension", confirmTitle: "Turn On", tone: .neutral,
+            confirmRole: .standard)
+    }
+
     /// The dialog outranks the palette, so a view command keeps its screen behind it.
     func confirmExtensionAlert(_ alert: ExtensionAlert) async -> Bool {
         NSApp.activate(ignoringOtherApps: true)

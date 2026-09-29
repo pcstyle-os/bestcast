@@ -19,6 +19,8 @@ final class ExtensionTriggerEngine {
     }
 
     let store: ExtensionTriggerStore
+    /// Each armed schedule's next fire, keyed like `key(extension:trigger:)`, for Settings.
+    private(set) var nextRuns: [String: Date] = [:]
     @ObservationIgnored let runner = ExtensionTriggerRunner()
     @ObservationIgnored weak var manager: ExtensionManager? {
         didSet { runner.manager = manager }
@@ -74,7 +76,9 @@ final class ExtensionTriggerEngine {
         var wanted: Set<Armed> = []
         for owner in manager.installed {
             for trigger in owner.manifest.triggers
-            where store.state(extension: owner.manifest.name, trigger: trigger.name).enabled {
+            where ExtensionTriggerPolicy.isOn(
+                trigger, state: store.state(extension: owner.manifest.name, trigger: trigger.name))
+            {
                 wanted.insert(Armed(owner: owner, trigger: trigger))
             }
         }
@@ -116,6 +120,7 @@ final class ExtensionTriggerEngine {
         for (item, task) in scheduleTasks where !next.contains(item) {
             task.cancel()
             scheduleTasks[item] = nil
+            nextRuns[Self.key(extension: item.owner.manifest.name, trigger: item.trigger.name)] = nil
         }
         for item in next where item.trigger.event == .schedule && scheduleTasks[item] == nil {
             scheduleTasks[item] = schedule(item)
@@ -131,6 +136,7 @@ final class ExtensionTriggerEngine {
         networkTask = nil
         for task in scheduleTasks.values { task.cancel() }
         scheduleTasks = [:]
+        nextRuns = [:]
         armed = []
         cancelRuns()
     }
@@ -241,9 +247,11 @@ final class ExtensionTriggerEngine {
     /// Sleeps in short steps, so a changed clock or a wake is noticed well before a far fire time.
     private func schedule(_ item: Armed) -> Task<Void, Never>? {
         guard let schedule = item.trigger.schedule else { return nil }
+        let key = Self.key(extension: item.owner.manifest.name, trigger: item.trigger.name)
         return Task { [weak self] in
             var after = Date()
             while !Task.isCancelled, let next = schedule.nextFire(after: after, calendar: .current) {
+                self?.nextRuns[key] = next
                 while !Task.isCancelled, next.timeIntervalSinceNow > 0 {
                     try? await Task.sleep(for: .seconds(min(next.timeIntervalSinceNow, 900)))
                 }
@@ -293,18 +301,31 @@ final class ExtensionTriggerEngine {
         enqueue(item, payload: ["query": .object(link.query.mapValues(JSONValue.string))])
     }
 
+    /// Settings' Run now: skips the throttle and backoff, never the switch or the pause.
+    func runNow(trigger: String, of owner: String) {
+        guard let item = armed.first(where: {
+            $0.owner.manifest.name == owner && $0.trigger.name == trigger
+        }), item.trigger.event != .selectionHotkey
+        else { return }
+        var payload: [String: JSONValue] = [:]
+        if item.trigger.event == .schedule { payload["scheduledAt"] = .string(Date().ISO8601Format()) }
+        if item.trigger.event == .deeplink { payload["query"] = .object([:]) }
+        enqueue(item, payload: payload, force: true)
+    }
+
     // MARK: - Running
 
     private func enqueue(
         _ item: Armed, payload: [String: JSONValue],
-        targetApp: NSRunningApplication? = NSWorkspace.shared.frontmostApplication
+        targetApp: NSRunningApplication? = nil, force: Bool = false
     ) {
         let name = item.owner.manifest.name
         let now = Date()
         let verdict = ExtensionTriggerPolicy.verdict(
             trigger: item.trigger, state: store.state(extension: name, trigger: item.trigger.name),
             isPaused: store.isPaused, now: now)
-        guard verdict == .fire else { return }
+        let skipsWait = force && (verdict == .throttled || verdict == .backingOff)
+        guard verdict == .fire || skipsWait else { return }
         store.update(extension: name, trigger: item.trigger.name) { $0.lastFired = now }
         let event = ExtensionTriggerPolicy.event(
             trigger: item.trigger.name, type: item.trigger.event, payload: payload)
@@ -367,6 +388,10 @@ final class ExtensionTriggerEngine {
             let app = pending.targetApp,
             store.state(extension: name, trigger: trigger.name).allowsTyping
         else { return }
+        // A slow run must not type into whatever the person moved on to.
+        guard NSWorkspace.shared.frontmostApplication == app else {
+            return showHUD("\(trigger.title) finished after you switched apps", for: key)
+        }
         injector?.replaceSelection(with: text, in: app)
     }
 
@@ -439,13 +464,21 @@ final class ExtensionTriggerEngine {
 
     // MARK: - Settings
 
-    func setEnabled(_ enabled: Bool, trigger: String, of owner: String) {
-        store.update(extension: owner, trigger: trigger) { state in
-            if enabled {
-                state = ExtensionTriggerPolicy.enabling(state)
-            } else {
-                state.enabled = false
-            }
+    /// Turning one on asks first, unless the person already agreed to this very event.
+    func setEnabled(_ enabled: Bool, trigger: ExtensionTrigger, of owner: InstalledExtension) async {
+        let name = owner.manifest.name
+        guard enabled else {
+            store.update(extension: name, trigger: trigger.name) { $0.enabled = false }
+            return
+        }
+        let state = store.state(extension: name, trigger: trigger.name)
+        if state.consentedEvent != trigger.event.rawValue {
+            guard let coordinator = manager?.coordinator,
+                await coordinator.confirmTrigger(trigger, of: owner.title)
+            else { return }
+        }
+        store.update(extension: name, trigger: trigger.name) {
+            $0 = ExtensionTriggerPolicy.enabling($0, for: trigger)
         }
     }
 

@@ -58,7 +58,8 @@ export interface BestcastTriggerEvent<Payload = BestcastTriggerPayload> {
   previous?: unknown;
 }
 
-/** An export named by a trigger: `export default async function (event) { … }`. */
+/** An export named by a trigger: `export default async function (event) { … }`. It runs with no
+ * window: clipboard reads, paste, selection reads, `open` and sign-in are refused. */
 export type BestcastTriggerHandler<Payload = BestcastTriggerPayload> = (
   event: BestcastTriggerEvent<Payload>,
 ) => unknown | Promise<unknown>;
@@ -104,6 +105,7 @@ export interface BestcastManifest {
     throttle?: string;
     schedule?: { every: string; weekdays?: number[] } | { at: string; weekdays?: number[] };
     bundleIds?: string[];
+    /** `selection.hotkey` only: a string result replaces the selection once the user allows it. */
     replacesSelection?: boolean;
   }>;
   exports?: Array<{ name: string; export: string; public?: boolean; description?: string }>;

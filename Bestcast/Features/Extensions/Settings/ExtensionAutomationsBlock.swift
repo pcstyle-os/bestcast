@@ -16,7 +16,7 @@ struct ExtensionAutomationsBlock: View {
                 Divider()
                 heading("Automations")
                 ForEach(triggers) { trigger in
-                    TriggerRows(extensionName: name, trigger: trigger, engine: engine)
+                    TriggerRows(installed: installed, trigger: trigger, engine: engine)
                 }
                 if !callers.isEmpty {
                     heading("Allowed to use this extension")
@@ -25,6 +25,7 @@ struct ExtensionAutomationsBlock: View {
                             Button("Revoke") {
                                 engine.store.revoke(caller: grant.caller, extension: name, export: grant.export)
                             }
+                            .accessibilityLabel("Revoke \(grant.caller)’s use of \(grant.export)")
                         }
                     }
                 }
@@ -50,14 +51,16 @@ struct ExtensionAutomationsBlock: View {
 
 /// A trigger's switch, then the consents and the shortcut or link that belong to it alone.
 private struct TriggerRows: View {
-    let extensionName: String
+    let installed: InstalledExtension
     let trigger: ExtensionTrigger
     let engine: ExtensionTriggerEngine
 
+    private var extensionName: String { installed.manifest.name }
     private var key: String { ExtensionTriggerEngine.key(extension: extensionName, trigger: trigger.name) }
 
     var body: some View {
         let state = engine.store.state(extension: extensionName, trigger: trigger.name)
+        let isOn = ExtensionTriggerPolicy.isOn(trigger, state: state)
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
@@ -66,13 +69,20 @@ private struct TriggerRows: View {
                         .font(.caption)
                         .foregroundStyle(state.lastError == nil ? Color.secondary : Color.orange)
                         .fixedSize(horizontal: false, vertical: true)
+                    history(state: state, isOn: isOn)
                 }
                 Spacer(minLength: Theme.Spacing.lg)
+                if isOn, !engine.store.isPaused, trigger.event != .selectionHotkey {
+                    Button("Run Now") { engine.runNow(trigger: trigger.name, of: extensionName) }
+                        .accessibilityLabel("Run \(trigger.title) now")
+                }
                 Toggle(
                     trigger.title,
                     isOn: Binding(
-                        get: { state.enabled },
-                        set: { engine.setEnabled($0, trigger: trigger.name, of: extensionName) })
+                        get: { isOn },
+                        set: { value in
+                            Task { await engine.setEnabled(value, trigger: trigger, of: installed) }
+                        })
                 )
                 .labelsHidden()
             }
@@ -103,6 +113,23 @@ private struct TriggerRows: View {
                         .truncationMode(.middle)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func history(state: ExtensionTriggerState, isOn: Bool) -> some View {
+        let next = isOn ? engine.nextRuns[key] : nil
+        if state.lastRun != nil || next != nil {
+            HStack(spacing: Theme.Spacing.xs) {
+                if let lastRun = state.lastRun {
+                    Text("Last run \(lastRun.formatted(.relative(presentation: .named)))")
+                }
+                if let next {
+                    Text("Next \(next.formatted(date: .abbreviated, time: .shortened))")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.tertiary)
         }
     }
 
