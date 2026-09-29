@@ -222,11 +222,12 @@ struct BuiltInToolPrompt: Equatable, Sendable {
         }
     }
 
+    /// A clipped quote says how long the whole is, so a write cannot hide its tail past the cut.
     static func quote(_ text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let preview =
-            trimmed.count > previewLength ? trimmed.prefix(previewLength) + "\u{2026}" : trimmed
-        return "\u{201C}\(preview)\u{201D}"
+        guard trimmed.count > previewLength else { return "\u{201C}\(trimmed)\u{201D}" }
+        return "\u{201C}\(trimmed.prefix(previewLength))\u{2026}\u{201D}\n\n"
+            + "Only the start is shown; the whole is \(trimmed.count) characters."
     }
 }
 
@@ -246,7 +247,8 @@ enum BuiltInFileAccess {
         let root = home.standardizedFileURL.pathComponents
         guard path.count > root.count, Array(path.prefix(root.count)) == root else { return false }
         let inside = path.dropFirst(root.count)
-        return inside.first != "Library" && !inside.contains { $0.hasPrefix(".") }
+        // APFS ignores case, so `~/library` is the same folder and must be refused alike.
+        return inside.first?.lowercased() != "library" && !inside.contains { $0.hasPrefix(".") }
     }
 }
 

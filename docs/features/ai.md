@@ -1240,8 +1240,10 @@ Calculator and System — is switched on in Settings → AI → Integrations, al
 - **A write asks on every call, and nothing is remembered.** `BuiltInToolPolicy` allows a read once
   its integration is on and returns `.ask` for anything that copies, creates, appends, opens or
   moves; `BuiltInToolPrompt` shows exactly what will happen — the text, the note's title, the
-  quicklink's resolved address — through `core.confirm`, one dialog at a time. There is no "always"
-  for a built-in, unlike an MCP server's `MCPTrust`.
+  quicklink's resolved address — through `core.confirm`, one dialog at a time; text too long to show
+  whole is clipped with its full length stated. There is no "always" for a built-in, unlike an MCP
+  server's `MCPTrust`. The API loop runs only a tool it offered that turn, so a model naming another
+  gets a refusal.
 - **The model is described in `Model/`; the Mac is touched in `Service/`.** `BuiltInTool` holds the
   name, schema and read/write effect, `BuiltInToolRequest.parse` checks every argument before
   anything runs, and only `BuiltInToolRunner` reaches AppKit, the stores and the permissions.
@@ -1249,7 +1251,7 @@ Calculator and System — is switched on in Settings → AI → Integrations, al
   action without Accessibility, and a feature switched off in its own pane all answer with a
   sentence the model can relay; none of them raises a system prompt.
 - **Files stay in home and out of sight.** `BuiltInFileAccess` refuses anything outside home, under
-  `~/Library` or with a hidden component, checks again after resolving symlinks, and reads only a
+  `~/Library` (in any case, since APFS ignores it) or with a hidden component, checks again after resolving symlinks, and reads only a
   regular UTF-8 file under 64 KB.
 - **An integration's switch is a capability grant**, so `aiIntegrations` has no `settings.json` key
   and is excluded from backups. `aiEnabled` off withdraws every one.
@@ -1274,7 +1276,7 @@ streamable HTTP on `127.0.0.1` at a random port, one path per integration (`/mcp
 a bearer token generated per launch. It starts on the first CLI turn that needs it and stops when
 no integration is left on. The Network framework's `NetworkListener` accepts the connections;
 `LoopbackMCP` is the pure half — HTTP parsing with a 256 KB cap, the token check and the JSON-RPC
-answers. A CLI's own permission question for a built-in is answered yes when the integration is on,
+answers, each tool result clipped to the API loop's 32 KB. A CLI's own permission question for a built-in is answered yes when the integration is on,
 and the write dialog comes from the endpoint's `tools/call`, where the arguments are; so the same
 dialog asks on every route. Codex waits 60 seconds for a tool call by default, so a dialog left
 open longer fails that call. Extension tools get a second endpoint of the same kind, owned by
