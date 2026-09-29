@@ -16,7 +16,8 @@ enum AppActionsMenu {
     static func content(
         app: AppEntry, searchQuery: String, core: AppCore, running: Bool,
         favorites: FavoriteActions, onResetRanking: @escaping () -> Void,
-        onHideFromSearch: @escaping () -> Void, onDisable: @escaping () -> Void
+        onTogglePin: @escaping () -> Void, onHideFromSearch: @escaping () -> Void,
+        onDisable: @escaping () -> Void
     ) -> PopoverMenuContent {
         let primarySymbol =
             switch app.kind {
@@ -61,6 +62,11 @@ enum AppActionsMenu {
                 })
         }
         if isPersistent {
+            let pinned = core.favorites.isPinned(app)
+            items.append(
+                PopoverMenuItem(
+                    title: pinned ? "Unpin from Search" : "Pin to Search",
+                    systemImage: pinned ? "pin.slash" : "pin", shortcut: "⌘.", action: onTogglePin))
             items += personalization(app: app, core: core)
         }
         if core.launcherRanking.hasRanking(for: app.preferenceKey) {
@@ -75,7 +81,7 @@ enum AppActionsMenu {
                     title: "Hide from Search", systemImage: "eye.slash", shortcut: "⇧⌘H",
                     action: onHideFromSearch))
         }
-        if app.canDisable {
+        if isPersistent, app.canDisable {
             items.append(
                 PopoverMenuItem(
                     title: "Disable Command", systemImage: "nosign", shortcut: "⇧⌘D",
@@ -175,7 +181,7 @@ enum AppActionsMenu {
         return items
     }
 
-    /// Only an app has a bundle ID worth copying, and only an extension command a deeplink.
+    /// Only an app has a bundle ID worth copying; a deeplink goes wherever a hotkey could.
     private static func copyItems(app: AppEntry, core: AppCore) -> [PopoverMenuItem] {
         var items = [
             PopoverMenuItem(
@@ -190,10 +196,10 @@ enum AppActionsMenu {
                     core.launcherCoordinator.copyBundleID(app)
                 })
         }
-        if app.kind == .extensionCommand {
+        if app.hasDeepLink {
             items.append(
                 PopoverMenuItem(title: "Copy Deeplink", systemImage: "link", shortcut: "⇧⌘C") {
-                    core.extensionCoordinator.copyDeepLink(for: app)
+                    core.launcherCoordinator.copyDeepLink(app)
                 })
         }
         return items

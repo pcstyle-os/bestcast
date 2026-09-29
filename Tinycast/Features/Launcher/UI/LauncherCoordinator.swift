@@ -329,8 +329,9 @@ final class LauncherCoordinator {
         }
     }
 
-    /// Unlike a hide, the hotkey stops too; the checkbox in its Settings pane turns it back on.
+    /// Unlike a hide, the hotkey and deeplink stop too; Settings is where it comes back on.
     func disable(_ app: AppEntry) {
+        guard app.canDisable else { return }
         switch app.kind {
         case .customCommand:
             guard let id = CustomCommand.id(fromEntryID: app.id) else { return }
@@ -339,9 +340,41 @@ final class LauncherCoordinator {
             guard let id = Quicklink.id(fromEntryID: app.id) else { return }
             quicklinkCoordinator.setQuicklinkEnabled(false, id: id)
         default:
-            return
+            core.visibility.setDisabled(true, key: app.preferenceKey)
         }
         core.showMessage("Disabled \(app.name)")
+    }
+
+    func togglePin(_ app: AppEntry) {
+        let favorites = core.favorites
+        favorites.togglePin(app)
+        core.showMessage(favorites.isPinned(app) ? "Pinned \(app.name)" : "Unpinned \(app.name)")
+    }
+
+    /// An extension command keeps the Raycast-shaped link other tools already know how to write.
+    func copyDeepLink(_ app: AppEntry) {
+        guard app.kind != .extensionCommand else {
+            extensionCoordinator.copyDeepLink(for: app)
+            return
+        }
+        guard app.hotKeyAction != nil, let url = LauncherDeepLink.url(forKey: app.preferenceKey)
+        else { return }
+        Paster.copyPlainText(url.absoluteString)
+        core.showMessage("Copied deeplink")
+    }
+
+    /// An unlisted command is absent from the index yet still runs, so its ID is the fallback.
+    func runDeepLink(key: String) {
+        let entry = core.appIndex.apps.first { $0.preferenceKey == key }
+        guard
+            let action = entry?.hotKeyAction ?? CommandID(rawValue: key).map(HotKeyAction.command)
+        else {
+            core.showMessage("Nothing in Tinycast answers that link", tone: .danger)
+            return
+        }
+        if !core.hotKeys.perform(action) {
+            core.showMessage("\(entry?.name ?? "That command") is disabled", tone: .danger)
+        }
     }
 
     func copyName(_ app: AppEntry) {

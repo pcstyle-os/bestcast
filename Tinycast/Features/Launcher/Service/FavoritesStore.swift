@@ -1,18 +1,28 @@
 import Foundation
 
-/// Favorite apps as an ordered key list, pinned to the top while the search is empty.
+/// Favorites lead the empty list and pins lead a typed search; one cleanup drops a key from both.
 @MainActor
 @Observable
 final class FavoritesStore {
     private let defaults = UserDefaults.standard
     private let key = "favoriteApps"
+    private let pinnedDefaultsKey = "pinnedLauncherItems"
 
     private(set) var keys: [String]
-    /// AppIndex includes this in its result key, invalidating a list when the pinning changes.
+    /// Settable so settings.json can bind it; the order is only the order they were pinned in.
+    var pinnedKeys: [String] {
+        didSet {
+            guard pinnedKeys != oldValue else { return }
+            revision &+= 1
+            defaults.set(pinnedKeys, forKey: pinnedDefaultsKey)
+        }
+    }
+    /// AppIndex includes this in its result key, invalidating a list when either list changes.
     private(set) var revision = 0
 
     init() {
         keys = defaults.stringArray(forKey: key) ?? []
+        pinnedKeys = defaults.stringArray(forKey: pinnedDefaultsKey) ?? []
     }
 
     func key(for app: AppEntry) -> String { app.preferenceKey }
@@ -27,6 +37,7 @@ final class FavoritesStore {
 
     func remove(keys removedKeys: Set<String>) {
         guard !removedKeys.isEmpty else { return }
+        pinnedKeys.removeAll { removedKeys.contains($0) }
         let updated = keys.filter { !removedKeys.contains($0) }
         guard updated != keys else { return }
         keys = updated
@@ -41,6 +52,13 @@ final class FavoritesStore {
             keys.append(k)
         }
         commit()
+    }
+
+    func isPinned(_ app: AppEntry) -> Bool { pinnedKeys.contains(key(for: app)) }
+
+    func togglePin(_ app: AppEntry) {
+        let k = key(for: app)
+        if pinnedKeys.contains(k) { pinnedKeys.removeAll { $0 == k } } else { pinnedKeys.append(k) }
     }
 
     /// The pair comes from the visible order, so hidden entries keep their slots.

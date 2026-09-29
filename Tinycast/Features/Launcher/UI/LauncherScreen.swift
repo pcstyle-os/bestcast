@@ -279,6 +279,7 @@ struct LauncherScreen: PaletteScreen {
                     // Reset can move the item; keep the highlight on the item whose action ran.
                     if let index = rows.firstIndex(of: .entry(app)) { vm.selection = index }
                 },
+                onTogglePin: { _ = performRowAction(.pin, at: selection) },
                 onHideFromSearch: { _ = hideFromSearch(at: selection) },
                 onDisable: { _ = disable(at: selection) })
         case .fallback(let fallback, let app):
@@ -361,7 +362,8 @@ struct LauncherScreen: PaletteScreen {
         case .favoriteSlot(let index): return launchFavorite(at: index)
         case .copyCalculation: return copyCalculation(at: selection)
         case .disableCommand: return disable(at: selection)
-        case .configureCommand, .recordHotKey, .editAlias, .copyName, .copyBundleID, .copyFile:
+        case .configureCommand, .recordHotKey, .editAlias, .copyName, .copyBundleID, .copyFile,
+            .pin:
             return performRowAction(shortcut, at: selection)
         default: return false
         }
@@ -378,8 +380,11 @@ struct LauncherScreen: PaletteScreen {
         case .copyName: launcher.copyName(app)
         case .copyBundleID where app.kind == .application && app.bundleID != nil:
             launcher.copyBundleID(app)
-        case .copyFile where app.kind == .extensionCommand:
-            core.extensionCoordinator.copyDeepLink(for: app)
+        case .copyFile where app.hasDeepLink: launcher.copyDeepLink(app)
+        // ⌘. skips `requiresExpanded` for the other screens, so the compact bar is refused here.
+        case .pin where !core.paletteCoordinator.paletteIsCollapsed:
+            launcher.togglePin(app)
+            follow(app)
         default: return false
         }
         return true
@@ -387,7 +392,8 @@ struct LauncherScreen: PaletteScreen {
 
     /// ⇧⌘D: like a hide, the row leaves the list, so the highlight takes the place it vacated.
     private func disable(at selection: Int) -> Bool {
-        guard let app = entry(at: selection), app.canDisable, let index = results.firstIndex(of: app)
+        guard let app = entry(at: selection), app.canDisable, !CommandCatalog.isQueryDriven(app),
+            let index = results.firstIndex(of: app)
         else { return false }
         core.launcherCoordinator.disable(app)
         select(row: min(index, max(reorderedResults().entries.count - 1, 0)))

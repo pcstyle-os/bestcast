@@ -297,7 +297,7 @@ final class HotKeyManager {
     private func register(_ action: HotKeyAction) {
         guard let shortcut = binding(for: action)?.shortcut else { return }
         center.register(id: action.defaultsKey, shortcut: shortcut) { [weak self] in
-            self?.perform(action)
+            _ = self?.perform(action)
         }
     }
 
@@ -311,9 +311,11 @@ final class HotKeyManager {
         modifierTapMonitor.update(bound: Set(modifierTaps.keys))
     }
 
-    private func perform(_ action: HotKeyAction) {
+    /// Also the launcher deeplink's funnel, so a link obeys every switch its hotkey does.
+    @discardableResult
+    func perform(_ action: HotKeyAction) -> Bool {
         // The category switch, the way each feature switch already guards its own funnel.
-        guard allowsAction?(action) ?? true else { return }
+        guard allowsAction?(action) ?? true else { return false }
         switch action {
         case .togglePalette: onTogglePalette?()
         case .command(let id): onRunCommand?(id)
@@ -331,6 +333,7 @@ final class HotKeyManager {
         case .aiPreset(let id): onRunAIPreset?(id)
         case .extensionCommand(let entryID): onRunExtensionCommand?(entryID)
         }
+        return true
     }
 
     // MARK: - UUID-keyed indexes

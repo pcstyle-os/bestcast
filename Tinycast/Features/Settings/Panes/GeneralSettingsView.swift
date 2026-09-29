@@ -186,6 +186,7 @@ struct GeneralSettingsView: View {
                     SettingsRowTitle(.generalSearch, "Learned ranking")
                     Text("Learned privately from the results you pick.")
                 }
+                DisabledCommandsList()
             } header: {
                 SettingsSectionHeader(.generalSearch)
             }

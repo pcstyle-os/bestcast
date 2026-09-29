@@ -15,7 +15,8 @@ earliest scope wins).
   list disables beneath it — the guard sits in the one dispatch funnel, the way each feature switch
   already guards its own. The per-item checkbox beside it is the narrow tool: it hides one row and
   leaves that row's shortcut firing, and **Hide from Search** in the ⌘K menu ticks that checkbox off for the
-  kinds whose pane can tick it back on. A new category must be wired into
+  kinds whose pane can tick it back on. **Disable Command** is the per-item act that silences the
+  chord too — see [the ⌘K menu](#the-k-menu). A new category must be wired into
   `VisibilityStore.allowsHotKey`, or its chords keep running while its pane reads off.
 - **One command, one pane, one switch.** `SettingsTab.ownedCommands` is the whole table of which pane
   lists a command's shortcut, alias and launcher checkbox. A feature that names its commands there
@@ -350,7 +351,7 @@ result will answer to is visible without opening anything.
 An alias is set from the row itself too: ⌘K's **Add / Edit Alias** (⌥⌘A) opens a text dialog
 through `DialogController.editAlias` and writes the same `AliasStore.setAlias` Settings does, so a
 blank answer clears it. Visibility still goes only one way from ⌘K — it can hide or disable a row,
-but putting it back is the pane's checkbox (see [the ⌘K menu](#the-k-menu)). Every pane built
+but putting it back is Settings' job (see [the ⌘K menu](#the-k-menu)). Every pane built
 on `LauncherItemsSection` puts an `AliasField` on each row, dressed like the `ShortcutRecorder`
 beside it; edits store as typed and trim when the field loses focus, and a blank means none. That
 list filters by **membership only**, keeping the index's name order — re-ranking it per keystroke
@@ -676,8 +677,8 @@ whose icon moved.
 | Group | Rows |
 | --- | --- |
 | Open | the kind's verb ↵, Show in Finder ⌘↵ |
-| Manage | Add / Remove from Favorites ⇧⌘F and the moves, Configure ⇧⌘,, Record / Change Hotkey ⌥⌘R, Add / Edit Alias ⌥⌘A, Reset Ranking, Hide from Search ⇧⌘H, Disable Command ⇧⌘D |
-| Copy | Copy Name ⌥⌘C, Copy Bundle ID ⇧⌘B (applications), Copy Deeplink ⇧⌘C (extension commands) |
+| Manage | Add / Remove from Favorites ⇧⌘F and the moves, Pin / Unpin ⌘., Configure ⇧⌘,, Record / Change Hotkey ⌥⌘R, Add / Edit Alias ⌥⌘A, Reset Ranking, Hide from Search ⇧⌘H, Disable Command ⇧⌘D |
+| Copy | Copy Name ⌥⌘C, Copy Bundle ID ⇧⌘B (applications), Copy Deeplink ⇧⌘C (every row a hotkey can run, applications aside) |
 | App / Extension | Restart, Quit, Uninstall; background refresh, Configure Extension ⇧⌘,, Uninstall Extension |
 
 A query-driven row gets none of Manage or Copy, for the reason it can't be a favorite.
@@ -690,15 +691,53 @@ A query-driven row gets none of Manage or Copy, for the reason it can't be a fav
   `DialogController.recordHotKey` sets `HotKeyManager.recordingAction` a turn after the panel is key,
   so the one `ShortcutCaptureSession` binds, clears on Delete or cancels on Esc exactly as Settings
   does, and `ShortcutCaptureField` closes the dialog whenever that session stops.
-- **Pin is Favorites.** There is no second concept; ⇧⌘F is the pin.
+- **Pin and Favorite are different places.** A favorite leads the *empty* list; a pin leads a *typed*
+  search. `FavoritesStore.pinnedKeys` holds the pins beside `keys`, so deleting an entry drops both
+  in one `remove(keys:)`, and `AppIndex.orderedResults` moves pinned rows to the front with
+  `LauncherPins.leading` — a stable partition, so the ranking still orders the pins among themselves
+  and the rest below them. A category listing (`apps`, `commands`, …) is left alone: it is laid out in
+  sections, and a pinned row would leave its own. ⌘. is the chord in the expanded palette only, since
+  the compact bar never has a typed query to lead. `settings.json` carries the list as `search.pinned`.
 - **Hide from Search and Disable Command are different acts.** A hide ticks the pane's search checkbox
-  and leaves the hotkey firing; a disable turns off the item's own enabled switch, which also silences
-  its hotkey. Only custom commands and quicklinks have such a switch (`AppEntry.canDisable`), and the
-  checkbox on their Settings row turns them back on. Every other kind already has Hide, or its
-  feature's master switch, and a third per-item flag would be a preference nothing else reads.
-- **Copy Deeplink** is extension-only: `tinycast://extensions/<author>/<extension>/<command>` from
-  `ExtensionDeepLink.url`, which `parse` reads back. Built-in commands have no URL that runs them —
-  their `tinycast://command/…` is a catalog placeholder — so they are offered no deeplink.
+  and leaves the hotkey firing; a disable turns the row off everywhere it can run from — search, its
+  hotkey, its alias and its deeplink. Custom commands and quicklinks turn off their own enabled switch,
+  and the checkbox on their Settings row turns them back on. Every other row a hotkey can run, bar
+  applications (`AppEntry.canDisable`), lands in `VisibilityStore.disabledItemKeys`: `isVisible`
+  drops it from search, `AppCore`'s `hotKeys.allowsAction` refuses its chord, and **General › Search ›
+  Disabled commands** lists each one with an Enable button. An application is left to Hide, since
+  Disable could not stop it opening from Finder or the Dock.
+- **Copy Deeplink** is offered on every row with `AppEntry.hasDeepLink` — a hotkey action and not an
+  application. An extension command copies
+  `tinycast://extensions/<author>/<extension>/<command>` from `ExtensionDeepLink.url`; everything else
+  copies `tinycast://run/<preferenceKey>` from `LauncherDeepLink.url`, percent-encoded so a bundle ID
+  or a `command:` key survives as one path segment. `AppCore.handleOpenURL` tries `LauncherDeepLink`
+  before `ExtensionDeepLink`, and `LauncherCoordinator.runDeepLink` runs the row through
+  `HotKeyManager.perform` — the hotkey funnel — so a link obeys every switch its chord does and a
+  disabled row answers with a HUD instead. A key nothing answers gets a HUD too, never a silent no-op.
+
+`launcher-actions-test` covers `LauncherDeepLink` and `LauncherPins`; the menu itself is a manual
+check.
+
+### Manual sweep
+
+- Open ⌘K on an app, a built-in command, a Settings-owned command (Clipboard History), an extension
+  command and a quicklink. Each hint is a chord that works with the menu closed, and VoiceOver reads
+  each row by its title.
+- **Configure** (⇧⌘,) on Clipboard History opens Settings › Clipboard; on an app, Settings ›
+  Applications; on an extension command, that extension's row.
+- **Record Hotkey** (⌥⌘R): the dialog captures a chord, Delete clears it and Esc cancels without
+  binding. The row's detail shows the new chord the next time ⌘K opens.
+- **Add Alias** (⌥⌘A): type the alias and the row answers to it; a blank answer clears it.
+- **Pin to Search** (⌘.) on a command, then type a query it matches weakly: it leads with a pin
+  glyph. Typing `commands` still lists sections unchanged. ⌘. again unpins it.
+- **Disable Command** (⇧⌘D) on a command with a hotkey: the row leaves search and its alias stops
+  matching. The chord does nothing, and `open tinycast://run/<key>` shows a "disabled" HUD. General ›
+  Search › Disabled commands lists it, and Enable brings back all three.
+- **Copy Deeplink** (⇧⌘C) on a built-in command: `open` the copied link from Terminal and it runs.
+  An edited link to nothing shows "Nothing in Tinycast answers that link".
+- **Copy Name** (⌥⌘C), and on an app **Copy Bundle ID** (⇧⌘B) and **Show in Finder** (⌘↵).
+- **Move Favorite Up / Down** (⌥⌘↑ / ⌥⌘↓) on favorites with an empty query: the highlight follows
+  the row.
 
 ## Favorites
 

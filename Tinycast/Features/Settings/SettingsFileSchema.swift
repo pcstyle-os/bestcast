@@ -4,22 +4,23 @@ import Foundation
 @MainActor
 enum SettingsFileSchema {
     static func bindings(
-        settings: AppSettings, ai: AISettingsStore, quickActions: QuickActionSettingsStore,
-        windowManagement: WindowManagementSettingsFile
+        settings: AppSettings, favorites: FavoritesStore, ai: AISettingsStore,
+        quickActions: QuickActionSettingsStore, windowManagement: WindowManagementSettingsFile
     ) -> [SettingsFileBinding] {
         var bindings: [SettingsFileBinding] = []
         for key in SettingsFileKey.allCases {
             bindings.append(
                 binding(
-                    for: key, settings: settings, ai: ai, quickActions: quickActions,
-                    windowManagement: windowManagement))
+                    for: key, settings: settings, favorites: favorites, ai: ai,
+                    quickActions: quickActions, windowManagement: windowManagement))
         }
         return bindings
     }
 
     private static func binding(
-        for key: SettingsFileKey, settings: AppSettings, ai: AISettingsStore,
-        quickActions: QuickActionSettingsStore, windowManagement: WindowManagementSettingsFile
+        for key: SettingsFileKey, settings: AppSettings, favorites: FavoritesStore,
+        ai: AISettingsStore, quickActions: QuickActionSettingsStore,
+        windowManagement: WindowManagementSettingsFile
     ) -> SettingsFileBinding {
         func bind<Root: AnyObject, Value: SettingsFileValue>(
             _ root: Root, _ path: ReferenceWritableKeyPath<Root, Value>,
@@ -46,6 +47,8 @@ enum SettingsFileSchema {
         case .calcNumberStyle: return bind(settings, \.calcNumberStyle)
         case .launcherShowsSuggestions: return bind(settings, \.launcherShowsSuggestions)
         case .rootSearchSensitivity: return bind(settings, \.rootSearchSensitivity)
+        case .launcherPinnedItems:
+            return bind(favorites, \.pinnedKeys) { LauncherPins.normalized($0) }
         case .searchScopes: return bind(settings, \.searchScopes) { SearchScopes.normalize($0) }
         case .customCommandsEnabled: return bind(settings, \.customCommandsEnabled)
         case .customCommandsShowInLauncher: return bind(settings, \.customCommandsShowInLauncher)

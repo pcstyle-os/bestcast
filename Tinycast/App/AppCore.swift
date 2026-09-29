@@ -387,7 +387,9 @@ final class AppCore {
             }
             hotKeys.displayName = { [weak self] action in self?.hotKeyDisplayName(for: action) }
             hotKeys.allowsAction = { [weak self] action in
-                guard let self, visibility.allowsHotKey(action) else { return false }
+                guard let self, visibility.allowsHotKey(action), !isDisabledEntry(action) else {
+                    return false
+                }
                 // A disabled feature drops its commands from the launcher; their shortcuts go too.
                 guard case .command(let id) = action else { return true }
                 return appIndex.isCommandEnabled(id)
@@ -457,12 +459,22 @@ final class AppCore {
         case .ignored:
             break
         }
+        if let key = LauncherDeepLink.key(from: url) {
+            launcherCoordinator.runDeepLink(key: key)
+            return
+        }
         guard ExtensionDeepLink.claims(url) else { return }
         guard let link = ExtensionDeepLink.parse(url: url) else {
             paletteCoordinator.showPalette(mode: .launcher, restoreAnyMode: true)
             return
         }
         extensionCoordinator.runDeepLink(link)
+    }
+
+    /// A disabled row keeps its binding, so re-enabling it brings the hotkey back unchanged.
+    private func isDisabledEntry(_ action: HotKeyAction) -> Bool {
+        guard !visibility.disabledItemKeys.isEmpty else { return false }
+        return appIndex.apps.contains { $0.hotKeyAction == action && visibility.isDisabled($0) }
     }
 
     /// The store-backed half of the conflict message; `HotKeyManager` names the catalogs itself.
@@ -800,7 +812,8 @@ final class AppCore {
         let file = SettingsFileRepository(
             fileURL: AppPaths.settingsFile(),
             bindings: SettingsFileSchema.bindings(
-                settings: settings, ai: aiSettings, quickActions: quickActionSettings,
+                settings: settings, favorites: favorites, ai: aiSettings,
+                quickActions: quickActionSettings,
                 windowManagement: WindowManagementSettingsFile(
                     sizes: customWindowSizes, layouts: windowLayouts, rooms: rooms, hotKeys: hotKeys)))
         file.onIssues = { [weak self] issues in

@@ -227,8 +227,11 @@ struct AppEntry: Identifiable, Hashable, Sendable {
 
     var canHideFromSearch: Bool { kind.descriptor.canHideFromSearch }
 
-    /// The two kinds with an enabled switch of their own, which is what a disable turns off.
-    var canDisable: Bool { kind == .customCommand || kind == .quicklink }
+    /// Anything a hotkey can run; custom commands and quicklinks turn off their own switch.
+    var canDisable: Bool { hotKeyAction != nil && kind != .application }
+
+    /// An app already has its file to open by; a link would only toggle it the hotkey's way.
+    var hasDeepLink: Bool { hotKeyAction != nil && kind != .application }
 
     var canDragOut: Bool { kind.descriptor.canDragOut }
 
@@ -724,7 +727,7 @@ final class AppIndex {
         return byUsage(listed, usage: ranking.snapshot())
     }
 
-    /// The launcher's rows: ranked matches, or favorites, suggestions and each kind by usage.
+    /// The launcher's rows: ranked matches pins first, or favorites, suggestions and kinds by usage.
     func orderedResults(
         query: String, visibility: VisibilityStore, favorites: FavoritesStore, hotKeys: HotKeyManager
     ) -> Results {
@@ -738,7 +741,13 @@ final class AppIndex {
         return resultsMemo.value(for: key) {
             // Filtering stays downstream of `matches` so that memo is never keyed on hidden state.
             let visible = matches(q).filter(visibility.isVisible)
-            guard q.isEmpty else { return Results(entries: visible) }
+            // A category listing is laid out in sections, which a pinned row must not leave.
+            guard q.isEmpty else {
+                guard AppEntry.Kind.named(by: q) == nil else { return Results(entries: visible) }
+                return Results(
+                    entries: LauncherPins.leading(
+                        visible, pinned: Set(favorites.pinnedKeys), key: \.preferenceKey))
+            }
             let split = favorites.ordered(visible)
             let suggested =
                 showsSuggestions ? suggestions(from: split.rest, usage: usage, hotKeys: hotKeys) : []

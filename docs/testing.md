@@ -106,6 +106,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `hotkey-test` | `HotKeys/Model/DoubleTapModifier.swift`, `DoubleTapDetector.swift`, `GlobeTapDetector.swift`, `HotKeyBinding.swift`, `HotKeySpelling.swift`, `HyperKey.swift`, `HyperKeyRewriter.swift`, `HotKeyAction.swift`, `HotKeyRegistrationIssue.swift`, `Service/KeyShortcut.swift`, and the command→action mapping in `Launcher/Model/CommandID.swift` |
 | `fallback-test` | `Launcher/Model/Fallback.swift`, plus the `CommandID` and `Quicklink` ids it is built from |
 | `command-owner-test` | `SettingsTab.ownedCommands` and `CommandID.owner` in `Launcher/Model/CommandID.swift` — the pane ⌘K's Configure Command opens for a built-in |
+| `launcher-actions-test` | `Launcher/Model/LauncherDeepLink.swift` — the `tinycast://run/…` link Copy Deeplink writes and `AppCore` reads back — and `LauncherPins.swift`, the pinned-first order |
 | `dictionary-test` | `Dictionary/Model/DictionaryEntry.swift`, `DictionaryMarkup.swift` — a real XHTML record and the plain-text fallback, read into page blocks |
 | `callout-test` | `DesignSystem/Theme.swift`, `HotKeys/UI/CalloutPlacement.swift` |
 | `system-action-test` | `SystemActions/Model/SystemAction.swift` |
@@ -434,6 +435,8 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - Learned ranking still surfaces your habitual result for a short query
 - An application row drags onto the Dock and into a Finder window as a copy, never a move, and a
   landed drop hides the palette; a click still launches; no other kind of row drags
+- The ⌘K menu's sweep in [launcher.md](features/launcher.md#manual-sweep): Pin, Disable and
+  Enable, Copy Deeplink run from Terminal, Configure, Record Hotkey and Alias
 
 ### Hotkeys
 

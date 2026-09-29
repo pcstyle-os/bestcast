@@ -13,6 +13,8 @@ struct SettingsBackup: Codable {
     var favoriteApps: [String]?
     var hiddenLauncherItems: [String]?
     var hiddenLauncherKinds: [String]?
+    var disabledLauncherItems: [String]?
+    var pinnedLauncherItems: [String]?
     var launcherAliases: [String: String]?
     var pinnedEmoji: [String]?
 
@@ -112,6 +114,8 @@ struct SettingsBackup: Codable {
         var hotkeys = 0
         var favorites = 0
         var hiddenItems = 0
+        var disabledItems = 0
+        var pinnedItems = 0
         var aliases = 0
         var pinnedEmoji = 0
         var customCommands = 0
@@ -243,6 +247,8 @@ extension SettingsBackup {
         backup.favoriteApps = core.favorites.keys
         backup.hiddenLauncherItems = Array(core.visibility.hiddenItemKeys)
         backup.hiddenLauncherKinds = Array(core.visibility.disabledKinds)
+        backup.disabledLauncherItems = Array(core.visibility.disabledItemKeys)
+        backup.pinnedLauncherItems = core.favorites.pinnedKeys
         backup.launcherAliases = core.aliases.aliases
         backup.pinnedEmoji = core.pinnedEmoji.glyphs
         return backup
@@ -276,11 +282,19 @@ extension SettingsBackup {
             core.favorites.replace(keys: favoriteApps)
             summary.favorites = favoriteApps.count
         }
-        if hiddenLauncherItems != nil || hiddenLauncherKinds != nil {
+        if let pinnedLauncherItems {
+            core.favorites.pinnedKeys = LauncherPins.normalized(pinnedLauncherItems)
+            summary.pinnedItems = core.favorites.pinnedKeys.count
+        }
+        if hiddenLauncherItems != nil || hiddenLauncherKinds != nil || disabledLauncherItems != nil {
             let items = hiddenLauncherItems ?? Array(core.visibility.hiddenItemKeys)
             let kinds = hiddenLauncherKinds ?? Array(core.visibility.disabledKinds)
-            core.visibility.replace(hiddenItems: items, disabledKinds: kinds)
-            summary.hiddenItems = items.count
+            let disabled = disabledLauncherItems ?? Array(core.visibility.disabledItemKeys)
+            core.visibility.replace(hiddenItems: items, disabledKinds: kinds, disabledItems: disabled)
+            if hiddenLauncherItems != nil || hiddenLauncherKinds != nil {
+                summary.hiddenItems = items.count
+            }
+            summary.disabledItems = disabledLauncherItems?.count ?? 0
         }
         if let launcherAliases {
             core.aliases.replace(launcherAliases)

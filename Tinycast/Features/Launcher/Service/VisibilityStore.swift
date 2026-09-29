@@ -7,8 +7,11 @@ final class VisibilityStore {
     private let defaults = UserDefaults.standard
     private let itemsKey = "hiddenLauncherItems"
     private let kindsKey = "hiddenLauncherKinds"
+    private let disabledItemsKey = "disabledLauncherItems"
 
     private(set) var hiddenItemKeys: Set<String>
+    /// Off in every path, hotkey and deeplink included, where a hidden item only leaves the list.
+    private(set) var disabledItemKeys: Set<String>
     private(set) var disabledKinds: Set<String>
     /// AppIndex includes this in its result key, invalidating a list when the visible set moves.
     private(set) var revision = 0
@@ -16,22 +19,25 @@ final class VisibilityStore {
     init() {
         hiddenItemKeys = Set(defaults.stringArray(forKey: itemsKey) ?? [])
         disabledKinds = Set(defaults.stringArray(forKey: kindsKey) ?? [])
+        disabledItemKeys = Set(defaults.stringArray(forKey: disabledItemsKey) ?? [])
     }
 
-    /// Replace both exclusion sets at once (used when importing a settings backup).
-    func replace(hiddenItems: [String], disabledKinds newKinds: [String]) {
+    /// Replace every exclusion set at once (used when importing a settings backup).
+    func replace(hiddenItems: [String], disabledKinds newKinds: [String], disabledItems: [String]) {
         hiddenItemKeys = Set(hiddenItems)
         disabledKinds = Set(newKinds)
+        disabledItemKeys = Set(disabledItems)
         revision &+= 1
         defaults.set(Array(hiddenItemKeys), forKey: itemsKey)
         defaults.set(Array(disabledKinds), forKey: kindsKey)
+        defaults.set(Array(disabledItemKeys), forKey: disabledItemsKey)
     }
 
     func key(for entry: AppEntry) -> String { entry.preferenceKey }
 
     /// Whether the entry appears in the launcher: its category and the item itself must be on.
     func isVisible(_ entry: AppEntry) -> Bool {
-        isCategoryEnabled(entry) && isItemVisible(entry)
+        isCategoryEnabled(entry) && isItemVisible(entry) && !isDisabled(entry)
     }
 
     /// An entry a feature pane owns answers to that feature's switch, so no category gates it.
@@ -50,13 +56,27 @@ final class VisibilityStore {
         defaults.set(Array(hiddenItemKeys), forKey: itemsKey)
     }
 
+    func isDisabled(_ entry: AppEntry) -> Bool {
+        disabledItemKeys.contains(key(for: entry))
+    }
+
+    func setDisabled(_ disabled: Bool, key: String) {
+        let previous = disabledItemKeys
+        if disabled { disabledItemKeys.insert(key) } else { disabledItemKeys.remove(key) }
+        guard disabledItemKeys != previous else { return }
+        revision &+= 1
+        defaults.set(Array(disabledItemKeys), forKey: disabledItemsKey)
+    }
+
     func removeItemKeys(_ keys: Set<String>) {
         guard !keys.isEmpty else { return }
-        let previous = hiddenItemKeys
+        let previous = (hiddenItemKeys, disabledItemKeys)
         hiddenItemKeys.subtract(keys)
-        guard hiddenItemKeys != previous else { return }
+        disabledItemKeys.subtract(keys)
+        guard hiddenItemKeys != previous.0 || disabledItemKeys != previous.1 else { return }
         revision &+= 1
         defaults.set(Array(hiddenItemKeys), forKey: itemsKey)
+        defaults.set(Array(disabledItemKeys), forKey: disabledItemsKey)
     }
 
     func isKindEnabled(_ kind: AppEntry.Kind) -> Bool {

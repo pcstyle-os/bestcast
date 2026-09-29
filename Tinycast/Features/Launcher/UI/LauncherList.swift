@@ -272,6 +272,7 @@ private struct AppRow: View {
     @Environment(HotKeyManager.self) private var hotKeys
     /// Observed for the same reason: an alias edit re-renders the row's badge at once.
     @Environment(AliasStore.self) private var aliases
+    @Environment(FavoritesStore.self) private var favorites
     /// Observed here rather than up in the list, so a ⌘ press re-renders rows and not the palette.
     @Environment(PaletteState.self) private var palette
     @State private var hovered = false
@@ -286,7 +287,8 @@ private struct AppRow: View {
     /// Everything the row shows beside its name, in reading order, as one VoiceOver value.
     private var spokenDetail: String {
         let alias = aliases.alias(for: app.preferenceKey).map { "alias \($0)" }
-        let parts = [app.subtitle, alias, app.kindLabel, running ? "running" : nil]
+        let pinned = favorites.isPinned(app) ? "pinned" : nil
+        let parts = [app.subtitle, alias, pinned, app.kindLabel, running ? "running" : nil]
         return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
@@ -332,6 +334,11 @@ private struct AppRow: View {
                     .background(
                         RoundedRectangle(cornerRadius: metrics.radius.menu, style: .continuous)
                             .fill(Theme.Colors.controlSurface))
+            }
+            if favorites.isPinned(app) {
+                Image(systemName: "pin.fill")
+                    .font(metrics.typography.rowTrailing)
+                    .foregroundStyle(.tertiary)
             }
             if let caps = shortcutCaps {
                 HStack(spacing: metrics.spacing.xxs) {
