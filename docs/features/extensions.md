@@ -751,12 +751,32 @@ extensions / 114 of 147 view commands** boot and render. `Scripts/raycast-runtim
 `Scripts/run-tests.sh ext-test` reproduce that measurement. OAuth landed after this run, so the three
 OAuth extensions it excluded are not counted yet — re-measure before quoting these numbers.
 
+### AI
+
+`AI.ask(prompt, { model, creativity, signal })` returns a Promise for the complete answer and
+accepts `.on("data", listener)` for text chunks. `AI.Model` comes from the bundled Raycast API
+version; `AI.Creativity` exposes None, Low, Medium, High and Maximum string values. Numeric creativity
+is clamped to 0–2. Tinycast's public provider request has no temperature field, so creativity is
+expressed as an instruction rather than a provider sampling parameter.
+
+Requests use Quick AI's default model. An explicit Raycast model first matches that default, then the
+available Tinycast model catalog, stripping Raycast's vendor prefix and normalizing dotted versions
+and Claude Haiku's name ordering. A matching route keeps its Tinycast provider; an unknown or
+unavailable model falls back to the default. No default produces a rejected Promise with a settings
+hint. No tools or web search are requested, and no chat history or user chat instructions are attached.
+
+`environment.canAccess(AI)` reports whether a default route is configured when the command starts;
+it does not promise that credentials or the provider are healthy. Abort signals cancel the native
+stream, as does ending the extension session. Reasoning and tool events are not emitted as text.
+Extensions bundle their own `@raycast/utils`; its `useAI` hook uses this streaming `AI.ask` API.
+Tinycast does not bundle a separate copy of that hook.
+
 ## What isn't supported yet
 
 | Gap | Why |
 | --- | --- |
 | **Raycast's PKCE proxy (`oauth.raycast.com`)** | Extensions whose provider has no PKCE support exchange tokens through Raycast's proxy. `OAuth.PKCEClient` works; a provider that needs that proxy still fails. |
-| **`AI`, `BrowserExtension`, `WindowManagement`** | Raycast services with no local equivalent. Importing them works; calling one throws with a clear reason. |
+| **`BrowserExtension`, `WindowManagement`** | Raycast services with no local equivalent. Importing them works; calling one throws with a clear reason. |
 | **A WebSocket to a host with a certificate macOS distrusts** | `ws`'s `rejectUnauthorized: false` is ignored — URLSession validates the chain either way. |
 | **Aborting a `fetch` already in flight** | `AbortSignal` is complete — `timeout`, `abort` and `any` included — and `fetch` checks it on both sides of the host call, so a caller gets its `AbortError`. The request itself still runs to completion: the signal isn't carried across the bridge, so nothing cancels the `URLSessionTask`. A timeout bounds the caller, not the network. |
 | **Interactive `spawn` stdin** | stdout and stderr stream, but stdin is sent once as the child starts: whatever was written in the same tick. A later `stdin.write` is dropped. |

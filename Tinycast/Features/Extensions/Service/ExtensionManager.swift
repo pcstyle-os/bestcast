@@ -64,6 +64,14 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         bridge.context = self
     }
 
+    func configureAI(
+        canAccess: @escaping () -> Bool,
+        makeProvider: @escaping (String?) throws -> any AIProvider
+    ) {
+        bridge.ai.canAccess = canAccess
+        bridge.ai.makeProvider = makeProvider
+    }
+
     /// Wires collaborators only; the coordinator decides whether anything scans.
     func start(appIndex: AppIndex, coordinator: ExtensionCoordinator) {
         self.appIndex = appIndex
@@ -108,7 +116,8 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
                         stop: {
                             host.stop()
                             bridge.context = nil
-                        }, enableInteraction: { host.enableInteraction() })
+                        }, enableInteraction: { host.enableInteraction() },
+                        canAccessAI: bridge.ai.canAccess())
                 },
                 onError: { [weak coordinator] message, owner, needsPreferences in
                     coordinator?.showHUD(message)
@@ -413,6 +422,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             fallbackText: fallbackText,
             launchType: launchType,
             isDarkAppearance: NSApp.effectiveAppearance.isDark,
+            canAccessAI: bridge.ai.canAccess(),
             launchContext: launchContext)
     }
 

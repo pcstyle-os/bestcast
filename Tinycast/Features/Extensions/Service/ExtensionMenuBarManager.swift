@@ -23,6 +23,7 @@ final class ExtensionMenuBarManager: ExtensionRuntimeDelegate {
         let runtime: ExtensionRuntime
         var stop: () -> Void
         var enableInteraction: () -> Void = {}
+        var canAccessAI = false
     }
 
     var isRunning: Bool { active != nil }
@@ -204,7 +205,8 @@ final class ExtensionMenuBarManager: ExtensionRuntimeDelegate {
             caches: storage.caches(extension: owner.manifest.name),
             arguments: command.completeArguments(request.arguments),
             fallbackText: nil, launchType: request.type,
-            isDarkAppearance: NSApp.effectiveAppearance.isDark, launchContext: request.context)
+            isDarkAppearance: NSApp.effectiveAppearance.isDark,
+            canAccessAI: execution.canAccessAI, launchContext: request.context)
         launchTask = Task { [weak self] in
             do {
                 let code = try await Task.detached(priority: .utility) {

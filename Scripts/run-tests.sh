@@ -572,6 +572,11 @@ run settings-history-test  Tinycast/Features/Settings/SettingsTab.swift \
 run updates-test           Tinycast/Features/Updates/Model/*.swift \
                            Tinycast/Features/Updates/Service/BundleSignature.swift
 run support-test           Tinycast/Features/Support/Model/*.swift
+run ext-ai-test            Tinycast/Features/AI/Model/*.swift \
+                           Tinycast/Features/AI/Service/AIProvider.swift \
+                           $E/Model/RenderNode.swift \
+                           $E/Model/ExtensionAIModelRouting.swift \
+                           $E/Service/ExtensionAIBridge.swift
 run ai-provider-test       Tinycast/Features/Settings/AppSettingsKey.swift \
                            Tinycast/Features/AI/Model/*.swift \
                            Tinycast/Features/AI/Settings/AISettingsStore.swift

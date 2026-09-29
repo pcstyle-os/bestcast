@@ -2,6 +2,7 @@
 
 import { Action, ActionPanel, Detail, Form, Grid, List, MenuBarExtra, Navigation, setActionEffects, useNavigation } from "./components.js";
 import * as enums from "./enums.generated.js";
+import { AI } from "./ai.js";
 import * as system from "./system.js";
 import { PKCEClient, TokenSet } from "./oauth.js";
 
@@ -81,11 +82,6 @@ function rejectingNamespace(name, members) {
   return target;
 }
 
-const AI = {
-  ...rejectingNamespace("AI", ["ask"]),
-  Model: Object.freeze({}),
-  Creativity: Object.freeze({}),
-};
 
 const OAuth = {
   RedirectMethod: nestedEnums.OAuth.RedirectMethod,
@@ -153,8 +149,9 @@ export const raycastApi = {
 
   OAuth,
 
-  // Unimplemented namespaces
   AI,
+
+  // Unimplemented namespaces
   BrowserExtension,
   WindowManagement,
 
