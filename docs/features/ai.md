@@ -830,8 +830,9 @@ sends anything. `PassiveAISettingsStore` (`aiSettings.passive`) holds the switch
   never sent anywhere until the reader runs one of its actions.
 - **Cheap, cancellable, off the main actor.** Every palette query change goes through
   `PassiveInlineSchedule`: a keystroke retires the pending answer and the one on screen, and only a
-  query left alone for 600 ms is answered. Kind detection, language recognition and the eligibility
-  checks run in `Task.detached`, over at most `detectionLimit` characters.
+  query left alone for 600 ms is answered. The eligibility check runs on main but tries the cheap
+  word test before the calculator or the index; kind detection and language recognition run in
+  `Task.detached`, over at most `detectionLimit` characters.
 - **An answer never hides a better row.** `PassiveAIHeuristics.shouldOfferInlineAnswer` wants a
   question or instruction (`isQuestionOrInstruction`) and refuses math (`looksLikeMath`), anything
   the calculator, a colour or a URL already answers, an argument entry, and a query whose name
