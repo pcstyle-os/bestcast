@@ -5,6 +5,7 @@ struct ExtensionInstaller: Sendable {
     /// An install can take minutes from source, and silence for that long reads as a hang.
     enum Progress: Sendable, Equatable {
         case downloading
+        case cloning
         case installingDependencies(manager: String)
         case building
         case installing
@@ -12,6 +13,7 @@ struct ExtensionInstaller: Sendable {
         var message: String {
             switch self {
             case .downloading: return "Downloading…"
+            case .cloning: return "Cloning…"
             case .installingDependencies(let manager): return "Installing dependencies with \(manager)…"
             case .building: return "Building…"
             case .installing: return "Installing…"
@@ -19,21 +21,22 @@ struct ExtensionInstaller: Sendable {
         }
     }
 
-    /// Long enough for a cold install on a slow line, short enough that a wedged child can't hang.
-    private static let commandTimeout: TimeInterval = 300
 
     let client: ExtensionStoreClient
     let packageManager: ExtensionPackageManager
     /// From `extensionCustomSearchPaths`, checked before the built-in list.
     let additionalSearchPaths: [String]
+    /// Long enough for a cold install on a slow line, short enough that a wedged child can't hang.
+    let commandTimeout: Duration
 
     init(
         client: ExtensionStoreClient = ExtensionStoreClient(), packageManager: ExtensionPackageManager,
-        additionalSearchPaths: [String] = []
+        additionalSearchPaths: [String] = [], commandTimeout: Duration = .seconds(300)
     ) {
         self.client = client
         self.packageManager = packageManager
         self.additionalSearchPaths = additionalSearchPaths
+        self.commandTimeout = commandTimeout
     }
 
     /// Copies into place before the workspace goes, so it hands back the install.
@@ -102,7 +105,7 @@ struct ExtensionInstaller: Sendable {
     // MARK: - Source
 
     /// Returns the directory to install from: `output` when `ray` produced it, else `source`.
-    private func build(
+    func build(
         at source: URL, into output: URL, onProgress: @Sendable @escaping (Progress) -> Void
     ) async throws -> URL {
         guard let resolved = packageManager.resolve(additionalSearchPaths: additionalSearchPaths) else {
@@ -167,7 +170,7 @@ struct ExtensionInstaller: Sendable {
 
     // MARK: - Running a child process
 
-    private struct CommandResult {
+    struct CommandResult {
         let status: Int32
         let output: String
 
@@ -180,8 +183,9 @@ struct ExtensionInstaller: Sendable {
     }
 
     /// Runs a tool with a PATH built for a GUI app, which inherits none of a login shell's.
-    private func run(
-        _ executable: URL, arguments: [String], in directory: URL, node: URL? = nil
+    func run(
+        _ executable: URL, arguments: [String], in directory: URL, node: URL? = nil,
+        extraEnvironment: [String: String] = [:]
     ) async throws -> CommandResult {
         let process = Process()
         process.executableURL = executable
@@ -196,6 +200,7 @@ struct ExtensionInstaller: Sendable {
         // Keeps npm from writing progress bars into the output we surface on failure.
         environment["CI"] = "1"
         environment["NO_COLOR"] = "1"
+        environment.merge(extraEnvironment) { _, extra in extra }
         process.environment = environment
 
         let pipe = Pipe()
@@ -221,12 +226,14 @@ struct ExtensionInstaller: Sendable {
                 return
             }
             Task {
-                try? await Task.sleep(for: .seconds(Self.commandTimeout))
+                try? await Task.sleep(for: commandTimeout)
                 guard process.isRunning else { return }
                 process.terminate()
                 guard state.claim() else { return }
                 continuation.resume(
-                    returning: CommandResult(status: -1, output: "timed out after 5 minutes"))
+                    returning: CommandResult(
+                        status: -1,
+                        output: "timed out after \(commandTimeout.components.seconds / 60) minutes"))
             }
         }
     }

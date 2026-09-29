@@ -267,7 +267,10 @@ struct ExtensionManifest: Sendable, Hashable {
     init?(json: [String: Any]) {
         guard let name = json["name"] as? String else { return nil }
         let commands = (json["commands"] as? [Any] ?? []).compactMap(ExtensionCommand.init(json:))
-        guard !commands.isEmpty else { return nil }
+        let tools = (json["tools"] as? [Any] ?? []).compactMap(ExtensionTool.init(json:))
+        guard !commands.isEmpty || !tools.isEmpty || json["bestcast"] is [String: Any] else {
+            return nil
+        }
         self.name = name
         title = json["title"] as? String ?? name
         description = json["description"] as? String ?? ""
@@ -277,7 +280,7 @@ struct ExtensionManifest: Sendable, Hashable {
         platforms = json["platforms"] as? [String]
         self.commands = commands
         preferences = (json["preferences"] as? [Any] ?? []).compactMap(ExtensionPreferenceSchema.init(json:))
-        tools = (json["tools"] as? [Any] ?? []).compactMap(ExtensionTool.init(json:))
+        self.tools = tools
         aiInstructions = ((json["ai"] as? [String: Any])?["instructions"] as? String)
             .flatMap { $0.isEmpty ? nil : $0 }
     }

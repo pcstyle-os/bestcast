@@ -76,6 +76,7 @@ struct ExtensionLaunchContext: Sendable {
     var isDarkAppearance: Bool
     var canAccessAI: Bool = false
     var launchContext: [String: RenderValue] = [:]
+    var isDevelopment = false
 
     func jsonString() -> String {
         var environment: [String: Any] = [
@@ -84,7 +85,7 @@ struct ExtensionLaunchContext: Sendable {
             "commandMode": commandMode.rawValue,
             "assetsPath": assetsPath,
             "supportPath": supportPath,
-            "isDevelopment": false,
+            "isDevelopment": isDevelopment,
             // Extensions gate features on this; report the API level the shim implements.
             "raycastVersion": ExtensionRuntimeVersion.raycastAPI,
             "textSize": "medium",

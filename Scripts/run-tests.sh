@@ -683,6 +683,31 @@ run ext-tools-test         Bestcast/Features/AI/Model/*.swift $W \
                            $E/Model/ExtensionLaunchType.swift \
                            $E/Model/ExtensionRefreshPolicy.swift \
                            $E/Model/ExtensionRefreshState.swift
+run slow ext-devkit-test   $E/Model/ExtensionGitURL.swift \
+                           $E/Model/ExtensionConsoleBuffer.swift \
+                           $E/Model/ScriptCommandHeader.swift \
+                           $E/Model/ExtensionBootConfig.swift \
+                           $E/Model/ExtensionLaunchType.swift \
+                           $E/Model/ExtensionManifest.swift \
+                           $E/Model/ExtensionRefreshPolicy.swift \
+                           $E/Model/ExtensionRefreshState.swift \
+                           $E/Model/RenderNode.swift \
+                           $E/Service/ExtensionCatalog.swift \
+                           $E/Service/ExtensionSourceStore.swift \
+                           $E/Service/ExtensionFetcher.swift \
+                           $E/Service/ExtensionNodeShims.swift \
+                           $E/Service/ExtensionOAuthKeychain.swift \
+                           $E/Service/ExtensionOAuthSession.swift \
+                           $E/Service/ExtensionRuntime.swift \
+                           Bestcast/Features/CustomCommands/Model/CustomCommand.swift \
+                           Bestcast/Features/CustomCommands/Model/RaycastScriptImport.swift \
+                           Bestcast/Platform/AppDisplayName.swift \
+                           Bestcast/Platform/ProcessExit.swift \
+                           Bestcast/Platform/Compression/Zlib.swift \
+                           Bestcast/Features/Clipboard/Model/ColorValue.swift \
+                           Bestcast/Features/Clipboard/Model/ColorSpaces.swift \
+                           Bestcast/Features/Settings/Model/SettingsFileJSON.swift \
+                           Bestcast/Features/Settings/Model/SettingsFileIdentity.swift
 run -O text-diff-test     Bestcast/Features/QuickActions/Model/TextDiffEngine.swift
 run index text-diff-performance Bestcast/Features/QuickActions/Model/TextDiffEngine.swift
 run quick-action-test      Bestcast/Features/Settings/AppSettingsKey.swift \

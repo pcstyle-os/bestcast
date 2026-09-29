@@ -1,0 +1,12 @@
+{
+  "name": "devkit-tools-only",
+  "title": "Tools Only",
+  "author": "fixture",
+  "tools": [
+    {
+      "name": "lookup",
+      "title": "Lookup",
+      "description": "Looks a word up."
+    }
+  ]
+}

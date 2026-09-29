@@ -1,0 +1,12 @@
+{
+  "name": "devkit-linked",
+  "title": "Linked Fixture",
+  "author": "fixture",
+  "commands": [
+    {
+      "name": "hello",
+      "title": "Hello",
+      "mode": "no-view"
+    }
+  ]
+}

@@ -145,6 +145,10 @@ last-wins.
 A benchmark that stays out of the suite still needs flags, so `run-tests.sh` registers it as
 `run index <name> <source...>`: `--index` emits its compile command and the runner never queues it.
 
+Fixtures sit beside the harnesses in `Tests/ai-fixtures/` and `Tests/ext-fixtures/`; `ext-devkit-test`
+reads its own subfolder, `Tests/ext-fixtures/devkit/` (a tools-only manifest, a linked extension, a
+script folder).
+
 Re-run it after adding a harness, then **Swift: Restart LSP Server** from the Command Palette — an
 already-running server does not re-read `.compile`.
 

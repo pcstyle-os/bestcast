@@ -17,6 +17,7 @@ struct ExtensionsSettingsView: View {
     @State private var importSummary: String?
     /// What a cleanup would reclaim, rescanned whenever the installed set changes.
     @State private var reclaimable = ExtensionCleanup.Report()
+    @State private var gitURL = ""
 
     var body: some View {
         @Bindable var settings = core.settings
@@ -35,6 +36,7 @@ struct ExtensionsSettingsView: View {
             Group {
                 install
                 library
+                ExtensionDevelopmentSection()
                 compatibility
             }
             .settingsEnabled(settings.extensionsEnabled)
@@ -132,7 +134,9 @@ struct ExtensionsSettingsView: View {
                             },
                             onUninstall: {
                                 core.extensionCoordinator.confirmUninstall(installed)
-                            })
+                            },
+                            record: core.extensions.sources.record(for: installed.manifest.name),
+                            showsConsole: installed.isDevelopment || core.settings.extensionsShowConsole)
                     }
                 }
             }
@@ -190,6 +194,30 @@ struct ExtensionsSettingsView: View {
                 ExtensionSettingsIcon(systemName: "folder")
             } trailing: {
                 Button("Choose…", action: addFolder)
+            }
+            SettingsRow(
+                title: "Link development folder",
+                subtitle: "Runs an extension from its source folder and reloads it on every save.",
+                anchor: .extensionsInstall
+            ) {
+                ExtensionSettingsIcon(systemName: "hammer")
+            } trailing: {
+                Button("Link…") { core.extensionDevelopment.linkFolder() }
+            }
+            SettingsRow(
+                title: "Install from Git",
+                subtitle: "A GitHub repository, or a folder in one, built on this Mac.",
+                anchor: .extensionsInstall
+            ) {
+                ExtensionSettingsIcon(systemName: "arrow.triangle.branch")
+            } trailing: {
+                TextField("", text: $gitURL, prompt: Text("https://github.com/…"))
+                    .textFieldStyle(.roundedBorder)
+                    .labelsHidden()
+                    .pointerStyle(.horizontalText)
+                    .frame(width: 200)
+                Button("Install…") { core.extensionDevelopment.installFromGit(gitURL) }
+                    .disabled(gitURL.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         } header: {
             SettingsSectionHeader(.extensionsInstall)
@@ -343,6 +371,9 @@ private struct ExtensionDisclosure: View {
     let isExpanded: Bool
     let onToggle: () -> Void
     let onUninstall: () -> Void
+    let record: ExtensionSourceRecord?
+    let showsConsole: Bool
+    @Environment(AppCore.self) private var core
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -382,11 +413,13 @@ private struct ExtensionDisclosure: View {
                 verticalSpacing: Theme.Spacing.md
             ) {
                 // No heading: these two are one idea, and first so 19 commands can't bury them.
-                ExtensionLauncherRow(installed: installed)
-                ExtensionIconRow(installed: installed)
+                if !installed.manifest.commands.isEmpty {
+                    ExtensionLauncherRow(installed: installed)
+                    ExtensionIconRow(installed: installed)
+                }
 
                 if !installed.manifest.preferences.isEmpty {
-                    rule
+                    if !installed.manifest.commands.isEmpty { rule }
                     heading("Preferences")
                     ForEach(
                         Array(installed.manifest.preferences.enumerated()), id: \.element.name
@@ -397,17 +430,39 @@ private struct ExtensionDisclosure: View {
                     }
                 }
 
-                rule
-                heading(installed.manifest.commands.count == 1 ? "Command" : "Commands")
-                ForEach(Array(installed.manifest.commands.enumerated()), id: \.element.id) {
-                    index, command in
-                    if index > 0 { rule }
-                    CommandRows(installed: installed, command: command)
+                if !installed.manifest.commands.isEmpty {
+                    rule
+                    heading(installed.manifest.commands.count == 1 ? "Command" : "Commands")
+                    ForEach(Array(installed.manifest.commands.enumerated()), id: \.element.id) {
+                        index, command in
+                        if index > 0 { rule }
+                        CommandRows(installed: installed, command: command)
+                    }
+                }
+                // Tools have no launcher row: chat's @-mentions are the only way to reach them.
+                if !installed.manifest.tools.isEmpty {
+                    if !installed.manifest.commands.isEmpty || !installed.manifest.preferences.isEmpty {
+                        rule
+                    }
+                    heading(installed.manifest.tools.count == 1 ? "AI Tool" : "AI Tools")
+                    ForEach(Array(installed.manifest.tools.enumerated()), id: \.element.id) {
+                        index, tool in
+                        if index > 0 { rule }
+                        SettingsCardRow(title: tool.title, detail: tool.description) { EmptyView() }
+                    }
                 }
             }
             HStack {
+                if showsConsole {
+                    Button("Open Console") { core.extensionDevelopment.openConsole(for: installed) }
+                }
+                if record?.kind == .git {
+                    Button("Update") { core.extensionDevelopment.updateFromGit(installed) }
+                }
                 Spacer()
-                Button("Uninstall…", role: .destructive, action: onUninstall)
+                Button(
+                    installed.isDevelopment ? "Unlink…" : "Uninstall…", role: .destructive,
+                    action: onUninstall)
             }
         }
         // Indented under the row's icon, so the settings read as belonging to the row above them.
@@ -436,10 +491,16 @@ private struct ExtensionDisclosure: View {
     }
 
     private var subtitle: String {
-        let count = installed.manifest.commands.count
-        let commands = "\(count) command\(count == 1 ? "" : "s")"
-        let author = installed.manifest.author
-        return author.isEmpty ? commands : "\(commands) · \(author)"
+        let manifest = installed.manifest
+        let count = manifest.commands.isEmpty ? manifest.tools.count : manifest.commands.count
+        let noun = manifest.commands.isEmpty ? "tool" : "command"
+        var parts = ["\(count) \(noun)\(count == 1 ? "" : "s")"]
+        if !manifest.author.isEmpty { parts.append(manifest.author) }
+        if installed.isDevelopment { parts.insert("Dev", at: 0) }
+        if record?.kind == .git, let commit = record?.commit {
+            parts.append("from git · \(commit.prefix(7))")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 

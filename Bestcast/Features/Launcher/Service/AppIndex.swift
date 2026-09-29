@@ -15,6 +15,7 @@ struct AppEntry: Identifiable, Hashable, Sendable {
         case quicklink
         case appleShortcut
         case extensionCommand
+        case scriptCommand
         case meeting
 
         var descriptor: KindDescriptor {
@@ -86,6 +87,11 @@ struct AppEntry: Identifiable, Hashable, Sendable {
                     label: "Extension", sectionTitle: "Extensions",
                     openVerb: "Run Command", canHideFromSearch: true,
                     canRevealInFinder: false, canDragOut: false, isSymbolIcon: true, rankPriority: 3)
+            case .scriptCommand:
+                return KindDescriptor(
+                    label: "Script Command", sectionTitle: "Script Commands",
+                    openVerb: "Run Script", canHideFromSearch: true,
+                    canRevealInFinder: true, canDragOut: false, isSymbolIcon: true, rankPriority: 3)
             case .meeting:
                 return KindDescriptor(
                     label: "Meeting", sectionTitle: "Meetings",
@@ -199,7 +205,7 @@ struct AppEntry: Identifiable, Hashable, Sendable {
             return AppleShortcut.id(fromEntryID: id).map { .appleShortcut(id: $0) }
         case .extensionCommand:
             return .extensionCommand(entryID: id)
-        case .snippet, .meeting:
+        case .snippet, .meeting, .scriptCommand:
             return nil
         }
     }
@@ -217,7 +223,7 @@ struct AppEntry: Identifiable, Hashable, Sendable {
         case .windowCommand, .windowLayout, .windowRoom: return .windowManagement
         case .quicklink: return .quicklinks
         case .appleShortcut: return .appleShortcuts
-        case .extensionCommand: return .extensions
+        case .extensionCommand, .scriptCommand: return .extensions
         case .meeting: return .calendar
         }
     }
@@ -259,6 +265,7 @@ struct AppEntry: Identifiable, Hashable, Sendable {
         case .windowLayout: return WindowLayout.sfSymbol
         case .windowRoom: return Room.sfSymbol
         case .meeting: return "video.fill"
+        case .scriptCommand: return "terminal"
         case .application, .systemSettings, .appleShortcut, .extensionCommand: return "questionmark"
         }
     }
@@ -419,6 +426,7 @@ final class AppIndex {
     private var customQuickActionEntries: [AppEntry] = []
     private var aiPresetEntries: [AppEntry] = []
     private var extensionEntries: [AppEntry] = []
+    private var scriptCommandEntries: [AppEntry] = []
     private var meetingEntries: [AppEntry] = []
     /// The catalog's commands a disabled feature hides; the Commands slice is recomputed from it.
     private var hiddenCommands: Set<CommandID> = []
@@ -533,6 +541,13 @@ final class AppIndex {
     func setExtensionCommands(_ entries: [AppEntry]) {
         guard entries != extensionEntries else { return }
         extensionEntries = entries
+        publishEntries()
+    }
+
+    /// Called by `ScriptCommandLibrary` on a rescan and whenever an inline subtitle moves.
+    func setScriptCommands(_ entries: [AppEntry]) {
+        guard entries != scriptCommandEntries else { return }
+        scriptCommandEntries = entries
         publishEntries()
     }
 
@@ -699,7 +714,7 @@ final class AppIndex {
         let updated =
             Self.named(meetingEntries) + discoveredEntries
             + Self.named(
-                extensionEntries + quicklinkEntries + appleShortcutEntries + snippetEntries
+                extensionEntries + scriptCommandEntries + quicklinkEntries + appleShortcutEntries + snippetEntries
                     + Self.systemActionEntries + windowLayoutEntries + windowRoomEntries
                     + windowCommandEntries
                     + customWindowSizeEntries + customCommandEntries + quickActionEntries

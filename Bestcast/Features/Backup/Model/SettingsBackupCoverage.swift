@@ -84,6 +84,8 @@ enum SettingsBackupCoverage {
         AppSettingsKey.extensionCustomSearchPaths.rawValue:
             "Machine-local toolchain paths; the Mac a backup lands on may not have them, or may have "
             + "something else there.",
+        AppSettingsKey.extensionsShowConsole.rawValue:
+            "A developer switch for this Mac's extension console; a restore has no use for it.",
         AppSettingsKey.extensionsEnabled.rawValue:
             "Doubles as consent to run third-party JavaScript; an import must not switch it on.",
         AppSettingsKey.palettePosition.rawValue:

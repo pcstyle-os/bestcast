@@ -87,6 +87,12 @@ final class ExtensionCoordinator {
             core.showMessage("Extensions are disabled — enable them in Settings", tone: .danger)
             return
         }
+        if link.opensConsole, extensions.resolve(link) == nil,
+            let owner = extensions.installed.first(where: { link.matches(manifestName: $0.manifest.name) })
+        {
+            core.extensionDevelopment.openConsole(for: owner)
+            return
+        }
         guard let (owner, command) = extensions.resolve(link) else {
             core.showMessage("No installed extension provides '\(link.commandName)'", tone: .danger)
             return
@@ -132,11 +138,13 @@ final class ExtensionCoordinator {
         Task {
             guard
                 await core.confirm(
-                    title: "Uninstall \(owner.title)?",
-                    message:
-                        "Removes the extension and everything it stored — its preferences, its cache "
-                        + "and its own files. Its commands leave the launcher.",
-                    symbol: "trash", confirmTitle: "Uninstall")
+                    title: owner.isDevelopment ? "Unlink \(owner.title)?" : "Uninstall \(owner.title)?",
+                    message: owner.isDevelopment
+                        ? "Forgets the link and everything the extension stored. The folder itself "
+                            + "stays where it is."
+                        : "Removes the extension and everything it stored — its preferences, its "
+                            + "cache and its own files. Its commands leave the launcher.",
+                    symbol: "trash", confirmTitle: owner.isDevelopment ? "Unlink" : "Uninstall")
             else { return }
             await extensions.uninstall(owner)
         }

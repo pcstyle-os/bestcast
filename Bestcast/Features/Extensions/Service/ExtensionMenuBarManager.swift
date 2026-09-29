@@ -206,7 +206,8 @@ final class ExtensionMenuBarManager: ExtensionRuntimeDelegate {
             arguments: command.completeArguments(request.arguments),
             fallbackText: nil, launchType: request.type,
             isDarkAppearance: NSApp.effectiveAppearance.isDark,
-            canAccessAI: execution.canAccessAI, launchContext: request.context)
+            canAccessAI: execution.canAccessAI, launchContext: request.context,
+            isDevelopment: owner.isDevelopment)
         launchTask = Task { [weak self] in
             do {
                 let code = try await Task.detached(priority: .utility) {

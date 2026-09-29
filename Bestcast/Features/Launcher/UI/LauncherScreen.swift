@@ -190,9 +190,9 @@ struct LauncherScreen: PaletteScreen {
                 metrics: core.settings.interfaceSize.metrics, focus: focus,
                 onOpenOptions: openArgumentOptions, onSubmit: { activate(at: selection) })
         }
-        if entry.kind == .customCommand {
+        if entry.kind == .customCommand || entry.kind == .scriptCommand {
             return CustomCommandArgumentsAccessory.make(
-                command: core.customCommands.command(entryID: entry.id), vm: vm,
+                command: customCommand(for: entry), vm: vm,
                 metrics: core.settings.interfaceSize.metrics, focus: focus,
                 onSubmit: { activate(at: selection) })
         }
@@ -218,8 +218,8 @@ struct LauncherScreen: PaletteScreen {
             guard let action = core.customQuickActions.action(entryID: entry.id) else { return [:] }
             return QuickActionArgumentsAccessory.values(for: action, vm: vm)
         }
-        if entry.kind == .customCommand {
-            guard let command = core.customCommands.command(entryID: entry.id) else { return [:] }
+        if entry.kind == .customCommand || entry.kind == .scriptCommand {
+            guard let command = customCommand(for: entry) else { return [:] }
             return CustomCommandArgumentsAccessory.values(for: command, vm: vm)
         }
         var values: [String: String] = [:]
@@ -228,6 +228,12 @@ struct LauncherScreen: PaletteScreen {
             if !typed.isEmpty { values[argument.name] = typed }
         }
         return values
+    }
+
+    /// A script command reads its fields off the same header shape a custom command stores.
+    private func customCommand(for entry: AppEntry) -> CustomCommand? {
+        guard entry.kind == .scriptCommand else { return core.customCommands.command(entryID: entry.id) }
+        return core.extensionDevelopment.scripts.header(entryID: entry.id)?.command
     }
 
     private func quicklink(for entry: AppEntry) -> Quicklink? {

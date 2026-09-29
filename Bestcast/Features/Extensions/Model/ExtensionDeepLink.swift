@@ -9,6 +9,8 @@ struct ExtensionDeepLink: Sendable, Equatable {
     let arguments: [String: String]
     let fallbackText: String?
     let launchType: ExtensionLaunchType
+    /// `bestcast://extensions/<owner>/<ext>/console`, which a command of that name still outranks.
+    var opensConsole = false
 
     /// `owner/ext` first so a scoped manifest wins over a bare slug collision.
     var extensionCandidates: [String] {
@@ -84,7 +86,8 @@ struct ExtensionDeepLink: Sendable, Equatable {
         }
         return ExtensionDeepLink(
             ownerOrAuthor: ownerOrAuthor, extensionName: extensionName, commandName: commandName,
-            arguments: arguments, fallbackText: fallbackText, launchType: launchType)
+            arguments: arguments, fallbackText: fallbackText, launchType: launchType,
+            opensConsole: url.scheme?.lowercased() == "bestcast" && commandName == "console")
     }
 
     /// Raycast sends one URL-encoded JSON object; anything else means no arguments, not a failure.

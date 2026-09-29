@@ -316,3 +316,9 @@ An import warns before it applies, the same as a backup carrying custom commands
 one `CustomCommandStore.add(contentsOf:)` — one persist and one launcher rebuild for the whole folder
 rather than one per script. A name already in the library is skipped and counted, so re-importing a
 folder after adding one script to it adds only that script.
+
+To keep a folder live instead, add it under **Settings → Extensions → Script Commands**: each
+`@raycast.schemaVersion 1` script becomes its own launcher row, read through this same parser and
+rescanned on change, with `mode`, `icon`, `packageName` and `refreshTime` honoured. Those rows are
+not custom commands and never enter `CustomCommandStore`; see
+[extensions.md](extensions.md#script-command-folders).
