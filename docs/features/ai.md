@@ -1015,7 +1015,8 @@ packed as Float32. A temporary chat keeps its index in memory only. Deleting a c
 - Caps: 400 files, 2,000 passages, a 4 MB text file, a 200 MB PDF, and 40,000 entries walked.
   Past any of them the bar says "limit reached"; skipped files are counted.
 - The index is a snapshot. An edited, added or deleted file is not seen until Reindex.
-- It lives in Caches, so macOS may purge it; the chat then answers without it until Reindex.
+- It lives in Caches, so macOS may purge it; the chat then answers without it until the files are
+  attached again.
 - No OCR: a scanned PDF has no text layer and is skipped. Text files must be UTF-8.
 - PDFKit reads in process, one page at a time inside an autorelease pool; a large PDF still costs
   memory while it is read. Embedding adds about 48 MB resident while it runs (31 MB for the first

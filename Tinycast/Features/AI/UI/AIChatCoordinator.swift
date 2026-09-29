@@ -480,7 +480,7 @@ final class AIChatCoordinator {
         attach(files: panel.urls, to: chat)
     }
 
-    /// Folders, and files too large to send whole, are indexed instead; the rest come back to stage.
+    /// Folders, and files too large to send whole, are indexed; the rest come back to be staged.
     private func addingToLibrary(_ files: [URL], in chat: AIChatState) -> [URL] {
         let readsDocuments = capabilities(for: chat).documents
         var staged: [URL] = []

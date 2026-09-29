@@ -443,7 +443,7 @@ private struct ChatFileSourceChip: View {
         let exists = exists
         let url = URL(filePath: source.path)
         Button {
-            NSWorkspace.shared.open(url)
+            if exists { NSWorkspace.shared.open(url) }
         } label: {
             HStack(spacing: metrics.spacing.xs) {
                 Text("\(source.number)")
@@ -461,7 +461,6 @@ private struct ChatFileSourceChip: View {
             .padding(.horizontal, metrics.spacing.xs)
         }
         .buttonStyle(.glass)
-        .disabled(!exists)
         .help(exists ? source.path : "No longer at \(source.path)")
         .contextMenu {
             Button("Open") { NSWorkspace.shared.open(url) }

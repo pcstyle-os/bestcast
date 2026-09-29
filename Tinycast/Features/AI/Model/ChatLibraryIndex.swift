@@ -15,7 +15,7 @@ struct ChatLibraryIndex: Codable, Equatable, Sendable {
     let language: String?
     let dimension: Int
     let chunks: [ChatLibraryChunk]
-    /// Packed Float32, unit length, `dimension` per chunk: a plist of a million numbers loads slowly.
+    /// Packed unit-length Float32s, `dimension` per chunk: a plist of a million numbers loads slowly.
     let vectors: Data
     let fileCount: Int
     /// Files passed over: unreadable, unsupported or past a cap.
