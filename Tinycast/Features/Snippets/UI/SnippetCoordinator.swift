@@ -303,6 +303,12 @@ final class SnippetCoordinator {
         }
     }
 
+    /// Consent withdrawn mid-fill stops the requests; the keyword still expands, its `{ai}` empty.
+    func applyAIPlaceholdersEnabled() {
+        guard !(settings.aiEnabled && settings.snippetAIPlaceholders) else { return }
+        aiFill?.settle()
+    }
+
     private func cancelAIFill() {
         guard let aiFill else { return }
         self.aiFill = nil

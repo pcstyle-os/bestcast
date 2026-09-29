@@ -42,6 +42,11 @@ final class SnippetAIFillSession {
         stop()
     }
 
+    /// Delivers now: a reply still missing expands empty, and its request is cancelled.
+    func settle() {
+        finish()
+    }
+
     private func record(_ reply: String, for prompt: String) {
         guard onFinish != nil else { return }
         answers[prompt] = reply

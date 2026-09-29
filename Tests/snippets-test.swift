@@ -1233,7 +1233,6 @@ struct SnippetsTests {
         check("reference depth limit leaves the unexpanded token visible", depthResult.text == "{snippet:S6}")
     }
 
-    /// Every token, parameter and modifier, against injected clock, locale and UUIDs.
     private static func testAIFillSession() async {
         var settled: [[String: String]] = []
         let answered = SnippetAIFillSession(prompts: ["a", "b"], timeout: .seconds(5)) { prompt in
@@ -1269,6 +1268,16 @@ struct SnippetsTests {
         cancelled.cancel()
         try? await Task.sleep(for: .milliseconds(120))
         check("a cancelled fill delivers nothing, not even at its deadline", settled.isEmpty)
+
+        settled = []
+        let withdrawn = SnippetAIFillSession(prompts: ["a"], timeout: .seconds(5)) { _ in
+            try await Task.sleep(for: .seconds(30))
+            return "late"
+        }
+        withdrawn.start { settled.append($0) }
+        withdrawn.settle()
+        try? await Task.sleep(for: .milliseconds(50))
+        check("a settled fill delivers at once, a missing reply as absent", settled == [[:]])
     }
 
     private static func testAIPlaceholders() {
@@ -1339,6 +1348,7 @@ struct SnippetsTests {
             !SnippetAIPrompt.draftInstructions.contains("{ai"))
     }
 
+    /// Every token, parameter and modifier, against injected clock, locale and UUIDs.
     private static func testDynamicPlaceholders() {
         var calendar = Calendar(identifier: .gregorian)
         let timeZone = TimeZone(secondsFromGMT: 0)!

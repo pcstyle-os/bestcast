@@ -189,7 +189,8 @@ with Cancel, and a deadline of `SnippetAIPrompt.fillTimeout` (10 seconds). The s
 once, with what has arrived; a prompt that failed or had not answered becomes an empty string, and
 the replies go into `ExpansionContext.aiAnswers` for the ordinary expansion. Typing anything
 cancels the fill and the expansion the way it cancels a pending automatic expansion, and Cancel
-does the same. The prompt is literal text: tokens inside it are not expanded, and nothing from the
+does the same. Turning AI or this setting off mid-fill settles it at once, unanswered prompts
+empty. The prompt is literal text: tokens inside it are not expanded, and nothing from the
 target app is sent with it.
 
 The snippet editor's **Generate with AI…** button (⌘J, shown while AI is on) opens a description

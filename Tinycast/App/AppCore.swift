@@ -707,6 +707,11 @@ final class AppCore {
                 _ = $0.fileSearchIgnorePatterns
             }, reproject: { $0.fileSearchCoordinator.applyPolicy() })
         track({ _ = $0.snippetsEnabled }, reproject: { $0.snippetCoordinator.applySnippetsEnabled() })
+        track(
+            {
+                _ = $0.aiEnabled
+                _ = $0.snippetAIPlaceholders
+            }, reproject: { $0.snippetCoordinator.applyAIPlaceholdersEnabled() })
         // Not a feature switch, but the same re-projection: a combo has the chord's ⇧ bit baked in.
         track({ _ = $0.hyperKeyIncludesShift }, reproject: { $0.applyHyperChord() })
         track(
