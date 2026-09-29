@@ -128,6 +128,14 @@ struct ChatSession: Equatable, Sendable {
         return true
     }
 
+    /// Editing the last question: it and whatever answered it go, and the question comes back.
+    mutating func dropLastExchange() -> ChatMessage? {
+        guard let index = messages.lastIndex(where: { $0.role == .user }) else { return nil }
+        let question = messages[index]
+        messages.removeSubrange(index...)
+        return question
+    }
+
     /// What Copy Chat puts on the pasteboard: each turn under its speaker, attachments by name.
     func markdownTranscript(title: String) -> String {
         var parts = ["# \(title)"]

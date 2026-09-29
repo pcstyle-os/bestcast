@@ -70,6 +70,11 @@ struct LauncherScreen: PaletteScreen {
         {
             results.insert(browser, at: 0)
         }
+        if pinned == nil, core.settings.aiEnabled, core.aiSettings.askAIFromRootSearch,
+            let ask = CommandCatalog.askAI(for: vm.query), visibility.isVisible(ask)
+        {
+            results.insert(ask, at: 0)
+        }
         // No card over a pinned row: its fields hang off the selection, which must start on it.
         let calc =
             pinned == nil
@@ -286,10 +291,19 @@ struct LauncherScreen: PaletteScreen {
         }
     }
 
-    /// ⌘↵ — only an entry backed by a file on disk has somewhere to be revealed.
+    /// ⌘↵ — a file-backed row reveals itself unless the query reads as a question for AI.
     func secondary(at selection: Int) -> Bool {
-        guard let app = entry(at: selection), app.canRevealInFinder else { return false }
-        core.launcherCoordinator.showInFinder(app)
+        let asks =
+            core.settings.aiEnabled && core.aiSettings.askAIFromRootSearch
+            && vm.argumentEntryID == nil && !vm.query.trimmingCharacters(in: .whitespaces).isEmpty
+        if let app = entry(at: selection), app.canRevealInFinder,
+            !(asks && QuickAIQuestion.looksLikeQuestion(vm.query))
+        {
+            core.launcherCoordinator.showInFinder(app)
+            return true
+        }
+        guard asks else { return false }
+        core.quickAICoordinator.ask(vm.query)
         return true
     }
 

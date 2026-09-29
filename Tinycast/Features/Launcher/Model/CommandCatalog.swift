@@ -32,6 +32,12 @@ enum CommandCatalog {
         return makeEntry(.openInBrowser, url: url, subtitle: "URL")
     }
 
+    /// The row a typed question earns, leading root search so ↵ asks rather than opens.
+    static func askAI(for query: String) -> AppEntry? {
+        guard QuickAIQuestion.looksLikeQuestion(query) else { return nil }
+        return makeEntry(.askAI, subtitle: "Quick AI")
+    }
+
     /// A command's row, built rather than looked up — `all` holds none of the query-driven ones.
     nonisolated static func makeEntry(
         _ id: CommandID, url: URL? = nil, subtitle: String? = nil

@@ -128,6 +128,14 @@ enum SettingsBackupCoverage {
         AppSettingsKey.aiToolRounds.rawValue:
             "Decides how much a tool-driven reply may spend on this Mac's own connections; no other "
             + "AI setting travels, and an import must not raise a spending limit unasked.",
+        AppSettingsKey.aiAskFromRootSearch.rawValue:
+            "No other AI setting travels in a backup, so an import must not add an AI row to a "
+            + "launcher whose AI it cannot configure.",
+        AppSettingsKey.aiQuickAIFollowUps.rawValue:
+            "Changes the instructions every Quick AI turn carries, like the system prompt beside it.",
+        AppSettingsKey.aiQuickAIPresets.rawValue:
+            "A preset is standing instructions naming a model on this Mac's own connections; an "
+            + "import must not carry either onto another Mac unseen.",
         AppSettingsKey.mcpEnabled.rawValue:
             "Doubles as consent to run third-party MCP servers, one of which is a local process; a "
             + "flag that grants a capability is never carried by a backup.",

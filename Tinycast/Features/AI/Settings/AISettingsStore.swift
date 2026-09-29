@@ -41,6 +41,22 @@ final class AISettingsStore {
     var toolRounds: AIToolRounds {
         didSet { defaults.set(toolRounds.rawValue, forKey: AppSettingsKey.aiToolRounds.rawValue) }
     }
+    var askAIFromRootSearch: Bool {
+        didSet {
+            defaults.set(askAIFromRootSearch, forKey: AppSettingsKey.aiAskFromRootSearch.rawValue)
+        }
+    }
+    var quickAIFollowUps: Bool {
+        didSet {
+            defaults.set(quickAIFollowUps, forKey: AppSettingsKey.aiQuickAIFollowUps.rawValue)
+        }
+    }
+    var quickAIPresets: [QuickAIPreset] {
+        didSet {
+            guard let data = try? JSONEncoder().encode(quickAIPresets) else { return }
+            defaults.set(data, forKey: AppSettingsKey.aiQuickAIPresets.rawValue)
+        }
+    }
     var enabledInstalledProviders: Set<InstalledAIKind> {
         didSet {
             guard
@@ -85,6 +101,13 @@ final class AISettingsStore {
         toolRounds =
             AIToolRounds(rawValue: defaults.integer(forKey: AppSettingsKey.aiToolRounds.rawValue))
             ?? .twentyFive
+        askAIFromRootSearch =
+            defaults.object(forKey: AppSettingsKey.aiAskFromRootSearch.rawValue) as? Bool ?? true
+        quickAIFollowUps =
+            defaults.object(forKey: AppSettingsKey.aiQuickAIFollowUps.rawValue) as? Bool ?? true
+        quickAIPresets =
+            defaults.data(forKey: AppSettingsKey.aiQuickAIPresets.rawValue)
+            .flatMap { try? JSONDecoder().decode([QuickAIPreset].self, from: $0) } ?? []
         enabledInstalledProviders = Self.decodeEnabledInstalledProviders(
             defaults.data(forKey: AppSettingsKey.aiInstalledProviders.rawValue))
         if case .api(let connection, let model, _) = defaultModel,
@@ -95,6 +118,10 @@ final class AISettingsStore {
         if defaultModel == nil {
             defaultModel = firstAvailableSelection()
         }
+    }
+
+    func preset(id: UUID) -> QuickAIPreset? {
+        quickAIPresets.first { $0.id == id }
     }
 
     func connection(id: UUID) -> AIConnection? {

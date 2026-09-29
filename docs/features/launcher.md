@@ -262,9 +262,12 @@ word is not a search for the row that ran, and learning it would rank that row u
 A **contextual** command is one the query itself supplies the target for, so it exists only while a
 query resolves and never sits in the index. `CommandCatalog.contextual` names them, `all` filters
 them out, and `LauncherScreen` offers the row per keystroke — ahead of the ranked matches, because
-nothing the index holds answers a typed address better. There is one today: typing a web address or
-a bare host puts **Open in Browser** on top, and activating it hands the URL to the system's default
-handler through `AppLauncher.open`.
+nothing the index holds answers a typed address better. Typing a web address or a bare host puts
+**Open in Browser** on top, and activating it hands the URL to the system's default handler through
+`AppLauncher.open`. A query that reads as a question (`QuickAIQuestion`) puts **Ask AI** above even
+that, and activating it sends the query to Quick AI; with AI on and Ask AI from root search enabled,
+⌘↵ does the same from any row, except a file-backed one under a non-question query, which keeps Show
+in Finder (see [ai.md](ai.md#quick-ai)).
 
 The shape a query has to have is `QuicklinkDestination.detect` returning `.web`, reused rather than
 re-written so `github.com` and `https://…` mean the same thing here as they do in a quicklink. The
@@ -762,8 +765,8 @@ no such menu item.
 ## Reveal in Finder
 
 Application and System Settings results expose **Show in Finder** in their ⌘K Actions menu and on
-**⌘↵**. Synthetic command results have no filesystem location, so neither the menu row nor the
-shortcut is available for them. `AppEntry.canRevealInFinder` is the one rule both the menu row and
+**⌘↵**. A query that reads as a question hands ⌘↵ to Ask AI instead. Synthetic command results
+have no filesystem location, so neither the menu row nor the shortcut is available for them. `AppEntry.canRevealInFinder` is the one rule both the menu row and
 the key handler read, so the advertised chord can't drift from the behavior.
 
 ## Dragging an application out

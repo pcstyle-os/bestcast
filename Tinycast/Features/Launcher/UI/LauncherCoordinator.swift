@@ -72,11 +72,19 @@ final class LauncherCoordinator {
         }
         // Commands dispatch before the palette hides: mode-switching commands keep it open.
         if app.kind == .command {
+            if let preset = QuickAIPreset.id(fromEntryID: app.id) {
+                core.quickAICoordinator.startPreset(id: preset)
+                return
+            }
             guard let id = CommandCatalog.command(for: app) else { return }
             // Query-driven: only this row knows the URL the typed text resolved to.
             if id == .openInBrowser {
                 paletteCoordinator.hidePalette(restoreFocus: false)
                 AppLauncher.open(app.url)
+                return
+            }
+            if id == .askAI {
+                core.quickAICoordinator.ask(searchQuery ?? "")
                 return
             }
             runCommand(id)
@@ -197,7 +205,7 @@ final class LauncherCoordinator {
             Task { await core.cameraCoordinator.show() }
         case .define:
             core.dictionaryCoordinator.show()
-        case .openInBrowser, .runShellCommand:
+        case .openInBrowser, .runShellCommand, .askAI:
             break  // Query-driven: each runs where the typed text is, never through this funnel.
         case .joinNextMeeting:
             calendarCoordinator.joinNextMeeting()

@@ -63,6 +63,8 @@ enum SettingsFileSchema {
         case .aiOpensTo: return bind(ai, \.opensTo)
         case .aiNewChatAfter: return bind(ai, \.newChatAfter)
         case .aiToolRounds: return bind(ai, \.toolRounds)
+        case .aiAskFromRootSearch: return bind(ai, \.askAIFromRootSearch)
+        case .aiQuickAIFollowUps: return bind(ai, \.quickAIFollowUps)
         case .quickActionLanguage: return bind(quickActions, \.settings.targetLanguage)
         case .fileSearchEnabled: return bind(settings, \.fileSearchEnabled)
         case .fileSearchScopes: return bind(settings, \.fileSearchScopes)

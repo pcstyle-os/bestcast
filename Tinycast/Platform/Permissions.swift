@@ -36,6 +36,21 @@ enum Permissions {
         NSWorkspace.shared.open(url)
     }
 
+    /// Checked, never requested: only the user's own visit to System Settings grants it.
+    static func isScreenRecordingTrusted() -> Bool {
+        CGPreflightScreenCaptureAccess()
+    }
+
+    @MainActor
+    static func openScreenRecordingSettings() {
+        guard
+            let url = URL(
+                string:
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+        else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     static func calendarAccess() -> CalendarAccess {
         switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess: return .granted

@@ -392,6 +392,48 @@ window's composer with the conversation. Chat History is the palette's own brows
 saved chats the window's sidebar lists: ↵ opens one in Quick AI, or in the window when the window
 already holds it, and Continue in AI Chat (`⌘J`) takes it to the window either way.
 
+**Ask AI from root search.** A launcher query that reads as a question — ends in `?`, or opens
+with two or more words led by what, why, how, who, when, where, can, should, is, are, does, explain
+or write — gets an `Ask AI` row (`command:ask-ai`, query-driven like Open in Browser) at the top of
+the results; ↵ on it sends the query to Quick AI. ⌘↵ anywhere in root search asks the same way,
+except on a file-backed row whose query is not a question, where it keeps Show in Finder.
+`QuickAIQuestion` is the pure rule and `quick-ai-test` pins it. Both paths sit behind
+`askAIFromRootSearch` (Settings → AI → Quick AI, on by default) and the AI switch, and only ever send
+what was typed, on the user's own keypress.
+
+**Context.** ⇧⌘S (`PaletteShortcut.attachSelection`) reads the selected text of the app the palette
+covered — `QuickActionRunner.selection`, so it takes the same Accessibility read and ⌘C fallback a
+Quick Action does — and stages it as a `Selection from <App>.txt` chip. ⌘K's **Attach Screenshot of
+<App> Window** captures that app's frontmost window through ScreenCaptureKit
+(`WindowCaptureService`, off-main) and stages it as an image. Nothing is sent until the user sends.
+Screen Recording is only preflighted (`Permissions.isScreenRecordingTrusted`), never requested: when
+it is off, a HUD says so and Tinycast's own dialog offers System Settings. Both attachments carry the
+staging generation, so one that lands after the chat moved on is dropped.
+
+**Reply actions.** With the composer empty and a reply finished, ⌘↵ pastes the reply (its choices
+fence stripped) into the app the palette covered, through `TextInjector.replaceSelection` like a Quick
+Action's Paste; a refused paste copies it and says so, as does ⌘↵ when the palette covered no other
+app. Copy Code Block (`⌥⌘C`) copies the reply's last fenced block. ↑ in an empty composer with
+nothing staged takes the last question back with its attachments; sending it then replaces that exchange (`ChatSession.dropLastExchange`, applied inside `AIChatState.send` only
+after the send's guards pass, so a refused send loses nothing).
+
+**Follow-ups.** With `quickAIFollowUps` on (the default), each Quick AI turn's instructions ask for a
+trailing ` ```choices ` fence — `QuickAIInstructions.followUpRequest` — and the transcript shows at
+most three of them as chips. ⇥ and ⇧⇥ in the composer cycle them into the field; a click sends one.
+
+#### Presets
+
+A `QuickAIPreset` is a name, a system prompt, an optional model and a web-search switch, stored as
+`aiQuickAIPresets` on `AISettingsStore` and managed in Settings → AI → Presets. A preset's prompt
+replaces the Settings system prompt for the chats it applies to; its web-search switch overrides the
+global one where the route offers search. It lives on `AIChatState.preset`, so it lasts until New
+Chat or opening another chat, and is not saved with the conversation. Presets are picked from the
+header model menu's Presets section (`AIModelMenu.withPresets`, appended after the models so the
+model rows keep their indexes) or ⌘K. Each also gets a launcher row, `Quick AI: <name>`
+(`ai-preset:<uuid>`, `.command` kind owned by the AI pane), and a bindable global shortcut,
+`HotKeyAction.aiPreset(id:)`; either starts a fresh Quick AI chat with the preset applied. Deleting a
+preset clears its shortcut, favorite, alias, visibility and ranking with it.
+
 ### AI Chat
 
 The `AI Chat` command (`command:ai-chat-window`, `HotKeyAction.command(.aiChat)`) opens a titled
@@ -568,6 +610,21 @@ window, and every chat action either surface sends — is the nineteenth feature
 - Drop a PDF on the pane with a text-only model selected: the HUD refuses it, as a paste would.
 - Collapse the sidebar with the toolbar button; ⌘N and ⌘Q (Close Window) still work, and ⌘Q with
   Settings in front closes Settings instead.
+- Type `how do I undo a commit` in root search: Ask AI leads the list and ↵ asks it in Quick AI.
+  `safari` shows no such row; ⌘↵ on it asks anyway, and ⌘↵ on an app row with a non-question query
+  still shows it in Finder. With Ask AI from root search off, neither happens.
+- Select text in TextEdit, summon Quick AI, press ⇧⌘S: a `Selection from TextEdit.txt` chip stages
+  and nothing is sent until ↵. With Accessibility off, Tinycast's own dialog offers System Settings.
+- ⌘K → Attach Screenshot of TextEdit Window stages that window. With Screen Recording off, a HUD and
+  Tinycast's dialog appear and no system prompt does; with a text-only model, the HUD refuses it.
+- After a reply, ⌘↵ in the empty composer pastes it into TextEdit; ⌥⌘C copies its last code block.
+  ↑ brings the question back; editing and sending replaces the old exchange rather than adding one.
+- A reply shows up to three follow-up chips; ⇥ fills the first, ⇧⇥ the last, a click sends one.
+  Switching Follow-up suggestions off stops them on the next turn.
+- Add a preset with a prompt, a model and web search in Settings → AI; pick it from the header model
+  menu and from ⌘K, bind it a shortcut, and run `Quick AI: <name>` from the launcher: each opens a
+  fresh chat on that model that answers in the preset's voice. Deleting it removes the row and frees
+  the shortcut.
 - Harnesses: `ai-provider-test` (endpoints, request bodies — web search on and off per route —
   stream decoding, Anthropic's search rows, failed and paused searches, citations with escaped
   titles and search offered only on Anthropic's own URL, persistence repair, Codex framing,
@@ -580,8 +637,9 @@ window, and every chat action either surface sends — is the nineteenth feature
   `installed-ai-test` (Claude/Grok/OpenCode/Cursor flags, prompt
   framing, streaming and cleanup, and Claude's private MCP configuration, control channel, round
   cap, managed-policy branch and web-tool flags and rows, with servers and without) and `apple-intelligence-test` (status copy, snapshot deltas,
-  transcript assembly, error mapping, plus one real generation when this Mac can run one), all in
-  `run-tests.sh`.
+  transcript assembly, error mapping, plus one real generation when this Mac can run one) and
+  `quick-ai-test` (the question rule, instructions, follow-ups, code blocks, editing and presets),
+  all in `run-tests.sh`.
 
 ## Installed commands
 
@@ -862,3 +920,8 @@ answer and must not arrive on another Mac unread. `aiRetention`, `aiOpensTo` and
 join them: all three are decisions about conversations that never leave the Mac that had them, and
 an import must not arrive carrying an instruction to delete them. `aiToolRounds` stays behind too: it
 limits what a tool-driven reply may spend, and an import must not raise that unasked.
+`aiAskFromRootSearch`, `aiQuickAIFollowUps` and `aiQuickAIPresets` stay behind as well: the first
+adds AI to a launcher whose AI the import cannot configure, the second changes every Quick AI turn's
+instructions, and a preset is standing instructions naming a model on this Mac's connections. The
+first two are mirrored in `settings.json` as `ai.askFromRootSearch` and `ai.followUpSuggestions`;
+presets are not.

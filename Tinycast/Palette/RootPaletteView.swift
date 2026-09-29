@@ -246,7 +246,10 @@ struct RootPaletteView: View {
                 "Category", emojiCategoryContent, width: metrics.size.emojiCategoryMenuWidth)
         case .aiModel:
             return headerMenu(
-                "Model", AIModelMenu.models(coordinator: core.aiChatCoordinator, chat: quickAI),
+                "Model",
+                AIModelMenu.withPresets(
+                    AIModelMenu.models(coordinator: core.aiChatCoordinator, chat: quickAI),
+                    quickAI: core.quickAICoordinator),
                 width: metrics.size.menuWidth)
         case .aiReasoning:
             return headerMenu(

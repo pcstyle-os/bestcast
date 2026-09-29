@@ -21,6 +21,7 @@ struct ChatTranscriptView: View {
     let status: String?
     let usage: AIUsage?
     let surface: ChatSurface
+    var choiceLimit = ChatChoices.maxCount
     /// Offered on the last reply once it has finished; nil where a surface has no room for it.
     var onRegenerate: (() -> Void)?
     /// Answers with one of the last reply's choices; nil leaves them unshown.
@@ -51,7 +52,8 @@ struct ChatTranscriptView: View {
                             onRegenerate: isLast && message.role == .assistant
                                 ? onRegenerate : nil,
                             // Only the latest reply's choices still answer anything.
-                            onChoose: isLast && message.state == .complete ? onChoose : nil
+                            onChoose: isLast && message.state == .complete ? onChoose : nil,
+                            choiceLimit: choiceLimit
                         )
                         .equatable()
                         .environment(\.chatTextHighlight, highlight(for: message.id))
@@ -174,6 +176,7 @@ private struct ChatMessageView: View, @MainActor Equatable {
     let status: String?
     let onRegenerate: (() -> Void)?
     let onChoose: ((String) -> Void)?
+    let choiceLimit: Int
     @Environment(\.chatTextHighlight) private var highlight
 
     @State private var hovered = false
@@ -303,7 +306,8 @@ private struct ChatMessageView: View, @MainActor Equatable {
                     .environment(\.chatFindPath, [offset])
                 }
                 if let onChoose, !parts.choices.isEmpty {
-                    ChatSuggestionChips(choices: parts.choices, onChoose: onChoose)
+                    ChatSuggestionChips(
+                        choices: Array(parts.choices.prefix(choiceLimit)), onChoose: onChoose)
                 }
                 if !references.isEmpty { ChatSourcesView(references: references) }
             }
@@ -319,7 +323,7 @@ extension ChatMessageView {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.message == rhs.message && lhs.status == rhs.status
             && (lhs.onRegenerate == nil) == (rhs.onRegenerate == nil)
-            && (lhs.onChoose == nil) == (rhs.onChoose == nil)
+            && (lhs.onChoose == nil) == (rhs.onChoose == nil) && lhs.choiceLimit == rhs.choiceLimit
     }
 }
 
