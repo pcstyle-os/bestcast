@@ -77,6 +77,11 @@ enum ExtensionCatalog {
         supportDirectory().appendingPathComponent("extension-commands.json", isDirectory: false)
     }
 
+    /// Consent per contribution; outside `extension-data` for the same reason as the metadata.
+    static func contributionsFile() -> URL {
+        supportDirectory().appendingPathComponent("extension-contributions.json", isDirectory: false)
+    }
+
     /// Per-extension `environment.supportPath` — an extension's own scratch directory.
     static func supportPath(for name: String) -> URL {
         supportRoot().appendingPathComponent(safeName(name), isDirectory: true)
@@ -233,6 +238,7 @@ enum ExtensionCatalog {
                     try fm.copyItem(at: item, to: destination.appendingPathComponent(folder))
                 }
             }
+            try copyContributionExports(of: manifest, from: source, to: destination)
             try restoreExecutablePermissions(in: destination)
         } catch {
             throw InstallError.copyFailed(error.localizedDescription)
@@ -241,6 +247,21 @@ enum ExtensionCatalog {
         // Re-read from the install location so the returned value points at the copy.
         let installedManifest = try ExtensionManifest.load(directory: destination)
         return InstalledExtension(manifest: installedManifest, directory: destination)
+    }
+
+    /// A contributed export may live anywhere under the source; one already copied is left alone.
+    private static func copyContributionExports(
+        of manifest: ExtensionManifest, from source: URL, to destination: URL
+    ) throws {
+        let fm = FileManager.default
+        for path in ExtensionContributions(manifest: manifest).exportPaths.sorted() {
+            let item = source.appendingPathComponent(path)
+            let target = destination.appendingPathComponent(path)
+            guard fm.fileExists(atPath: item.path), !fm.fileExists(atPath: target.path) else { continue }
+            try fm.createDirectory(
+                at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.copyItem(at: item, to: target)
+        }
     }
 
     /// Both paths it owns: nothing else collects the scratch dir, and the dialog promises it goes.

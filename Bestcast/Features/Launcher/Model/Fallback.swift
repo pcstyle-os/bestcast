@@ -22,12 +22,18 @@ enum Fallback: Hashable, Sendable {
 
     case builtin(Builtin)
     case quicklink(UUID)
+    /// An extension command a contribution offers; the id is the command's own launcher id.
+    case extensionCommand(extensionName: String, commandName: String)
+
+    static let extensionIDPrefix = "extension:"
 
     /// The row's `AppEntry` id, so a stored order outlives a rename and survives a reinstall.
     var id: String {
         switch self {
         case .builtin(let builtin): return builtin.command.rawValue
         case .quicklink(let id): return Quicklink.entryIDPrefix + id.uuidString.lowercased()
+        case .extensionCommand(let extensionName, let commandName):
+            return Self.extensionIDPrefix + extensionName + "/" + commandName
         }
     }
 
@@ -38,6 +44,14 @@ enum Fallback: Hashable, Sendable {
             self = .builtin(builtin)
         } else if let quicklink = Quicklink.id(fromEntryID: id) {
             self = .quicklink(quicklink)
+        } else if id.hasPrefix(Self.extensionIDPrefix),
+            case let body = id.dropFirst(Self.extensionIDPrefix.count),
+            let slash = body.lastIndex(of: "/"), slash != body.startIndex,
+            body.index(after: slash) != body.endIndex
+        {
+            self = .extensionCommand(
+                extensionName: String(body[..<slash]),
+                commandName: String(body[body.index(after: slash)...]))
         } else {
             return nil
         }
@@ -51,6 +65,7 @@ enum Fallback: Hashable, Sendable {
         case .builtin(.runShellCommand): return "Run Shell Command"
         case .builtin(.define): return "Define Word"
         case .quicklink: return "Open Quicklink"
+        case .extensionCommand: return "Open Command"
         }
     }
 

@@ -232,6 +232,7 @@ struct ExtensionManifest: Sendable, Hashable {
     let tools: [ExtensionTool]
     /// `ai.instructions`: what the model is told whenever the extension is addressed.
     let aiInstructions: String?
+    /// `bestcast`, kept raw; each feature reads its own slice, so the manifest stays schema-free.
     let bestcastJSON: Data?
 
     /// `platforms` is absent on older manifests, which predate Windows support and are macOS-only.
@@ -282,6 +283,6 @@ struct ExtensionManifest: Sendable, Hashable {
         aiInstructions = ((json["ai"] as? [String: Any])?["instructions"] as? String)
             .flatMap { $0.isEmpty ? nil : $0 }
         bestcastJSON = (json["bestcast"] as? [String: Any])
-            .flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+            .flatMap { try? JSONSerialization.data(withJSONObject: $0, options: .sortedKeys) }
     }
 }

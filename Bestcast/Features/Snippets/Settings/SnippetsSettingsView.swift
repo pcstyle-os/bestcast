@@ -242,6 +242,7 @@ private struct SnippetEditorPanel: View {
     @Environment(AppCore.self) private var core
     @Environment(AppSettings.self) private var settings
     @Environment(SnippetsStore.self) private var store
+    @Environment(ExtensionSearchCoordinator.self) private var extensionSearch
     @FocusState private var isTemplateFocused: Bool
     @FocusState private var isDescriptionFocused: Bool
     @State private var isDescribing = false
@@ -435,6 +436,12 @@ private struct SnippetEditorPanel: View {
             if settings.aiEnabled, settings.snippetAIPlaceholders {
                 Section("AI") {
                     placeholderItem("{ai prompt=\"Prompt\"}")
+                }
+            }
+            let extensionTokens = extensionSearch.placeholderTokens
+            if !extensionTokens.isEmpty {
+                Section("Extensions") {
+                    ForEach(extensionTokens, id: \.self) { placeholderItem($0) }
                 }
             }
         }

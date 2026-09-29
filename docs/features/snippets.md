@@ -142,9 +142,10 @@ so a migrated snippet keeps working.
 | `{snippet:Name}` · `{snippet name="Name"}` | Another snippet resolved by name, then keyword                                                                                                                                                                     |
 | `{cursor}`                                 | Final insertion point                                                                                                                                                                                              |
 | `{ai prompt="…"}`                          | The default model's reply to the prompt, when [AI placeholders](#ai-placeholders-and-drafts) are on; otherwise left as written                                                                                     |
+| `{ext:<extension>/<name> key="value"}`     | An opted-in extension placeholder's text (see [Extension placeholders](#extension-placeholders)); empty when it is off, unknown or fails                                                                           |
 
-The editor's **Insert…** menu lists every token above except `{ai}`, which it lists only while AI
-placeholders are on; parameters and modifiers are typed by hand. A
+The editor's **Insert…** menu lists every token above, `{ai}` only while AI placeholders are on and
+`{ext:…}` once per opted-in placeholder, under Extensions; parameters and modifiers are typed by hand. A
 parameter value needs quotes only to carry a `|`: an unquoted one runs to the next `key=`, so
 `{date format=MMMM d, yyyy}` keeps its spaces the way Raycast writes it.
 
@@ -197,6 +198,17 @@ The snippet editor's **Generate with AI…** button (⌘J, shown while AI is on)
 field above the text. Return sends it with `SnippetAIPrompt.draftInstructions`, which list only the
 tokens a fresh template can use unaided, and the reply replaces the text with Revert one click away.
 Stop cancels it, and so does closing the editor.
+
+## Extension placeholders
+
+`{ext:<extension>/<name> key="value"}` asks an installed extension for text, through a placeholder it
+declares under `bestcast.contributes.placeholders` (see
+[Contributions](extensions.md#contributions)). `SnippetTemplateEngine.externalPlaceholders` collects
+them, nested snippets included, before anything is typed; `SnippetCoordinator.resolveExternal`, wired
+by `AppCore` to `ExtensionSearchCoordinator.placeholder`, fills each in turn, with 3 seconds apiece
+and only the arguments the manifest declares. The results go into `ExpansionContext.externalValues`
+ahead of the AI fill. One that is not opted in, is unknown, fails or runs out of time expands to
+nothing, never to its own source. A quicklink never resolves one and leaves it as written.
 
 ## Launcher and automatic keywords
 

@@ -291,7 +291,8 @@ struct ExtensionsSettingsView: View {
             error = nil
             for url in panel.urls {
                 do {
-                    try await core.extensions.install(from: url)
+                    let name = try await core.extensions.install(from: url)
+                    core.extensionSearch.offerContributions(forExtensionNamed: name)
                 } catch {
                     self.error = error.localizedDescription
                 }
@@ -397,6 +398,8 @@ private struct ExtensionDisclosure: View {
                             extensionName: installed.manifest.name, schema: schema)
                     }
                 }
+
+                ExtensionContributionsBlock(installed: installed)
 
                 rule
                 heading(installed.manifest.commands.count == 1 ? "Command" : "Commands")

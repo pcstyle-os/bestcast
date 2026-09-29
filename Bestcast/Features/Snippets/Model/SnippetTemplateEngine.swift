@@ -16,6 +16,8 @@ enum SnippetTemplateEngine {
         var browserTab: String?
         /// `{ai}` replies by prompt, filled only when the reader opted in; nil leaves the token.
         var aiAnswers: [String: String]?
+        /// `{ext:…}` values; nil leaves the token as written, a missing key expands to nothing.
+        var externalValues: [ExternalPlaceholder: String]?
 
         var clipboard: String { clipboardHistory.first ?? "" }
 
@@ -27,6 +29,7 @@ enum SnippetTemplateEngine {
             copy.frontmostApp = frontmostApp
             copy.browserTab = browserTab
             copy.aiAnswers = aiAnswers
+            copy.externalValues = externalValues
             return copy
         }
 
@@ -90,6 +93,13 @@ enum SnippetTemplateEngine {
         let defaultValue: String?
     }
 
+    /// `{ext:<extension>/<name> key="value"}`: a value only another feature can produce.
+    struct ExternalPlaceholder: Sendable, Hashable {
+        let namespace: String
+        let name: String
+        let arguments: [String: String]
+    }
+
     /// The kinds of fact a template reads, so a caller gathers only what it will use.
     enum Placeholder: Sendable, Hashable {
         case clipboard
@@ -102,6 +112,7 @@ enum SnippetTemplateEngine {
         case frontmostApp
         case browserTab
         case ai
+        case external
     }
 
     /// Formatting the result asks for: none for a snippet, percent-encoding for a quicklink URL.
@@ -192,6 +203,7 @@ enum SnippetTemplateEngine {
             case .snippetReference: found.insert(.snippet)
             case .fact(let fact, _, _): found.insert(fact.placeholder)
             case .ai: found.insert(.ai)
+            case .external: found.insert(.external)
             }
         }
         return found
@@ -200,32 +212,52 @@ enum SnippetTemplateEngine {
     /// Every distinct `{ai}` prompt expansion would reach, nested snippets included, in order.
     static func aiPrompts(in record: StoredSnippet, snippets: [StoredSnippet]) -> [String] {
         var prompts: [String] = []
-        collectAIPrompts(
-            in: record.snippet.text, snippets: snippets.sorted { $0.id < $1.id }, depth: 0,
-            visitedIDs: [record.id], into: &prompts)
+        for case .ai(let prompt, _, _) in reachableSegments(of: record, snippets: snippets)
+        where !prompts.contains(prompt) {
+            prompts.append(prompt)
+        }
         return prompts
     }
 
-    /// Walks references exactly as `expandText` does, so it never asks for a reply nobody reads.
-    private static func collectAIPrompts(
+    /// Every distinct `{ext:…}` expansion would reach, nested snippets included, in order.
+    static func externalPlaceholders(
+        in record: StoredSnippet, snippets: [StoredSnippet]
+    ) -> [ExternalPlaceholder] {
+        var found: [ExternalPlaceholder] = []
+        for case .external(let placeholder, _, _) in reachableSegments(of: record, snippets: snippets)
+        where !found.contains(placeholder) {
+            found.append(placeholder)
+        }
+        return found
+    }
+
+    private static func reachableSegments(
+        of record: StoredSnippet, snippets: [StoredSnippet]
+    ) -> [Segment] {
+        var segments: [Segment] = []
+        collectSegments(
+            in: record.snippet.text, snippets: snippets.sorted { $0.id < $1.id }, depth: 0,
+            visitedIDs: [record.id], into: &segments)
+        return segments
+    }
+
+    /// Walks references exactly as `expandText` does, so it never asks for a value nobody reads.
+    private static func collectSegments(
         in text: String, snippets: [StoredSnippet], depth: Int,
-        visitedIDs: Set<StoredSnippet.ID>, into prompts: inout [String]
+        visitedIDs: Set<StoredSnippet.ID>, into segments: inout [Segment]
     ) {
         for segment in parseSegments(text) {
-            switch segment {
-            case .ai(let prompt, _, _):
-                if !prompts.contains(prompt) { prompts.append(prompt) }
-            case .snippetReference(let key, _):
-                guard depth < maximumReferenceDepth,
-                    let target = resolveReference(key, snippets: snippets),
-                    !visitedIDs.contains(target.id)
-                else { continue }
-                collectAIPrompts(
-                    in: target.snippet.text, snippets: snippets, depth: depth + 1,
-                    visitedIDs: visitedIDs.union([target.id]), into: &prompts)
-            default:
+            guard case .snippetReference(let key, _) = segment else {
+                segments.append(segment)
                 continue
             }
+            guard depth < maximumReferenceDepth,
+                let target = resolveReference(key, snippets: snippets),
+                !visitedIDs.contains(target.id)
+            else { continue }
+            collectSegments(
+                in: target.snippet.text, snippets: snippets, depth: depth + 1,
+                visitedIDs: visitedIDs.union([target.id]), into: &segments)
         }
     }
 
@@ -292,6 +324,7 @@ enum SnippetTemplateEngine {
         case snippetReference(key: String, source: String)
         case fact(ContextFact, source: String, modifiers: [Modifier])
         case ai(prompt: String, source: String, modifiers: [Modifier])
+        case external(ExternalPlaceholder, source: String, modifiers: [Modifier])
     }
 
     private enum ContextFact {
@@ -400,6 +433,12 @@ enum SnippetTemplateEngine {
                     continue
                 }
                 result.append(apply(modifiers, to: answers[prompt] ?? "", encoding: encoding))
+            case .external(let placeholder, let source, let modifiers):
+                guard let values = context.externalValues else {
+                    result.append(source)
+                    continue
+                }
+                result.append(apply(modifiers, to: values[placeholder] ?? "", encoding: encoding))
             case .snippetReference(let key, let source):
                 guard depth < maximumReferenceDepth,
                     let target = resolveReference(key, snippets: snippets),
@@ -525,6 +564,9 @@ enum SnippetTemplateEngine {
             guard !key.isEmpty, modifiers.isEmpty else { return nil }
             return .snippetReference(key: key, source: source)
         }
+        if head.hasPrefix("ext:") {
+            return externalSegment(head.dropFirst("ext:".count), source: source, modifiers: modifiers)
+        }
 
         guard let token = parseToken(head) else { return nil }
         switch token.command {
@@ -568,6 +610,19 @@ enum SnippetTemplateEngine {
         default:
             return nil
         }
+    }
+
+    /// The name keeps its case, unlike a command: it is another feature's key, not a keyword.
+    private static func externalSegment(
+        _ body: Substring, source: String, modifiers: [Modifier]
+    ) -> Segment? {
+        let name = body.prefix { !$0.isWhitespace && $0 != "=" }
+        guard let slash = name.lastIndex(of: "/"), slash != name.startIndex,
+            name.index(after: slash) != name.endIndex, let token = parseToken(String(body))
+        else { return nil }
+        return .external(
+            ExternalPlaceholder(namespace: "ext", name: String(name), arguments: token.parameters),
+            source: source, modifiers: modifiers)
     }
 
     private static func parseDateTime(_ token: ParsedToken) -> DateTimeToken? {

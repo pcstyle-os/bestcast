@@ -1,0 +1,28 @@
+{
+  "name": "surfaces",
+  "title": "Surfaces",
+  "description": "Every kind of contribution, for ext-surfaces-test.",
+  "author": "bestcast",
+  "platforms": ["macOS"],
+  "commands": [
+    { "name": "open-ticket", "title": "Open Ticket", "mode": "no-view" }
+  ],
+  "bestcast": {
+    "contributes": {
+      "search": [
+        { "name": "lookup", "title": "Tickets", "export": "src/search-lookup.js", "maxResults": 4 },
+        { "name": "estimate", "title": "Estimate", "export": "src/search-lookup.js#answer",
+          "prefix": "est", "minLength": 2, "mode": "answer" }
+      ],
+      "fallbacks": [{ "command": "open-ticket", "title": "Open Ticket" }],
+      "actions": [
+        { "name": "share", "title": "Share App", "icon": "square.and.arrow.up",
+          "on": ["app", "snippet"], "export": "src/search-lookup.js#share" }
+      ],
+      "placeholders": [
+        { "name": "ticket", "title": "Ticket Number", "export": "src/placeholder-ticket.js",
+          "arguments": [{ "name": "project" }] }
+      ]
+    }
+  }
+}

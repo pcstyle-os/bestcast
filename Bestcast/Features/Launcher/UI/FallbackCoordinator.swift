@@ -37,6 +37,7 @@ final class FallbackCoordinator {
         switch fallback {
         case .builtin(let builtin): return CommandCatalog.makeEntry(builtin.command)
         case .quicklink(let id): return quicklinks.quicklink(id: id).map(AppEntry.init)
+        case .extensionCommand: return core.extensionSearch.fallbackEntry(for: fallback)
         }
     }
 
@@ -48,6 +49,7 @@ final class FallbackCoordinator {
         case .builtin(.runShellCommand): core.customCommandCoordinator.runShellCommand(query)
         case .builtin(.define): core.dictionaryCoordinator.show(term: query)
         case .quicklink(let id): core.quicklinkCoordinator.openQuicklink(id: id, filling: query)
+        case .extensionCommand: core.extensionSearch.runFallback(fallback, query: query)
         }
     }
 
@@ -60,12 +62,13 @@ final class FallbackCoordinator {
     /// A fallback whose feature is switched off is offered nowhere, Settings included.
     private var candidates: [Fallback] {
         var result = Fallback.Builtin.allCases.filter(isAvailable).map(Fallback.builtin)
-        guard settings.quicklinksEnabled else { return result }
-        result += quicklinks.quicklinks
-            .filter { $0.isEnabled && QuicklinkDestination.containsPlaceholder($0.link) }
-            .sorted(by: Quicklink.precedes)
-            .map { .quicklink($0.id) }
-        return result
+        if settings.quicklinksEnabled {
+            result += quicklinks.quicklinks
+                .filter { $0.isEnabled && QuicklinkDestination.containsPlaceholder($0.link) }
+                .sorted(by: Quicklink.precedes)
+                .map { .quicklink($0.id) }
+        }
+        return result + core.extensionSearch.fallbacks
     }
 
     private func isAvailable(_ builtin: Fallback.Builtin) -> Bool {

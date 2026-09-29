@@ -7,7 +7,7 @@ produces, rendered natively into the palette. No Electron, no browser, no Node.j
   [The Swift host](#the-swift-host) · [Rendering](#rendering)
 - [Turning it on](#turning-it-on) · [Installing extensions](#installing-extensions) ·
   [Registries](#registries) · [Shortcuts](#shortcuts) · [Aliases](#aliases) · [Deeplinks](#deeplinks) ·
-  [What's supported](#whats-supported) ·
+  [What's supported](#whats-supported) · [Contributions](#contributions) ·
   [What isn't](#what-isnt-supported-yet) · [Working on the runtime](#working-on-the-runtime)
 
 ## Invariants
@@ -39,6 +39,12 @@ produces, rendered natively into the palette. No Electron, no browser, no Node.j
   them only through `@handle`; a tool that is not clearly read-only runs only after the user agrees.
   `ExtensionToolSession` boots, loads, calls and throws the runtime away, so no tool state outlives
   its call. See [AI tools](#ai-tools).
+- **Contributed rows are host-rendered; an extension never draws on a launcher surface.** A search
+  provider, ⌘K action or placeholder returns data — text, an SF Symbol name, a fixed set of actions —
+  and `ExtensionSearchResultRow` draws it. See [Contributions](#contributions).
+- **A search provider only runs when opted in.** Every contribution starts off, per item, and the
+  consent never rides a backup; `setEnabled(false)` and uninstall stop them all. A provider that is
+  on sees every launcher query as it is typed, which is why its toggle carries a warning.
 - **`SymbolCatalog` reads a system bundle, not API.** The list comes from `CoreGlyphs.bundle` at
   runtime; every read stays optional and falls back to `SymbolCatalog.suggested`, and Apple's restricted
   marks are never offered.
@@ -165,6 +171,15 @@ Two host-call flavours:
 | `UI/ExtensionScreen.swift` | flattens one screen into the palette's row order |
 | `UI/ExtensionCommandScreen.swift` | that order adapted to `PaletteScreen`, so the flat selection indexes it |
 | `UI/ExtensionCoordinator.swift` | launching, leaving, and every host callback that touches a surface |
+| `Model/ExtensionContribution.swift` | `bestcast.contributes` → search providers, fallbacks, actions, placeholders |
+| `Model/ExtensionSearchResult.swift` | a provider's return value → capped `ExtensionSearchItem`s and their actions |
+| `Model/ExtensionSearchScheduler.swift` | the debounce, prefix, minimum length and stale-reply rules |
+| `Service/ExtensionContributionStore.swift` | which contributions are on, per extension |
+| `Service/ExtensionContributionRunner.swift` | runs a contributed export; search providers stay warm |
+| `UI/ExtensionSearchCoordinator.swift` | root-search sections, fallbacks, ⌘K groups, placeholder values, consent |
+| `UI/ExtensionSearchResultRow.swift` | the host-drawn contributed row |
+| `UI/ExtensionContributionConsent.swift` | the post-install opt-in dialog body |
+| `Settings/ExtensionContributionsBlock.swift` | the same toggles in Settings › Extensions › <extension> |
 
 `ExtensionRuntime` is `@unchecked Sendable` deliberately and narrowly: every `JSContext` / `JSValue`
 touch happens on one private serial queue, and only plain `Sendable` values cross in or out
@@ -886,6 +901,48 @@ but not yet granted. It has its own Revoke, and each extension has Revoke All. U
 every grant, a rescan forgets those of an extension whose folder is gone, and switching extensions
 off cancels any call still waiting on a dialog.
 
+## Contributions
+
+Beyond its own commands, an extension can add to the launcher itself. Nothing Raycast defines does
+this, so it is declared under a Bestcast-only key in `package.json`:
+
+```json
+"bestcast": { "contributes": {
+  "search": [{ "name": "lookup", "title": "Tickets", "export": "src/search.js",
+               "prefix": "t", "minLength": 2, "mode": "rows", "maxResults": 3 }],
+  "fallbacks": [{ "command": "open-ticket", "title": "Open Ticket" }],
+  "actions": [{ "name": "share", "title": "Share", "icon": "square.and.arrow.up",
+                "on": ["app", "snippet", "quicklink"], "export": "src/share.js" }],
+  "placeholders": [{ "name": "ticket", "title": "Ticket", "export": "src/ticket.js",
+                     "arguments": [{ "name": "project" }] }]
+}}
+```
+
+An `export` is a bundle path, `.js` implied when left off, optionally `#member` for a named export;
+install copies each one next to the commands. The inputs and return shapes are in `Scripts/raycast-runtime/types/bestcast-contributions.d.ts`.
+
+| Kind | Where it shows | What the export gets and returns |
+| --- | --- | --- |
+| **Root search** | a section under passive AI's rows, headed by the provider's title | `{ query }`, minus any `prefix`; rows (3 by default, at most 5), or one `mode: "answer"` line |
+| **Fallback** | the `Use "…" with` section | nothing: it names one of the extension's commands, launched with the query as `fallbackText` |
+| **Action** | a trailing group titled after the extension in ⌘K on an app, snippet or quicklink row | `{ kind, item }`; a returned string is shown as a HUD. `command` instead launches that command with `{ kind, item }` as its `launchContext` |
+| **Placeholder** | `{ext:<extension>/<name> key="value"}` in a snippet | `{ arguments }`, only the declared ones; a string is the text |
+
+A search provider is called 150 ms after typing stops, on a warm context kept per export, and has
+800 ms to answer; a late answer, or one for a query that has since changed, is dropped. Rows that land
+above the highlight push it down, so ↵ still opens what it did. A row's first action is ↵ and the rest
+are its ⌘K menu: copy, paste, open an http(s)/mailto URL or a file path, or launch one of the
+extension's own commands. A placeholder has 3 seconds; a failure, a disabled one or an unknown one
+expands to nothing. Search and placeholder code runs because of a keystroke, not a choice, so it gets
+the `background` launch type: no toasts, HUDs, dialogs or window changes, and no AI.
+
+**Consent.** After an install from a folder or the store, a dialog lists every contribution with a
+toggle, all off; the search group repeats that a provider sees everything typed in the launcher, and
+runs as you type. The
+same toggles stay in Settings › Extensions › <extension> under **Contributions**. Switching one off
+stops its warm context, and a context still loading when that happens never runs. The choices live in `extension-contributions.json`, which no backup carries,
+and uninstall forgets them.
+
 ## What isn't supported yet
 
 | Gap | Why |
@@ -897,6 +954,7 @@ off cancels any call still waiting on a dialog.
 | **Interactive `spawn` stdin** | stdout and stderr stream, but stdin is sent once as the child starts: whatever was written in the same tick. A later `stdin.write` is dropped. |
 | **`net` / `tls`** | Resolve but throw on use. Nothing bridges a raw socket; a bundled `ws` reaches the network through the WebSocket bridge instead. `tls.TLSSocket` is the one exception: `http2-wrapper`, inside `got`, derives a class from one at import time, so it constructs as an inert duplex. |
 | **Streaming HTTP** | The bridge answers a request with the whole body at once, so `http.request` delivers one chunk and `Response.body` replays bytes that already arrived. Server-sent events, network-level progress and backpressure onto the socket are all out of reach; `stream` itself is real enough to carry them the day the bridge is. |
+| **`file` and `clipboard.*` action targets** | The manifest accepts them, but only app, snippet and quicklink rows offer contributed ⌘K actions so far. |
 | **An extension with tools but no commands** | The manifest still needs one command, so a tools-only extension is not recognised as one. |
 
 ## Working on the runtime
@@ -966,6 +1024,7 @@ never shares with an installed copy.
 | OAuth tokens | macOS Keychain (`com.bestcast.extensions.oauth`) | yes |
 | Menu-bar activation and snapshot | `extension-commands.json` | yes |
 | Icon override | `UserDefaults` → `extensionAppearances` | yes |
+| Contribution opt-ins | `extension-contributions.json` | yes |
 | Command shortcuts | `UserDefaults` → `hotkey.extensionCommand.<entry id>` | yes |
 | Favorites, hidden items | `UserDefaults` → `favoriteApps`, `hiddenItemKeys` | yes |
 | User alias | `UserDefaults` → `launcherAliases` | yes |

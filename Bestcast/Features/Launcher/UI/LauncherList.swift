@@ -29,6 +29,8 @@ struct LauncherList: View {
     struct LeadingSection {
         let title: String
         let rowIDs: [String]
+        /// A further header before the row at that index, where one feature's rows follow another's.
+        var headers: [Int: String] = [:]
         let row: (Int, Bool) -> AnyView
         let onActivate: (Int) -> Void
         let onActions: (Int) -> Void
@@ -75,6 +77,7 @@ struct LauncherList: View {
         case app(AppEntry, slot: Character?)
         case fallback(AppEntry, index: Int)
         case leading(index: Int, id: String)
+        case leadingHeader(index: Int, title: String)
         var id: String {
             switch self {
             case .header(let title): return "header-" + title
@@ -83,6 +86,7 @@ struct LauncherList: View {
             case .app(let app, _): return app.id
             case .fallback(let app, _): return "fallback-" + app.id
             case .leading(_, let id): return id
+            case .leadingHeader(let index, _): return "leading-header-\(index)"
             }
         }
     }
@@ -103,7 +107,11 @@ struct LauncherList: View {
     private var leadingRows: [Row] {
         guard let leading else { return [] }
         return [.header(leading.title)]
-            + leading.rowIDs.enumerated().map { Row.leading(index: $0, id: $1) }
+            + leading.rowIDs.enumerated().flatMap { index, id -> [Row] in
+                let row = Row.leading(index: index, id: id)
+                guard let title = leading.headers[index] else { return [row] }
+                return [.leadingHeader(index: index, title: title), row]
+            }
     }
 
     private var rows: [Row] {
@@ -163,6 +171,8 @@ struct LauncherList: View {
                                 switch row {
                                 case .header(let title):
                                     SectionHeader(title: title, isFirst: row.id == rows.first?.id)
+                                case .leadingHeader(_, let title):
+                                    SectionHeader(title: title, isFirst: false)
                                 case .fallbackHeader(let title):
                                     SectionHeader(
                                         title: title, isFirst: row.id == rows.first?.id,

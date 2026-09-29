@@ -38,6 +38,10 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
     /// Extension-scoped state the launcher and Settings read through here, like `storage`.
     let appearances = ExtensionAppearanceStore()
     let grants = ExtensionGrantStore()
+    let contributionStore = ExtensionContributionStore(fileURL: ExtensionCatalog.contributionsFile())
+    @ObservationIgnored private(set) lazy var contributions = ExtensionContributionRunner { [unowned self] in
+        try await self.openExportSession(owner: $0, bundle: $1, launchType: $2)
+    }
     private let commandMetadata = ExtensionCommandMetadataStore(
         fileURL: ExtensionCatalog.commandMetadataFile())
     @ObservationIgnored private let runtime: ExtensionRuntime
@@ -98,6 +102,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             menuBars?.stop()
             menuBars = nil
             bridge.bestcast.stopAll()
+            contributions.stopAll()
             await stop()
             backgroundTask?.cancel()
             backgroundTask = nil
@@ -235,9 +240,12 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
 
     // MARK: - Install / uninstall
 
-    func install(from source: URL) async throws {
-        _ = try ExtensionCatalog.install(from: source)
+    /// The installed manifest's name, so the caller can offer its contributions.
+    @discardableResult
+    func install(from source: URL) async throws -> String {
+        let installed = try ExtensionCatalog.install(from: source)
         await refresh()
+        return installed.manifest.name
     }
 
     /// Scanned off-main: it reads a manifest per directory, and a full Raycast install is dozens.
@@ -299,6 +307,8 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         commandMetadata.removeAll(extension: installedExtension.manifest.name)
         appearances.set(nil, for: installedExtension.manifest.name)
         grants.forget(extension: installedExtension.manifest.name)
+        contributions.stop(extension: installedExtension.manifest.name)
+        contributionStore.forget(extension: installedExtension.manifest.name)
         onDidUninstall?(entryIDs)
         await refresh()
     }
@@ -491,6 +501,56 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             preferences: storage.resolvedPreferences(extension: owner.manifest.name, schemas: schemas),
             caches: storage.caches(extension: owner.manifest.name), arguments: [:],
             fallbackText: nil, isDarkAppearance: NSApp.effectiveAppearance.isDark,
+            canAccessAI: bridge.ai.canAccess())
+        do {
+            try await session.load(code: code, file: bundle, context: context, support: support)
+        } catch {
+            session.end()
+            throw error
+        }
+        return session
+    }
+
+    /// A contribution's export on its own runtime; `.background` is for code the user didn't run.
+    func openExportSession(
+        owner: InstalledExtension, bundle: URL, launchType: ExtensionLaunchType
+    ) async throws -> ExtensionToolSession {
+        guard isEnabled, let coordinator else {
+            throw ExtensionLaunchError.unknownCommand(owner.manifest.name)
+        }
+        let schemas = owner.manifest.preferences
+        let missing = storage.missingRequiredPreferences(extension: owner.manifest.name, schemas: schemas)
+        guard missing.isEmpty else { throw ExtensionLaunchError.missingPreferences(missing) }
+        let support = ExtensionCatalog.supportPath(for: owner.manifest.name)
+        let code = try await Task.detached(priority: .userInitiated) {
+            try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+            return try String(contentsOf: bundle, encoding: .utf8)
+        }.value
+        // Loading runs the bundle's top level, so a switch-off during the read must still hold.
+        guard isEnabled, extensionNamed(owner.manifest.name) != nil else {
+            throw ExtensionLaunchError.unknownCommand(owner.manifest.name)
+        }
+        let host = ExtensionToolHost(
+            owner: owner, storage: storage, manager: self, coordinator: coordinator,
+            launchType: launchType)
+        let bridge = self.bridge.scoped(to: host)
+        // Keystroke-driven code must not spend the reader's AI: these contributions are not AI.
+        if launchType == .background {
+            bridge.ai.makeProvider = nil
+            bridge.ai.canAccess = { false }
+        }
+        let session = ExtensionToolSession(runtime: ExtensionRuntime(hostAPI: bridge)) { [storage] in
+            host.stop()
+            bridge.context = nil
+            storage.flush()
+        }
+        let context = ExtensionLaunchContext(
+            extensionName: owner.manifest.name, extensionTitle: owner.title,
+            commandName: bundle.deletingPathExtension().lastPathComponent, commandMode: .noView,
+            assetsPath: owner.assetsPath, supportPath: support.path,
+            preferences: storage.resolvedPreferences(extension: owner.manifest.name, schemas: schemas),
+            caches: storage.caches(extension: owner.manifest.name), arguments: [:],
+            fallbackText: nil, launchType: launchType, isDarkAppearance: NSApp.effectiveAppearance.isDark,
             canAccessAI: bridge.ai.canAccess())
         do {
             try await session.load(code: code, file: bundle, context: context, support: support)

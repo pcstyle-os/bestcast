@@ -211,6 +211,7 @@ final class AppCore {
         settings: settings, store: mcpSettings, manager: mcp, core: self)
     @ObservationIgnored private(set) lazy var builtInTools = BuiltInToolCoordinator(core: self)
     @ObservationIgnored private(set) lazy var extensionTools = ExtensionToolCoordinator(core: self)
+    @ObservationIgnored private(set) lazy var extensionSearch = ExtensionSearchCoordinator(core: self)
     /// Its own window and lifecycle, like Settings; Quick AI is the palette's half of the feature.
     @ObservationIgnored private(set) lazy var aiChatCoordinator = AIChatCoordinator(
         chats: aiChats, settings: settings, appIndex: appIndex,
@@ -296,6 +297,9 @@ final class AppCore {
                 })
             extensions.configureBestcast(services: AppExtensionServices(core: self))
             extensions.start(appIndex: appIndex, coordinator: extensionCoordinator)
+            snippetCoordinator.resolveExternal = { [weak self] placeholder in
+                await self?.extensionSearch.placeholder(placeholder)
+            }
             extensionCoordinator.applyEnabled()
             fileSearchCoordinator.applyEnabled()
             windowSwitchCoordinator.applyEnabled()
@@ -694,7 +698,17 @@ final class AppCore {
                 _ = $0.query
                 _ = $0.mode
                 _ = $0.isVisible
-            }, reproject: { $0.passiveAICoordinator.paletteChanged() })
+            },
+            reproject: {
+                $0.passiveAICoordinator.paletteChanged()
+                $0.extensionSearch.paletteChanged()
+            })
+        track(
+            extensions,
+            {
+                _ = $0.isEnabled
+                _ = $0.installed
+            }, reproject: { $0.extensionSearch.reset() })
         track({ _ = $0.fileSearchEnabled }, reproject: { $0.fileSearchCoordinator.applyEnabled() })
         // Two features, one switch: each coordinator gates only its own command and mode.
         track(
@@ -964,6 +978,11 @@ final class AppCore {
 
     func hideProgress() {
         messageHUD.dismiss()
+    }
+
+    /// An extension's post-install opt-in, for the same reason.
+    func confirmContributions(title: String, state: ExtensionContributionConsentState) async -> Bool {
+        await dialogs.confirmContributions(title: title, state: state)
     }
 
     /// The volume slider, so `dialogs` stays the single owner of every prompt in the app.

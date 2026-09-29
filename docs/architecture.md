@@ -120,6 +120,14 @@ the stateless `ClipboardTextWorker` runs one bundled `ClipboardTextHelper` per i
 to a process that exits, and the helper — which has no database, clipboard or settings access — is
 handed an input path and answers with bounded text down a pipe.
 
+**`ExtensionSearchCoordinator` is the one seam between extensions and the launcher's own surfaces.**
+Root-search sections, extension fallbacks, contributed ⌘K groups and `{ext:…}` snippet values all
+come from it, and it hands back data — `ExtensionSearchItem`s, `Fallback`s, `PopoverMenuItem`s,
+strings — that `LauncherScreen`, `FallbackCoordinator`, `AppActionsMenu` and `SnippetCoordinator`
+place without reaching into `Features/Extensions/`. `AppCore` re-runs its search on every palette
+change, clears it when extensions are switched off, and wires the snippet closure in `start()`. See
+[features/extensions.md](features/extensions.md#contributions).
+
 ## Entry points and windows
 
 `BestcastApp` (`@main`) declares only two `MenuBarExtra` scenes — Bestcast's own item and the

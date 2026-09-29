@@ -144,6 +144,7 @@ enum AppActionsMenu {
                     core.extensionCoordinator.confirmUninstall(app)
                 })
         }
+        items += core.extensionSearch.rowActions(for: app)
         return PopoverMenuContent(header: app.name, items: items)
     }
 
