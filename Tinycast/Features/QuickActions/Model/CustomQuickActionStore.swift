@@ -67,12 +67,22 @@ final class CustomQuickActionStore {
         return removed
     }
 
-    func setPreviewsResult(
-        _ previews: Bool, id: UUID
-    ) throws(CustomQuickActionError) {
-        guard var value = action(id: id), value.previewsResult != previews else { return }
-        value.previewsResult = previews
+    func setOutput(_ output: AICommandOutput, id: UUID) throws(CustomQuickActionError) {
+        guard var value = action(id: id), value.output != output else { return }
+        value.output = output
         try update(value)
+    }
+
+    /// Adds a batch in one write, so an import either lands whole or not at all.
+    @discardableResult
+    func add(contentsOf drafts: [CustomQuickAction]) throws(CustomQuickActionError)
+        -> [CustomQuickAction]
+    {
+        var values: [CustomQuickAction] = []
+        for draft in drafts { values.append(try validated(draft)) }
+        guard !values.isEmpty else { return [] }
+        try commit(actions + values)
+        return values
     }
 
     private func validated(

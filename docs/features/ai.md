@@ -336,6 +336,13 @@ compatible reasoning fields are surfaced as `.thinking`, never mixed into answer
 system messages are lifted into its top-level `system` field; the other HTTP routes keep system
 messages in the OpenAI message array.
 
+`AIRequest.temperature` is an optional hint, and only AI Commands set it. `AITemperaturePolicy`
+decides whether an HTTP body carries it. Anthropic, Gemini, OpenRouter and non-reasoning
+OpenAI-compatible models get a value clamped to 0…1. OpenAI's reasoning models and current Claude
+models (Opus 4.7 and later, Sonnet 5 and later, Fable, Mythos) reject the field with a 400, on any
+route, so it is dropped for them. Apple Intelligence passes it to `GenerationOptions`, and the installed CLI
+routes ignore it. Chat never sets one.
+
 `AIProviderFactory` resolves the selection, validates an API endpoint, reads an API key at the last
 possible moment and returns `AppleIntelligenceProvider`, `HTTPAIProvider`, `CodexInstalledProvider`
 or `InstalledCLIProvider`. A consumer should hold neither settings nor credentials itself. The

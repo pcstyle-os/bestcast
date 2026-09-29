@@ -55,8 +55,10 @@ struct LauncherScreen: PaletteScreen {
         self.scrollToFollow = scrollToFollow
 
         // Listed even when hidden from search: the shortcut that opened it still has to be answered.
-        let pinned = vm.argumentEntryID.flatMap(core.customCommands.command(entryID:))
-            .map(AppEntry.init).flatMap { $0.name == vm.query ? $0 : nil }
+        let pinned = vm.argumentEntryID.flatMap { id in
+            core.customCommands.command(entryID: id).map(AppEntry.init)
+                ?? core.customQuickActions.action(entryID: id).map(AppEntry.init)
+        }.flatMap { $0.name == vm.query ? $0 : nil }
         let ordered =
             pinned.map { AppIndex.Results(entries: [$0]) }
             ?? appIndex.orderedResults(
@@ -155,6 +157,12 @@ struct LauncherScreen: PaletteScreen {
                 placement: .afterQuery, onOpenOptions: openArgumentOptions,
                 onSubmit: { activate(at: selection) })
         }
+        if entry.kind == .quickAction {
+            return QuickActionArgumentsAccessory.make(
+                action: core.customQuickActions.action(entryID: entry.id), vm: vm,
+                metrics: core.settings.interfaceSize.metrics, focus: focus,
+                onOpenOptions: openArgumentOptions, onSubmit: { activate(at: selection) })
+        }
         if entry.kind == .customCommand {
             return CustomCommandArgumentsAccessory.make(
                 command: core.customCommands.command(entryID: entry.id), vm: vm,
@@ -178,6 +186,10 @@ struct LauncherScreen: PaletteScreen {
         if entry.kind == .quicklink {
             guard let quicklink = quicklink(for: entry) else { return [:] }
             return QuicklinkArgumentsAccessory.values(for: quicklink, core: core, vm: vm)
+        }
+        if entry.kind == .quickAction {
+            guard let action = core.customQuickActions.action(entryID: entry.id) else { return [:] }
+            return QuickActionArgumentsAccessory.values(for: action, vm: vm)
         }
         if entry.kind == .customCommand {
             guard let command = core.customCommands.command(entryID: entry.id) else { return [:] }

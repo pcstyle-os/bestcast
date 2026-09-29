@@ -6,8 +6,14 @@ both listed in **Settings → Quick Actions**. Three go through the AI provider 
 Apple's own translator. The result either replaces the selection or arrives in a floating panel, per
 action.
 
-A **custom Quick Action** is a name, a glyph and a prompt, run through the same provider. It takes a
-shortcut and a launcher row like any other.
+An **AI Command** is the reader's own action, Raycast-style: a name, a glyph, a prompt, an output and
+a creativity, run through the same provider. The prompt may use placeholders, so it can be filled
+with the selection, the clipboard, the frontmost browser tab, the frontmost app, the date and time,
+and up to three typed arguments. It takes a shortcut and a launcher row like any other. A library of
+ready-made commands lives behind **Add from Library…** and the **Browse AI Commands** launcher
+command. The commands import and export as Raycast-shaped JSON. In code an AI Command is still a
+`CustomQuickAction`. The type kept its name because its identity, store, hotkey and launcher plumbing
+did not change.
 
 Quick Actions is the provider layer's second consumer. It shares the provider connections and
 selectable Markdown renderer with AI Chat.
@@ -68,7 +74,25 @@ selectable Markdown renderer with AI Chat.
   too. The output is pasted into somebody's document.
 - **A custom prompt cannot drop that boundary.** An override on a shipped action may replace
   `boundary`, because the sheet shows the whole prompt. A custom action *is* the prompt, so `boundary`
-  is prepended and no control removes it.
+  is prepended and no control removes it. A placeholder prompt gets `AICommandTemplate.boundary`
+  instead. It says the same thing about selected text, clipboard contents and web pages, and nothing
+  the reader types removes it. When the answer goes to AI Chat, where no system prompt of ours
+  applies, the turn carries `materialNote` as long as it quotes any of that material.
+- **An AI Command reads only what its prompt names.** `AICommandTemplate.facts(for:)` decides what
+  is gathered. A prompt without `{selection}` never reads the selection, never borrows a ⌘C and runs
+  with nothing selected. A prompt without `{browser-tab}` never sends an Apple Event. The one
+  exception is a prompt with no placeholders at all. It predates AI Commands, so it transforms the
+  selection exactly as it always did.
+- **The browser is asked, never scraped.** `{browser-tab}` asks the frontmost Safari, Chrome, Arc
+  or Brave for its front tab's title and URL through `NSAppleScript`. It runs off-main,
+  and only after the reader runs a command that names the placeholder. A refused Automation grant
+  (`-1743`/`-1744`) opens a Tinycast dialog that names the browser and offers System Settings →
+  Privacy & Security → Automation. It never falls back to a guess. Any other frontmost app is
+  refused with a HUD. Only the title and URL are read, never the page's content.
+- **A command that types checks for a target before it asks the model.** A Replace or Paste command
+  refuses at once if the displaced app is Tinycast, is gone, or no app is frontmost. It also refuses
+  when Accessibility is missing. None of those runs spends a call whose answer could not land.
+  `TextInjector` still refuses our own bundle and Secure Event Input before every event post.
 - **Each model action owns its instructions and its route.** The pencil on Fix Grammar, Rewrite and
   Summarize opens a sheet prefilled with the exact built-in prompt and the action's model. Saving
   replaces both for only that action; Use Default restores the prompt. Translate has no editor because no model handles translation. The same
@@ -76,7 +100,9 @@ selectable Markdown renderer with AI Chat.
 - **A custom action never travels in a backup.** Neither the record, its shortcut nor its route, for
   the reason `quickActionInstructions` already doesn't: an import must never change what a shortcut
   does to somebody's documents. Its JSON sits outside `UserDefaults`, so no settings key can sweep it
-  up, and `quickActionModelOverrides` is excluded like `quickActionModel`.
+  up, and `quickActionModelOverrides` is excluded like `quickActionModel`. **Import…** in the pane is
+  the one way in from a file. It is a gesture made in the pane, and it adds records without binding
+  a shortcut or choosing a route.
 
 ## The actions
 
@@ -96,25 +122,122 @@ started.
 | Rewrite | provider | panel | yes |
 | Translate | Apple Translation | panel | no |
 | Summarize | provider | panel, always | no |
-| a custom action | provider | panel | no |
+| an AI Command | provider | its own output, **Show in Panel** when new | no |
 
-A custom action previews by default, switchable to Replace per row: Tinycast cannot know whether an
-arbitrary prompt transforms the text or answers a question about it, and only the second destroys what
-it replaces. No diff, for the same reason.
+An AI Command shows its answer in the panel unless the reader picks another output in its editor or
+in the pane's per-row popup. Tinycast cannot know whether an arbitrary prompt transforms the text or
+answers a question about it, and only the first is safe to write over what was selected. There is no
+diff, for the same reason.
 
 Custom instructions stay on this Mac and are excluded from settings backups, like chat's system
 prompt, because importing them would change results without the reader seeing them first.
 
-## Custom actions
+## AI Commands
 
-`CustomQuickAction` is `id`, `name`, `iconSymbol`, `instructions`, `previewsResult`, `createdAt`.
-`CustomQuickActionStore` keeps them as JSON in Application Support, ordered by `createdAt`, under an
-injected directory so the harness gets a throwaway one. Name and instructions must be non-empty;
-nothing else is rejected, including a name a shipped action already uses.
+`CustomQuickAction` is `id`, `name`, `iconSymbol`, `instructions` (the prompt), `output`,
+`creativity`, `createdAt`. `CustomQuickActionStore` keeps them as JSON in Application Support, ordered
+by `createdAt`, under an injected directory so the harness gets a throwaway one. Name and instructions
+must be non-empty. Nothing else is rejected, including a name a shipped action already uses. A file
+written before AI Commands has `previewsResult` instead of `output`, and decoding maps it to Panel or
+Replace, so an existing action keeps doing what it did.
 
-**Replace / Preview rides the record.** `QuickActionSettings` keys on `BuiltInQuickAction`, which
+**Output and creativity ride the record.** `QuickActionSettings` keys on `BuiltInQuickAction`, which
 cannot hold a UUID, and a parallel dictionary would outlive what it described. On the record, a delete
 takes the choice with it.
+
+### Placeholders
+
+The prompt goes through `SnippetTemplateEngine`, the parser Snippets and Quicklinks use. Modifiers,
+quoting and unknown-token handling are therefore identical, and `AICommandTemplate` is the thin layer
+that decides what to gather and how the request is framed.
+
+| Placeholder | Filled with | Read when |
+| --- | --- | --- |
+| `{selection}` | the frontmost app's selection, through the two tiers below | the prompt names it |
+| `{clipboard}` | the current plain-text clipboard | the prompt names it; empty or over the selection cap refuses |
+| `{browser-tab}` | the front tab's title and URL, one per line | the prompt names it and a supported browser is frontmost |
+| `{frontmost-app}` | the displaced app's name | always cheap, read from the target the run captured |
+| `{date}` · `{time}` · `{datetime}` · `{day}` | the run's clock, in the reader's locale | always |
+| `{argument name="…" default="…" options="…"}` | a launcher field, see below | up to three per prompt |
+
+**A prompt with no placeholders is a selection transform.** It is sent through `QuickActionPrompt`
+exactly as a custom action always was, with the selection as the message. This is the path the
+built-in rules and the model's token budget were tuned for, and it keeps the reader's existing actions
+unchanged.
+
+`{frontmost-app}` and `{browser-tab}` exist only in `ExpansionContext` for AI Commands. A snippet or
+quicklink passes nil, so either token is left as written, the same way an unknown token is.
+
+### Arguments
+
+`AICommandTemplate.arguments(in:)` lists the first three `{argument}`s in written order, with their
+defaults and options. `QuickActionArgumentsAccessory` draws them as inline fields beside the launcher's
+query. It uses the same `InlineArgumentFields` as quicklinks and custom commands, and the values are
+keyed by argument name. An argument with a `default=` is optional and may be left blank.
+
+A shortcut has no fields. `run(id:arguments:)` checks `missingArguments`, and when one is still owed it
+opens the palette on that command with its fields showing, through `paletteCoordinator.showArguments`,
+instead of running with a blank. `LauncherScreen` pins the command's row while its fields are open,
+even if the command is hidden from search, because the shortcut that opened it still needs an answer.
+
+### Outputs
+
+| Output | What happens to the answer |
+| --- | --- |
+| Replace Selection | typed over the selection through `TextInjector.replaceSelection` |
+| Paste | inserted at the insertion point; there is no selection to replace |
+| Copy | put on the clipboard, and a HUD says so |
+| Show in Panel | streamed into the Quick Action panel |
+| Open in Quick AI | the filled prompt is sent to a fresh Quick AI chat, as if it had been typed there |
+
+Replace, Paste and Copy use a boundary that asks for the result alone, with no preamble or fences,
+because the text lands in somebody's document or clipboard. The panel's boundary asks for a direct
+answer and renders it as Markdown. Replace and Paste that cannot land fall back to the clipboard,
+like any Quick Action.
+
+The panel's footer for an AI Command is **Continue in Chat** (⌘J), **Copy** (⌘C) and **Replace** or
+**Paste** (↵). The last one says Paste when nothing was selected. Continue in Chat saves the exchange,
+the filled prompt and the reply, as a new chat in AI Chat history. It uses the command's route, or
+chat's default model when the command follows the shared one, and then opens it in the AI Chat
+window. The button is only offered while AI Chat is on.
+
+**Open in Quick AI** needs `aiEnabled`. It hands the turn to `QuickAICoordinator.ask`, so it runs on
+chat's route with chat's tools, and neither the command's model nor its creativity applies there.
+It is still the reader's own gesture: the prompt only leaves the Mac because they ran the command.
+
+### Creativity
+
+Low, Medium and High map to `AIRequest.temperature` of 0.2, 0.6 and 1.0. The value is a hint.
+`AITemperaturePolicy` sends it to Anthropic, Gemini, OpenRouter and non-reasoning OpenAI-compatible
+models, clamped to 0…1. Apple Intelligence takes it through `GenerationOptions`. OpenAI's reasoning
+models (`o*`, `gpt-5*`) and current Claude models (Opus 4.7+, Sonnet 5+, Fable) reject the field, and installed CLI routes have no such knob, so there it is
+dropped without a word rather than failing the run. Built-in actions send no temperature.
+
+### Library, import and export
+
+`AICommandLibrary` is the built-in library: 28 prompts in four categories, Writing, Summaries, Code and
+Other. **Add from Library…** in the pane opens `AICommandLibraryPanel`, where one click turns an entry
+into an ordinary AI Command through `makeCommand`. From then on it is the reader's to edit or delete.
+An entry reads as **Added** when a command with its name or its exact prompt already exists, so an
+edited copy is not offered twice.
+
+**Browse AI Commands** (`CommandID.browseAICommands`) is the launcher's way into the library. It
+closes the palette, opens Settings → Quick Actions scrolled to AI Commands and, while Quick Actions
+are on, opens the library panel through the coordinator's observed `libraryRequested`, which the pane
+clears. With Quick Actions off it only opens the pane, where the switch is.
+
+**Import…** and **Export…** read and write `AICommandArchive`. It uses Raycast's shape, a JSON array of
+`{title, prompt, icon, creativity, output}`, so an export from either app imports into the other.
+- A hand-written `name` is accepted for `title`.
+- A single object is accepted as well as an array.
+- Raycast's five creativity steps fold into three.
+- `model` is ignored, because Raycast's model names mean nothing here.
+- An icon that is not a known SF Symbol is dropped, which is how Raycast's own icon names are handled.
+- A record matching an existing command by name (case-insensitive) and prompt counts as a duplicate
+  and is skipped, so importing the same file twice adds nothing.
+- The batch is written in one commit, so a failed write leaves nothing half-imported.
+
+Only the reader's own commands are exported. The four built-ins are not theirs to move.
 
 **`AppEntry.Kind.quickAction` is one section for both halves**, ungated in
 `VisibilityStore.allowsHotKey` because `quickActionsEnabled` is the master switch. The four keep their
@@ -181,10 +304,12 @@ It could not have been built on `HUDPresenter`: `HUDPanel` sets `ignoresMouseEve
 which is a closed two-case enum measured once at present time — a growing stream would clip.
 
 Non-activating, so the target app keeps its selection while the panel holds key. Keys go through
-`sendEvent`: `↵` replaces, `⌘C` copies, `esc` dismisses; click-away dismisses like every other
-borderless surface. The panel is anchored by its **top-left** and re-measured as the reply arrives —
-centring on every measure would walk it up the screen. Summarize uses chat's `ChatMarkdownText` and
-`MarkdownBlock.parse`, keeping its whole result selectable across paragraphs and headings.
+`sendEvent`: `↵` replaces (or pastes), `⌘C` copies, `⌘J` continues an AI Command in AI Chat, and `esc`
+dismisses. Click-away dismisses like every other borderless surface. The panel is anchored by its
+**top-left** and re-measured as the reply arrives —
+centring on every measure would walk it up the screen. Summarize and every AI Command use chat's
+`ChatMarkdownText` and `MarkdownBlock.parse`, keeping the whole result selectable across paragraphs
+and headings.
 
 The body is a `ScrollView` with its height **set** rather than capped: a scroll view has no ideal
 height, so `NSHostingView.fittingSize` measures it as nothing and the body collapses to a slot. The
@@ -279,6 +404,20 @@ failure handler, so automatic expansion stays silent as before.
 - Translate into a language that has not been downloaded: the panel names the language, and its
   button closes the panel and opens Language & Region.
 - Revoke Accessibility while enabled: a HUD explains instead of failing silently.
-- Harnesses: `quick-action-test` (action metadata, prompt boundaries, preview choices, routes and
-  their repair, diffs) and
+- Add **Translate to Language** and **Summarize Web Page** from the library. In ⌘Space type
+  "Translate", fill in the language field and run it over a selection. Then bind a shortcut to it
+  and press it: the palette opens on the command with its field focused.
+- Run Summarize Web Page with Safari frontmost the first time: macOS asks about Automation. Deny it
+  and run again: Tinycast's own dialog names Safari and opens the Automation pane. Run it with
+  Finder frontmost: refused with a HUD.
+- Give a command the Paste output and run it from ⌘Space with nothing selected in a text field:
+  the answer is inserted. Run a `{clipboard}` command with an empty clipboard: refused.
+- Run a Show in Panel command, press ⌘J: AI Chat opens on a new chat holding the prompt and reply.
+- Export, delete one command, then import the file twice: the first import restores it, and the
+  second reports that everything is already there. Import a Raycast export: titles, prompts and
+  creativity arrive.
+- Run **Browse AI Commands** from ⌘Space: Settings opens on AI Commands with the library showing.
+- Harnesses: `quick-action-test` (action metadata, prompt boundaries, output choices, routes and
+  their repair, diffs), `ai-command-test` (placeholders, arguments, rendering and its boundary, the
+  library, the archive, browser-tab parsing and temperature policy) and
   `text-diff-test` (exact chunks, Unicode, ties, token boundaries and fast paths).

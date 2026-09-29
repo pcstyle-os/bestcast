@@ -33,10 +33,22 @@ final class QuickActionPanelState {
 
     var canReplace: Bool { phase == .finished && !output.isEmpty }
 
-    init(action: QuickAction, original: String, targetLanguage: Locale.Language) {
+    /// An AI Command's expanded prompt; nil for a built-in, which sends its own fixed one.
+    let rendered: AICommandTemplate.Rendered?
+    let temperature: Double?
+
+    /// With nothing selected the reply lands at the caret, so the button says what will happen.
+    var deliveryTitle: String { original.isEmpty ? "Paste" : "Replace" }
+
+    init(
+        action: QuickAction, original: String, targetLanguage: Locale.Language,
+        rendered: AICommandTemplate.Rendered? = nil, temperature: Double? = nil
+    ) {
         self.action = action
         self.original = original
         self.targetLanguage = targetLanguage
+        self.rendered = rendered
+        self.temperature = temperature
     }
 
     func append(_ delta: String) {

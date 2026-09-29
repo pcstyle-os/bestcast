@@ -315,8 +315,17 @@ enum SettingsSearchCatalog {
             group: .quickActionsActions, "Actions",
             keywords: ["shortcut", "replace", "preview", "customize"]),
         .init(
-            .quickActionsActions, "Add Quick Action",
-            keywords: ["new", "custom", "prompt", "instructions", "alias"]),
+            group: .quickActionsAICommands, "AI Commands",
+            keywords: ["custom", "prompt", "placeholder", "raycast"]),
+        .init(
+            .quickActionsAICommands, "Add AI Command",
+            keywords: ["new", "custom", "prompt", "instructions", "alias", "quick action"]),
+        .init(
+            .quickActionsAICommands, "Add from Library…",
+            keywords: ["preset", "template", "browse", "built-in"]),
+        .init(
+            .quickActionsAICommands, "Import or export",
+            keywords: ["json", "raycast", "backup", "share"]),
         .init(
             .quickActionsModel, "Model",
             keywords: ["llm", "ai", "default"]),

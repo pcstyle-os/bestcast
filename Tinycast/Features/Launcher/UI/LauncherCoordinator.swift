@@ -88,7 +88,7 @@ final class LauncherCoordinator {
                 return
             }
             guard let id = CustomQuickAction.id(fromEntryID: app.id) else { return }
-            core.quickActionCoordinator.run(id: id)
+            core.quickActionCoordinator.run(id: id, arguments: arguments)
             return
         }
         if app.kind == .customCommand {
@@ -176,6 +176,8 @@ final class LauncherCoordinator {
             core.quickActionCoordinator.run(.translate)
         case .summarize:
             core.quickActionCoordinator.run(.summarize)
+        case .browseAICommands:
+            core.quickActionCoordinator.browseLibrary()
         case .calculatorHistory:
             paletteCoordinator.togglePalette(mode: .calculatorHistory)
         case .clipboardHistory:

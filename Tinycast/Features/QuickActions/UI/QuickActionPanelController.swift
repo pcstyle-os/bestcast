@@ -8,6 +8,7 @@ final class QuickActionPanelController: NSObject, NSWindowDelegate {
     private var state: QuickActionPanelState?
     private var onReplace: ((String) -> Void)?
     private var onRetranslate: ((Locale.Language) -> Void)?
+    private var onContinue: ((String) -> Void)?
 
     /// Clear of the pointer, so the panel never opens under the hand that summoned it.
     private static let cursorOffset: CGFloat = 12
@@ -19,12 +20,14 @@ final class QuickActionPanelController: NSObject, NSWindowDelegate {
         metrics: InterfaceMetrics,
         languages: [Locale.Language],
         onRetranslate: @escaping (Locale.Language) -> Void,
-        onReplace: @escaping (String) -> Void
+        onReplace: @escaping (String) -> Void,
+        onContinue: ((String) -> Void)? = nil
     ) {
         dismiss()
         self.state = state
         self.onReplace = onReplace
         self.onRetranslate = onRetranslate
+        self.onContinue = onContinue
 
         let hosting = NSHostingView(
             rootView: QuickActionResultView(
@@ -32,6 +35,8 @@ final class QuickActionPanelController: NSObject, NSWindowDelegate {
                 languages: languages,
                 onReplace: { [weak self] in self?.replace(state.output) },
                 onCopy: { [weak self] in self?.copyOutput() },
+                onContinue: onContinue == nil
+                    ? nil : { [weak self] in self?.continueInChat(state.output) },
                 onCancel: { [weak self] in self?.dismiss() },
                 onRetranslate: { [weak self] in self?.onRetranslate?($0) },
                 onOpenLanguageSettings: { [weak self] in self?.openLanguageSettings() },
@@ -50,6 +55,7 @@ final class QuickActionPanelController: NSObject, NSWindowDelegate {
             switch key {
             case .replace: if state.canReplace { self.replace(state.output) }
             case .copy: if state.canReplace { self.copyOutput() }
+            case .continueInChat: if state.canReplace { self.continueInChat(state.output) }
             case .cancel: self.dismiss()
             }
         }
@@ -68,6 +74,7 @@ final class QuickActionPanelController: NSObject, NSWindowDelegate {
         state = nil
         onReplace = nil
         onRetranslate = nil
+        onContinue = nil
         closing.delegate = nil
         closing.onKey = nil
         closing.fadeOut(duration: Theme.Duration.exit)
@@ -87,6 +94,12 @@ final class QuickActionPanelController: NSObject, NSWindowDelegate {
         let callback = onReplace
         dismiss()
         callback?(text)
+    }
+
+    private func continueInChat(_ text: String) {
+        guard let callback = onContinue else { return }
+        dismiss()
+        callback(text)
     }
 
     /// Grows from the current top-left, so a reply landing after a drag cannot snap the panel back.

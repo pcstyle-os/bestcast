@@ -9,6 +9,7 @@ enum CommandID: String, CaseIterable, Sendable {
     case rewrite = "command:rewrite"
     case translate = "command:translate"
     case summarize = "command:summarize"
+    case browseAICommands = "command:browse-ai-commands"
     case calculatorHistory = "command:calculator-history"
     case clipboardHistory = "command:clipboard-history"
     case pasteNextQueuedClip = "command:paste-next-queued-clip"
@@ -55,6 +56,7 @@ enum CommandID: String, CaseIterable, Sendable {
         case .rewrite: return BuiltInQuickAction.rewrite.title
         case .translate: return BuiltInQuickAction.translate.title
         case .summarize: return BuiltInQuickAction.summarize.title
+        case .browseAICommands: return "Browse AI Commands"
         case .calculatorHistory: return "Calculator History"
         case .clipboardHistory: return "Clipboard History"
         case .pasteNextQueuedClip: return "Paste Next Clip"
@@ -103,6 +105,7 @@ enum CommandID: String, CaseIterable, Sendable {
         case .rewrite: return BuiltInQuickAction.rewrite.symbol
         case .translate: return BuiltInQuickAction.translate.symbol
         case .summarize: return BuiltInQuickAction.summarize.symbol
+        case .browseAICommands: return "books.vertical"
         case .calculatorHistory: return "plus.forwardslash.minus"
         case .clipboardHistory: return "doc.on.clipboard"
         case .pasteNextQueuedClip: return "list.number"
@@ -210,7 +213,7 @@ extension SettingsTab {
         case .quicklinks:
             [.createQuicklink, .searchQuicklinks, .importQuicklinks, .exportQuicklinks]
         case .ai: [.quickAI, .aiChat]
-        case .quickActions: [.fixGrammar, .rewrite, .translate, .summarize]
+        case .quickActions: [.fixGrammar, .rewrite, .translate, .summarize, .browseAICommands]
         case .fileSearch: [.searchFiles]
         case .notes: [.showNotes, .createNote, .searchNotes]
         case .snippets: [.searchSnippets, .createSnippet]

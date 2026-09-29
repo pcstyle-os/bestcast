@@ -11,7 +11,7 @@ struct QuickActionSettings: Equatable, Sendable {
     func previewsResult(_ action: QuickAction) -> Bool {
         switch action {
         case .builtIn(let builtIn): return previewsResult(builtIn)
-        case .custom(let custom): return custom.previewsResult
+        case .custom(let custom): return custom.output == .panel
         }
     }
 

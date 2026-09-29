@@ -59,6 +59,9 @@ struct CommandOwnerTests {
         check("Clipboard History opens Clipboard", CommandID.clipboardHistory.owner == .clipboard)
         check("Search Emoji opens Emoji & Symbols", CommandID.searchEmoji.owner == .emoji)
         check("Fix Grammar opens Quick Actions", CommandID.fixGrammar.owner == .quickActions)
+        check(
+            "Browse AI Commands opens Quick Actions",
+            CommandID.browseAICommands.owner == .quickActions)
         check("Create Quicklink opens Quicklinks", CommandID.createQuicklink.owner == .quicklinks)
         check("Calculator History has no feature pane", CommandID.calculatorHistory.owner == nil)
         check("Open Camera has no feature pane", CommandID.openCamera.owner == nil)

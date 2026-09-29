@@ -97,23 +97,26 @@ struct AIRequest: Equatable, Sendable {
     let webSearch: Bool
     /// Empty for every route that cannot call one, so a transport need not ask whether it may.
     let tools: [AITool]
+    /// A hint: a route that has none, or a model that refuses one, sends the request without it.
+    let temperature: Double?
 
     init(
         instructions: String? = nil, messages: [AIMessage], maxOutputTokens: Int = 4_096,
-        webSearch: Bool = false, tools: [AITool] = []
+        webSearch: Bool = false, tools: [AITool] = [], temperature: Double? = nil
     ) {
         self.instructions = instructions
         self.messages = messages
         self.maxOutputTokens = maxOutputTokens
         self.webSearch = webSearch
         self.tools = tools
+        self.temperature = temperature
     }
 
     /// The same turn carried forward, armed with what the loop wrapping it may call.
     func continuing(with messages: [AIMessage], tools: [AITool]) -> AIRequest {
         AIRequest(
             instructions: instructions, messages: messages, maxOutputTokens: maxOutputTokens,
-            webSearch: webSearch, tools: tools)
+            webSearch: webSearch, tools: tools, temperature: temperature)
     }
 }
 

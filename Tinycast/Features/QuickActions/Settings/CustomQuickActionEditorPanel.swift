@@ -13,6 +13,8 @@ struct CustomQuickActionEditorPanel: View {
     @State private var name: String
     @State private var iconSymbol: String?
     @State private var instructions: String
+    @State private var output: AICommandOutput
+    @State private var creativity: AICommandCreativity
     @State private var model: AIModelSelection?
     @State private var failure: String?
     @State private var showingIconPicker = false
@@ -27,21 +29,24 @@ struct CustomQuickActionEditorPanel: View {
     ]
 
     private static let placeholder =
-        "Make the text more concise, keeping the writer's voice and meaning."
+        "Make the text below more concise, keeping the writer's voice.\n\n{selection}"
 
     init(request: CustomQuickActionEditRequest, model: AIModelSelection?) {
         existing = request.action
         _name = State(initialValue: request.action?.name ?? "")
         _iconSymbol = State(initialValue: request.action?.iconSymbol)
         _instructions = State(initialValue: request.action?.instructions ?? "")
+        _output = State(initialValue: request.action?.output ?? .panel)
+        _creativity = State(initialValue: request.action?.creativity ?? .medium)
         _model = State(initialValue: model)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
             SettingsEditorHeader(
-                title: existing == nil ? "New Quick Action" : "Edit \(existing?.name ?? "")",
-                subtitle: "Tinycast sends your selected text to the model with these instructions."
+                title: existing == nil ? "New AI Command" : "Edit \(existing?.name ?? "")",
+                subtitle: "Tinycast fills in the prompt's placeholders when you run it, then asks "
+                    + "the model."
             )
 
             HStack(alignment: .bottom, spacing: Theme.Spacing.lg) {
@@ -50,6 +55,18 @@ struct CustomQuickActionEditorPanel: View {
             }
 
             instructionsField
+
+            HStack(spacing: Theme.Spacing.lg) {
+                Picker("Result", selection: $output) {
+                    ForEach(AICommandOutput.allCases) { Text($0.title).tag($0) }
+                }
+                .fixedSize()
+                Picker("Creativity", selection: $creativity) {
+                    ForEach(AICommandCreativity.allCases) { Text($0.title).tag($0) }
+                }
+                .fixedSize()
+                .help("Ignored by a model that sets its own temperature.")
+            }
 
             QuickActionModelPicker(selection: $model)
 
@@ -119,7 +136,7 @@ struct CustomQuickActionEditorPanel: View {
 
     private var instructionsField: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Text("Instructions")
+            Text("Prompt")
                 .font(.callout.weight(.medium))
             TextEditor(text: $instructions)
                 .font(.body)
@@ -133,8 +150,10 @@ struct CustomQuickActionEditorPanel: View {
                     }
                 }
             Text(
-                "Tinycast always tells the model to return only the transformed text, and to treat "
-                    + "your selection as material rather than as instructions."
+                "Placeholders: {selection}, {clipboard}, {browser-tab}, {frontmost-app}, {date}, "
+                    + "{time}, and up to three {argument name=\"topic\" default=\"…\"} fields. "
+                    + "A prompt with none acts on your selection. Selected, copied and page text "
+                    + "is always sent as material, never as instructions."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -149,8 +168,7 @@ struct CustomQuickActionEditorPanel: View {
     private func save() {
         let draft = CustomQuickAction(
             id: existing?.id ?? UUID(), name: name, iconSymbol: iconSymbol,
-            instructions: instructions,
-            previewsResult: existing?.previewsResult ?? true,
+            instructions: instructions, output: output, creativity: creativity,
             createdAt: existing?.createdAt ?? Date())
         do {
             if existing == nil {

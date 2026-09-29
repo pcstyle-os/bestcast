@@ -570,8 +570,13 @@ carrying the action's own title and glyph so the launcher row and the settings r
 without one. They report `CommandID.entryKind`, the one place a catalog command claims a section other
 than Commands.
 
-Custom actions arrive through `AppIndex.setCustomQuickActions` as `quick-action:<uuid>` entries,
-sorted by when they were made, and bind `HotKeyAction.quickAction(id:)`.
+AI Commands (custom actions) arrive through `AppIndex.setCustomQuickActions` as `quick-action:<uuid>`
+entries, sorted by when they were made, and bind `HotKeyAction.quickAction(id:)`. A command whose prompt
+declares `{argument}`s shows them as inline fields through `QuickActionArgumentsAccessory`. This is the
+same header-accessory path quicklinks and custom commands use, and activation passes the values
+through to `run(id:arguments:)`. `CommandID.browseAICommands` is published beside the shipped four and
+opens the AI Command library in Settings. It has no `BuiltInQuickAction`, so it sits in the Commands
+section.
 
 Quick Actions are one of the panes in `SettingsTab.ownedCommands`, so `Enable Commands` does not reach
 them. **There is deliberately no `Enable Quick Actions` category toggle** either: a

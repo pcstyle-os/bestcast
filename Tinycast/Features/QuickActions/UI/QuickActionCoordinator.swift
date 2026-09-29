@@ -19,7 +19,11 @@ final class QuickActionCoordinator {
     private let panels = QuickActionPanelController()
     private unowned let core: AppCore
 
-    private static let launcherCommands = Set(BuiltInQuickAction.allCases.map(CommandID.init))
+    private static let launcherCommands = Set(
+        BuiltInQuickAction.allCases.map(CommandID.init) + [.browseAICommands])
+
+    /// Set by the launcher's Browse AI Commands; the Settings pane opens its library and clears it.
+    var libraryRequested = false
 
     /// One at a time: two runs race for one selection, and the second overwrites the first's work.
     @ObservationIgnored private var running: Task<Void, Never>?
@@ -111,12 +115,66 @@ final class QuickActionCoordinator {
         store.setModelOverride(model, for: .custom(draft))
     }
 
-    func setPreviewsResult(_ previews: Bool, id: UUID) {
+    func setOutput(_ output: AICommandOutput, id: UUID) {
         do {
-            try customActions.setPreviewsResult(previews, id: id)
+            try customActions.setOutput(output, id: id)
         } catch {
             report(error)
         }
+    }
+
+    func addFromLibrary(_ entry: AICommandLibrary.Entry) {
+        do {
+            _ = try customActions.add(entry.makeCommand(now: Date()))
+        } catch {
+            report(error)
+        }
+    }
+
+    func browseLibrary() {
+        if paletteCoordinator.isVisible { paletteCoordinator.hidePalette(restoreFocus: false) }
+        libraryRequested = settings.quickActionsEnabled
+        core.settingsCoordinator.showSettings(
+            tab: .quickActions, revealing: .section(.quickActionsAICommands))
+    }
+
+    /// Only the reader's own commands leave: a built-in is not theirs to hand to another app.
+    func exportCommands() async {
+        guard !customActions.actions.isEmpty,
+            let destination = BackupActions.chooseSaveLocation(named: "AI Commands")
+        else { return }
+        do {
+            try AICommandArchive.encode(customActions.actions).write(to: destination, options: .atomic)
+            core.showMessage("Exported \(countLabel(customActions.actions.count))")
+        } catch {
+            await core.showNotice(
+                title: "Couldn’t Export AI Commands", message: error.localizedDescription,
+                symbol: CustomQuickAction.sfSymbol, tone: .danger)
+        }
+    }
+
+    func importCommands() async {
+        guard let source = BackupActions.chooseJSONFile() else { return }
+        do {
+            let data = try Data(contentsOf: source)
+            let imported = try AICommandArchive.decode(
+                data, existing: customActions.actions, now: Date(),
+                isKnownSymbol: { NSImage(systemSymbolName: $0, accessibilityDescription: nil) != nil })
+            try customActions.add(contentsOf: imported.commands)
+            guard !imported.commands.isEmpty else {
+                return core.showMessage("Every AI Command in that file is already here")
+            }
+            let skipped = imported.duplicates == 0 ? "" : ", \(imported.duplicates) already present"
+            core.showMessage("Imported \(countLabel(imported.commands.count))\(skipped)")
+        } catch {
+            await core.showNotice(
+                title: "Couldn’t Import AI Commands", message: error.localizedDescription,
+                symbol: CustomQuickAction.sfSymbol, tone: .danger)
+        }
+    }
+
+    private func countLabel(_ count: Int) -> String {
+        count == 1 ? "1 AI Command" : "\(count) AI Commands"
     }
 
     func deleteCustomQuickAction(id: UUID) async {
@@ -155,16 +213,29 @@ final class QuickActionCoordinator {
         ranking.reset(itemKey: action.entryID)
     }
 
-    func run(id: UUID) {
+    /// A shortcut has no fields to type into, so a command still owed an argument asks in root search.
+    func run(id: UUID, arguments: [String: String] = [:]) {
         guard let action = customActions.action(id: id) else { return }
-        run(.custom(action))
+        let missing = AICommandTemplate.missingArguments(in: action.instructions, values: arguments)
+        if settings.quickActionsEnabled, running == nil, !missing.isEmpty {
+            paletteCoordinator.showArguments(of: AppEntry(action), values: arguments)
+            return
+        }
+        run(.custom(action), arguments: arguments)
     }
 
-    func run(_ action: QuickAction) {
+    func run(_ action: QuickAction, arguments: [String: String] = [:]) {
         guard settings.quickActionsEnabled, running == nil else { return }
         let target = paletteCoordinator.targetApp
         if paletteCoordinator.isVisible { paletteCoordinator.hidePalette(restoreFocus: false) }
-        start { [weak self] in await self?.begin(action, target: target) }
+        start { [weak self] in
+            guard let self else { return }
+            if let command = action.customAction {
+                await self.begin(command, arguments: arguments, target: target)
+            } else {
+                await self.begin(action, target: target)
+            }
+        }
     }
 
     func cancel() {
@@ -205,8 +276,84 @@ final class QuickActionCoordinator {
         await perform(state, target: target, previewing: previews)
     }
 
+    /// Reads only the facts the prompt names, so a prompt without `{selection}` never takes one.
+    private func begin(
+        _ command: CustomQuickAction, arguments: [String: String], target: NSRunningApplication?
+    ) async {
+        guard command.output != .quickAI || settings.aiEnabled else {
+            return core.showMessage("Turn on AI in Settings to open Quick AI", tone: .danger)
+        }
+        let context: SnippetTemplateEngine.ExpansionContext
+        do {
+            if command.output == .replace || command.output == .paste {
+                try requireTypingTarget(target)
+            }
+            context = try await AICommandContextReader.gather(
+                AICommandTemplate.facts(for: command.instructions), target: target,
+                injector: injector)
+        } catch let failure as QuickActionFailure {
+            reportRefusal(failure)
+            return
+        } catch {
+            core.showMessage(error.localizedDescription, tone: .danger)
+            return
+        }
+        guard !Task.isCancelled else { return }
+        let rendered = AICommandTemplate.render(command, context: context, arguments: arguments)
+        // Quick AI runs the chat's own route and tools, so creativity has nothing to set there.
+        guard command.output != .quickAI else {
+            return core.quickAICoordinator.ask(rendered.chatPrompt)
+        }
+        let state = QuickActionPanelState(
+            action: .custom(command), original: context.selection, targetLanguage: targetLanguage,
+            rendered: rendered, temperature: command.creativity.temperature)
+        let previews = command.output == .panel
+        if previews { present(state, target: target) }
+        await perform(state, target: target, previewing: previews)
+    }
+
+    /// Checked before the model runs, so a reply is never written only to have nowhere to land.
+    private func requireTypingTarget(_ target: NSRunningApplication?) throws {
+        guard let target, !target.isTerminated,
+            target.bundleIdentifier != Bundle.main.bundleIdentifier
+        else { throw QuickActionFailure.noPasteTarget }
+        guard Permissions.isAccessibilityTrusted() else { throw QuickActionFailure.needsAccessibility }
+    }
+
+    /// The exchange is saved first, so the window opens it like any chat from history.
+    private func continueInChat(_ state: QuickActionPanelState, reply: String) {
+        guard settings.aiEnabled, let rendered = state.rendered else { return }
+        let session = ChatSession(
+            messages: [
+                ChatMessage(role: .user, text: rendered.chatPrompt),
+                ChatMessage(role: .assistant, text: reply)
+            ],
+            model: store.model(for: state.action) ?? core.aiSettings.defaultModel)
+        core.chatHistory.save(session)
+        guard core.chatHistory.conversation(id: session.id) != nil else {
+            core.showMessage("The chat could not be saved", tone: .danger)
+            return
+        }
+        core.aiChatCoordinator.openChat(id: session.id)
+        core.aiChatCoordinator.showWindow()
+    }
+
     /// A missing permission cannot be fixed from a pill that fades, so it earns a dialog instead.
     private func reportRefusal(_ failure: QuickActionFailure) {
+        if failure.opensAutomationSettings {
+            NSApp.activate(ignoringOtherApps: true)
+            Task {
+                guard
+                    await core.reportFailure(
+                        title: "AI Commands can't read your browser",
+                        message: (failure.errorDescription ?? "")
+                            + " Tinycast only asks for the front tab's address and title.",
+                        symbol: "safari", recovery: "Open System Settings")
+                else { return }
+                Permissions.openAutomationSettings()
+            }
+            return
+        }
         guard failure.opensAccessibilitySettings else {
             core.showMessage(failure.localizedDescription, tone: .danger)
             return
@@ -234,7 +381,11 @@ final class QuickActionCoordinator {
             guard !Task.isCancelled else { return }
             state.finish(text)
             if previewing { return }
-            deliver(text, to: target, action: state.action)
+            guard state.action.customAction?.output != .copy else {
+                Paster.copyPlainText(text)
+                return core.showMessage("\(state.action.title) copied")
+            }
+            deliver(text, to: target, state: state)
         } catch is CancellationError {
             return
         } catch let error as TextTranslator.Failure where error.needsDownload {
@@ -271,25 +422,33 @@ final class QuickActionCoordinator {
             return try await TextTranslator.translate(state.original, to: state.targetLanguage)
         }
         let provider = try core.quickActionProvider(for: state.action)
+        let onDelta: @MainActor (String) -> Void = { delta in
+            guard streaming else { return }
+            state.append(delta)
+        }
+        if let rendered = state.rendered {
+            return try await QuickActionRunner.run(
+                rendered, temperature: state.temperature, using: provider, onDelta: onDelta)
+        }
         return try await QuickActionRunner.run(
             state.action, selection: state.original, using: provider,
             instructionOverride: store.settings.instructionOverride(for: state.action),
-            onDelta: { delta in
-                guard streaming else { return }
-                state.append(delta)
-            })
+            onDelta: onDelta)
     }
 
     /// A replacement that never lands would otherwise lose the reply, so the clipboard keeps it.
-    private func deliver(_ text: String, to target: NSRunningApplication?, action: QuickAction) {
+    private func deliver(
+        _ text: String, to target: NSRunningApplication?, state: QuickActionPanelState
+    ) {
+        let action = state.action
+        let missed = state.original.isEmpty ? "paste" : "replace the selection"
         injector.replaceSelection(
             with: text, in: target,
             onDelivered: { [weak self] in self?.core.showMessage("\(action.title) applied") },
             onFailed: { [weak self] in
                 Paster.copyPlainText(text)
                 self?.core.showMessage(
-                    "\(action.title) couldn't replace the selection — copied instead",
-                    tone: .danger)
+                    "\(action.title) couldn't \(missed) — copied instead", tone: .danger)
             })
     }
 
@@ -312,8 +471,11 @@ final class QuickActionCoordinator {
                 self?.rerun(state, target: target)
             },
             onReplace: { [weak self] text in
-                self?.deliver(text, to: target, action: state.action)
-            })
+                self?.deliver(text, to: target, state: state)
+            },
+            onContinue: state.rendered == nil || !settings.aiEnabled
+                ? nil
+                : { [weak self] text in self?.continueInChat(state, reply: text) })
     }
 
     private func rerun(_ state: QuickActionPanelState, target: NSRunningApplication?) {
