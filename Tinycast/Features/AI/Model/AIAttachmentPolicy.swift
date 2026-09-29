@@ -40,7 +40,6 @@ enum AIAttachmentPolicy {
         (name as NSString).pathExtension.lowercased() == "pdf" ? pdfMIMEType : "text/plain"
     }
 
-    /// A fence long enough that a Markdown file holding its own fence cannot escape.
     static func prompt(text: String, documents: [AIDocument]) -> String {
         let inlined = documents.compactMap(block).joined(separator: "\n\n")
         guard !inlined.isEmpty else { return text }
@@ -51,7 +50,7 @@ enum AIAttachmentPolicy {
         guard document.mimeType != pdfMIMEType,
             let contents = String(data: document.data, encoding: .utf8)
         else { return nil }
-        let fence = String(repeating: "`", count: max(3, longestBacktickRun(in: contents) + 1))
+        let fence = Self.fence(for: contents)
         let hint = (document.name as NSString).pathExtension.lowercased()
         return """
             Attached file: \(sanitized(name: document.name))
@@ -86,6 +85,11 @@ enum AIAttachmentPolicy {
         let cleaned = name.unicodeScalars
             .filter { !Self.unsafeInName.contains($0) }
         return String(String.UnicodeScalarView(cleaned)).prefix(64).description
+    }
+
+    /// A fence long enough that quoted text holding its own fence cannot close it early.
+    static func fence(for text: String) -> String {
+        String(repeating: "`", count: max(3, longestBacktickRun(in: text) + 1))
     }
 
     private static func longestBacktickRun(in text: String) -> Int {

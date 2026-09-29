@@ -124,7 +124,7 @@ final class QuickAICoordinator {
         let recent = core.chatHistory.conversations.first
         let hasTranscript = !chat.session.messages.isEmpty
         // Staged files are unsent work: neither branch may throw them away on a plain re-summon.
-        let hasStaging = !chat.pendingAttachments.isEmpty
+        let hasStaging = !chat.pendingAttachments.isEmpty || !chat.library.isEmpty
         // From history when nothing is resident, so the verdict still holds after a relaunch.
         let lastActiveAt = hasTranscript ? chat.session.updatedAt : recent?.updatedAt
         let decision = AIConversationOpenPolicy.decide(
@@ -301,6 +301,13 @@ final class QuickAICoordinator {
                 core.showMessage(error.localizedDescription, tone: .danger)
             }
         }
+    }
+
+    /// ⌘O: the panel is modal and takes key, so the palette steps aside and comes back after it.
+    func chooseFiles() {
+        paletteCoordinator.hidePalette(restoreFocus: false)
+        chatCoordinator.chooseFiles(for: chat)
+        reshowIfHidden()
     }
 
     /// The ⌘C fallback brings the target forward, which takes the palette down with it.

@@ -20,6 +20,10 @@ final class AIChatState {
     private(set) var isTemporary: Bool
     /// The question the composer is rewriting; sending replaces it and everything after it.
     private(set) var editingMessageID: UUID?
+    /// Folders and large files this chat searches on each turn; never written for a temporary chat.
+    let library: ChatLibraryState
+    /// A turn waiting on its library search before the question goes out.
+    private(set) var isSearchingLibrary = false
     @ObservationIgnored private var draftBeforeEdit = ""
 
     /// Every path that consumes or drops the staged images moves this on, so a late decode knows
@@ -40,9 +44,10 @@ final class AIChatState {
 
     private static let flushInterval: Duration = .milliseconds(40)
 
-    init(history: ChatHistoryStore, isTemporary: Bool = false) {
+    init(history: ChatHistoryStore, libraries: ChatLibraryStore? = nil, isTemporary: Bool = false) {
         self.history = history
         self.isTemporary = isTemporary
+        library = ChatLibraryState(store: libraries)
     }
 
     @discardableResult
@@ -104,9 +109,12 @@ final class AIChatState {
     private func startReply(
         using provider: any AIProvider, webSearch: Bool, instructions: String?, contextBudget: Int
     ) {
+        let retrieval = contextBudget - historyBudget(within: contextBudget)
         let request = AIRequest(
             instructions: instructions,
-            messages: session.requestMessages(textBudget: contextBudget), webSearch: webSearch)
+            messages: session.requestMessages(textBudget: contextBudget - retrieval),
+            webSearch: webSearch)
+        let query = ChatLibraryPolicy.query(for: session.historyMessages)
         session.append(ChatMessage(role: .assistant, text: "", state: .streaming))
         isStreaming = true
         isThinking = false
@@ -116,6 +124,11 @@ final class AIChatState {
         replyGeneration += 1
         let generation = replyGeneration
         replyTask = Task { [weak self, provider] in
+            let request =
+                retrieval == 0
+                ? request
+                : await self?.withLibrary(request, query: query, budget: retrieval, generation: generation)
+            guard let request else { return }
             do {
                 for try await event in provider.stream(request) {
                     guard let self, !Task.isCancelled, self.replyGeneration == generation else {
@@ -134,6 +147,33 @@ final class AIChatState {
                 self.finishLast(state: .failed, fallback: error.localizedDescription)
             }
         }
+    }
+
+    /// The library's excerpts take their share of the window before history is fitted into it.
+    func historyBudget(within contextBudget: Int) -> Int {
+        library.isEmpty
+            ? contextBudget
+            : contextBudget - ChatLibraryPolicy.retrievalBudget(contextBudget: contextBudget)
+    }
+
+    /// Nil when the turn was cancelled while its library was searched.
+    private func withLibrary(
+        _ request: AIRequest, query: String, budget: Int, generation: Int
+    ) async -> AIRequest? {
+        isSearchingLibrary = true
+        let passages = await library.passages(for: query, budget: budget)
+        guard !Task.isCancelled, replyGeneration == generation else { return nil }
+        isSearchingLibrary = false
+        guard !passages.isEmpty, var message = session.messages.last, message.role == .assistant
+        else { return request }
+        message.sources = ChatLibraryPolicy.sources(for: passages)
+        session.replaceLast(with: message)
+        let block = ChatLibraryPolicy.prompt(for: passages, roots: library.rootPaths)
+        return AIRequest(
+            instructions: request.instructions,
+            messages: ChatLibraryPolicy.injecting(block, into: request.messages),
+            maxOutputTokens: request.maxOutputTokens, webSearch: request.webSearch,
+            tools: request.tools, temperature: request.temperature)
     }
 
     func report(_ message: String) {
@@ -179,6 +219,7 @@ final class AIChatState {
         replyGeneration += 1
         replyTask?.cancel()
         replyTask = nil
+        isSearchingLibrary = false
         guard isStreaming else {
             discardPendingText()
             return
@@ -188,6 +229,7 @@ final class AIChatState {
 
     func startNewChat() {
         cancel()
+        library.reset()
         session = ChatSession()
         preset = nil
         isTemporary = false
@@ -238,6 +280,7 @@ final class AIChatState {
         if session.id == id, !session.messages.isEmpty { return true }
         guard let loaded = history.session(id: id) else { return false }
         cancel()
+        library.load(id)
         session = loaded
         preset = nil
         isTemporary = false
@@ -250,6 +293,7 @@ final class AIChatState {
     func delete(id: UUID) {
         if session.id == id {
             cancel()
+            library.remove(savedAs: id)
             session = ChatSession()
             preset = nil
             notice = nil
@@ -270,7 +314,13 @@ final class AIChatState {
     }
 
     /// The line shown in the empty streaming bubble while nothing has arrived yet.
-    var liveStatus: String? { isThinking ? "Thinking…" : nil }
+    var liveStatus: String? {
+        if isSearchingLibrary { return library.isIndexing ? "Reading your files…" : "Searching your files…" }
+        return isThinking ? "Thinking…" : nil
+    }
+
+    /// Where a library's index is saved: nowhere for a temporary chat, which is never written down.
+    var librarySaveID: UUID? { isTemporary ? nil : session.id }
 
     var lastAssistantText: String? {
         session.messages.last(where: { $0.role == .assistant && !$0.text.isEmpty })?.text
@@ -394,6 +444,7 @@ final class AIChatState {
         persist()
         isStreaming = false
         isThinking = false
+        isSearchingLibrary = false
         replyTask = nil
         if state == .complete { onReplyFinished?(self) }
     }

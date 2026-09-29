@@ -282,6 +282,11 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
   on-device model. Every transport funnels through `requestMessages(textBudget:)`, so no route can
   resend every image each turn or let history grow the payload as a chat goes on. The composer refuses a picture
   past the budget and says so, rather than letting send time drop it silently.
+- **A chat's files are read and searched on this Mac alone.** A folder, or a file too large to send
+  whole, is indexed with PDFKit and `NLEmbedding` and never uploaded; only the few excerpts a turn
+  picks reach the route, inside the history budget rather than on top of it. The index lives in the
+  bundle ID's Caches, one file per chat, saved only for a saved chat and deleted with it. See
+  [Chat with files](#chat-with-files).
 
 ## Connections and routing
 
@@ -397,12 +402,14 @@ the pill's job, so the header never has to fit a third control beside the switch
 The second footer control is the palette's normal Actions (`⌘K`) menu. It owns Continue in AI Chat
 (`⌘J`; Open AI Chat while the chat is empty), New Chat (`⌘N`), Chat History (`⌘Y`) and AI Settings
 (`⌥⌘,`), plus Stop Response (`⌘.`), Regenerate Response (`⌘R`), Copy Last Response (`⇧⌘C`) and
-Remove Attachments when those apply. The chords are Raycast's where it has one, and `AIScreen.perform`
-maps each `PaletteShortcut` to its action. AI Settings takes ⌥⌘, because ⌘, stays the app's own
-Settings on every screen. Continuing closes the palette and carries the half-typed line into the
-window's composer with the conversation. Chat History is the palette's own browser over the same
-saved chats the window's sidebar lists: ↵ opens one in Quick AI, or in the window when the window
-already holds it, and Continue in AI Chat (`⌘J`) takes it to the window either way.
+Remove Attachments when those apply. Attach Files or Folder… (`⌘O`) opens the picker, and a chat
+reading files adds Stop Reading Files while it indexes, else Reindex Files and Remove Files. The
+chords are Raycast's where it has one, and `AIScreen.perform` maps each `PaletteShortcut` to its
+action. AI Settings takes ⌥⌘, because ⌘, stays the app's own Settings on every screen. Continuing
+closes the palette and carries the half-typed line into the window's composer with the conversation.
+Chat History is the palette's own browser over the same saved chats the window's sidebar lists: ↵
+opens one in Quick AI, or in the window when the window already holds it, and Continue in AI Chat
+(`⌘J`) takes it to the window either way.
 
 **Ask AI from root search.** A launcher query that reads as a question — ends in `?`, or opens
 with two or more words led by what, why, how, who, when, where, can, should, is, are, does, explain
@@ -489,6 +496,7 @@ its first message.
     Reply and Branch Chat.
   - Copy as Markdown, which works for any chat with messages, a temporary one included.
   - Chat Instructions….
+  - Attach Files or Folder… (`⌘O`), and the library's Stop Reading, Reindex and Remove Files.
   - For a saved chat only: Export as Markdown…, Pin and Delete.
 
   Regenerate also asks a question whose reply never came. `AIChatActionsMenu` builds the menu each
@@ -558,9 +566,10 @@ its first message.
   solid under its glass so the transcript cannot show through. `ChatContextReport`
   lays it out: tokens in context of the window, input with its cached share, output with its
   thinking share and cost; then what the next message sends — model, history of budget, messages
-  sent of total, staged files, and whether the system prompt, web search and tools ride along. The model and reasoning menus are this chat's, as Quick AI's header is Quick AI's. Files arrive by ⌘V, a drop anywhere on the pane, or the paperclip, and all three take
-  the refusals a paste does. The unsent text lives on `AIChatState.draft`, so it survives closing
-  the window.
+  sent of total, staged files, and whether the system prompt, web search and tools ride along. The model and reasoning menus are this chat's, as Quick AI's header is Quick AI's. Files arrive by ⌘V, a drop anywhere on the pane, or the paperclip (`⌘O`), and all three take
+  the refusals a paste does — except that a folder, or a file past the inline cap, goes to the
+  chat's [library](#chat-with-files) instead of being refused. The unsent text lives on
+  `AIChatState.draft`, so it survives closing the window.
 
 `AIChatState` turns provider-neutral stream events into one live assistant message. Thinking state is
 shown without entering the transcript, partial text is preserved on failure, cancellation invalidates
@@ -699,6 +708,13 @@ the twenty-second.
   Press ⌘N: the temporary chat is gone, and `ai-chats.sqlite3` has no trace of it.
 - ⌘K → Copy as Markdown puts the whole chat on the pasteboard as Markdown, a temporary chat
   included.
+- Drop a folder of Markdown notes on the window: the bar counts files and passages as it reads.
+  Ask about one note: the reply cites it and a "From your files" chip opens it. Press Stop midway
+  through a second folder: the first index still answers. Edit a note, Reindex, and ask again.
+- ⌘O in Quick AI, pick a 300-page PDF: it is read rather than refused, and the answer's chip names
+  the page. Remove Files clears the bar. A folder of Japanese text reads "word match only".
+- Delete a chat that had a folder: its plist leaves `Caches/<bundle ID>/ChatLibraries`. A
+  temporary chat with a folder leaves nothing there.
 - Harnesses: `ai-provider-test` (endpoints, request bodies — web search on and off per route —
   stream decoding, Anthropic's search rows, failed and paused searches, citations with escaped
   titles and search offered only on Anthropic's own URL, persistence repair, Codex framing,
@@ -706,7 +722,9 @@ the twenty-second.
   `ai-chat-test` (`ChatSession`, `MarkdownBlock`, `ChatHistoryStore` with renames, pins and chat
   instructions, `AIToolLoopProvider`, regenerate, edit and retry truncation, branching, full-text
   search with its snippets and escaped wildcards, temporary chats, and `AIChatSurfacesState`'s
-  one-live-place rule), `ai-instructions-test` (the preamble and a chat's own prompt),
+  one-live-place rule, and a library answering with cited excerpts, saved per chat and pruned with
+  it), `chat-library-test` (chunking, ranking, the retrieval budget, follow-up queries, the excerpt
+  prompt and citations), `ai-instructions-test` (the preamble and a chat's own prompt),
   `codex-turn-test` (the Stop path, driven against a stub app-server stalled where Stop races the
   turn ID, plus the MCP launch boundary, one launch for concurrent starts, the elicitation, the
   rows and the call cap),
@@ -878,7 +896,8 @@ is why documents are *not* assumed the way images are. An attachment is never dr
 out: answering a question about a document the model never received is the one outcome this must
 not produce.
 
-In Quick AI attachments arrive by ⌘V; the window also takes a drop and the paperclip. They come in
+In Quick AI attachments arrive by ⌘V or the ⌘O picker; the window also takes a drop and the
+paperclip. A folder, or a file too big to send, is searched rather than staged (below). They come in
 three kinds: an **image**, a **PDF** sent as a native document block,
 and a **text-ish file** whose contents are inlined as fenced, named text.
 `PaletteWindowController`'s command-shortcut hook gives chat the chord first; a pasteboard holding
@@ -951,6 +970,61 @@ because there the field really is a search. Neither exit touches the conversatio
 The model switcher is `fixedSize` with its title shortened in `AIChatCoordinator` (26 characters,
 middle ellipsis) rather than truncated by layout: a flexible label claimed the row up to its max
 width and clipped the search field well short of the button.
+
+## Chat with files
+
+A chat can read a folder, or a PDF or text file too big to attach, by searching it instead of
+sending it. `ChatLibraryPolicy.belongsInLibrary` decides: a folder always; a text file past
+`AIAttachmentBudget.maxInlinedTextBytes`; a PDF past `AIAttachmentBudget.maxBytes`, or any PDF
+when the route cannot take a document. Everything else stages as before. Files reach the library
+through the same routes an attachment does — a drop on the window, ⌘V of copied files, and the
+`⌘O` picker (which takes folders) on either surface. Each chat has its own `ChatLibraryState`.
+
+**Indexing** runs off-main in `ChatLibraryRunner`. `ChatLibraryScanner` walks the roots, skipping
+hidden files, packages and generated trees (`node_modules`, `DerivedData`, …), and reads a PDF's
+pages with PDFKit and a text file as UTF-8. `ChatLibraryChunkEngine` cuts the text into ~900
+character passages with a 120 character overlap, breaking at a paragraph, sentence or word end.
+`ChatEmbeddingService` finds the text's language and embeds each passage with Apple's sentence
+embedding, on two lanes at most. The composer (and Quick AI, above its transcript) shows a bar with
+what is attached, progress, and Stop, or once built the file and passage counts with Reindex and
+Remove; ⌘K carries the same three. Stopping a rebuild keeps the index that was there before.
+
+**Each turn** asks `ChatLibraryState.passages` with the newest question — a follow-up of under six
+words borrows the one before it (`ChatLibraryPolicy.query`). A question sent while the index is
+still being built waits for it, and the status reads "Reading your files…".
+`ChatLibraryIndex.passages` ranks by cosine similarity plus a word-overlap lift, keeps what scores at
+least half the best, takes at most three passages per file and eight in all, and stops at the
+turn's budget: `ChatLibraryPolicy.retrievalBudget`, a third of the route's history budget and at
+most 24 KB, taken out of the history rather than added to it. With nothing to match ("summarise
+this"), each file's opening passage stands in. `ChatLibraryPolicy.prompt` numbers the excerpts by
+file and page, fences each like an attached file, and `injecting` puts the block before the newest
+question. The reply's `ChatMessage.sources` records what it was given, saved in `message_sources`;
+the transcript shows the ones it cited (all of them when it cites none) as "From your files" chips.
+Clicking one opens the file, and its context menu offers Show in Finder and Copy Path. A file that
+moved since draws struck through.
+
+**Storage.** The index is a binary plist per chat under `Caches/<bundle ID>/ChatLibraries`, vectors
+packed as Float32. A temporary chat keeps its index in memory only. Deleting a chat, pruning by
+`Keep conversations`, and turning AI on remove the indexes of chats that are gone.
+
+**Limits, honestly.**
+
+- Sentence embeddings cover English, German, French, Spanish, Italian and Portuguese. Text in any
+  other language is matched by its words alone, and the bar says "word match only"; a language
+  written without spaces, such as Japanese, matches poorly that way.
+- Caps: 400 files, 2,000 passages, a 4 MB text file, a 200 MB PDF, and 40,000 entries walked.
+  Past any of them the bar says "limit reached"; skipped files are counted.
+- The index is a snapshot. An edited, added or deleted file is not seen until Reindex.
+- It lives in Caches, so macOS may purge it; the chat then answers without it until Reindex.
+- No OCR: a scanned PDF has no text layer and is skipped. Text files must be UTF-8.
+- PDFKit reads in process, one page at a time inside an autorelease pool; a large PDF still costs
+  memory while it is read. Embedding adds about 48 MB resident while it runs (31 MB for the first
+  lane's model, 17 MB for the second).
+- Quick AI takes no drop, since the palette has no drop target: use ⌘V or ⌘O. There is no
+  `@folder` mention.
+- A PDF source opens the file, not the cited page; the chip names the page.
+- Retrieval finds passages that look like the question. A question about the whole of a large
+  folder ("what is in here?") sees only a few excerpts, not everything.
 
 ## Passive AI
 

@@ -30,13 +30,15 @@ struct ChatMessage: Identifiable, Equatable, Sendable {
     var usage: AIUsage?
     /// The server a question was addressed to with `@server`; the text is stored without it.
     let toolScope: String?
+    /// Library excerpts the reply was given, numbered as its prompt numbered them.
+    var sources: [ChatSource]
 
     init(
         id: UUID = UUID(), role: Role, text: String, state: State = .complete,
         sentAt: Date = Date(), images: [AIImage] = [], documents: [AIDocument] = [],
         searches: [ChatSearch] = [],
         toolUses: [ChatToolUse] = [], reasoning: [ChatReasoning] = [], usage: AIUsage? = nil,
-        toolScope: String? = nil
+        toolScope: String? = nil, sources: [ChatSource] = []
     ) {
         self.id = id
         self.role = role
@@ -50,6 +52,7 @@ struct ChatMessage: Identifiable, Equatable, Sendable {
         self.reasoning = reasoning
         self.usage = usage
         self.toolScope = toolScope
+        self.sources = sources
     }
 
     /// The next search or call's place among the reply's: with no text between, offsets tie.
@@ -188,6 +191,16 @@ struct ChatReasoning: Equatable, Hashable, Sendable {
     let textOffset: Int
     /// Until the answer resumed, or the reply ended; nil while it is still thinking.
     var duration: TimeInterval?
+}
+
+/// A file, and a PDF's 1-based page, that a reply was quoted from its chat's library.
+struct ChatSource: Equatable, Hashable, Sendable {
+    let number: Int
+    let path: String
+    let page: Int?
+
+    var name: String { (path as NSString).lastPathComponent }
+    var label: String { page.map { "\(name), p. \($0)" } ?? name }
 }
 
 enum ChatSegment: Equatable, Hashable {

@@ -201,6 +201,6 @@ extension ChatMessage {
         ChatMessage(
             role: role, text: text, state: state, sentAt: sentAt, images: images,
             documents: documents, searches: searches, toolUses: toolUses, reasoning: reasoning,
-            usage: usage, toolScope: toolScope)
+            usage: usage, toolScope: toolScope, sources: sources)
     }
 }

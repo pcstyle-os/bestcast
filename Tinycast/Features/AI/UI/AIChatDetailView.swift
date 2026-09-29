@@ -140,6 +140,12 @@ private struct AIChatComposer: View {
                 ChatEditingBanner { coordinator.cancelEdit(in: chat) }
             }
             chips
+            if !chat.library.isEmpty {
+                ChatLibraryBar(
+                    library: chat.library, onStop: { coordinator.stopReadingFiles(in: chat) },
+                    onReindex: { coordinator.reindexFiles(in: chat) },
+                    onRemove: { coordinator.removeFiles(in: chat) })
+            }
             ZStack(alignment: .topLeading) {
                 if chat.draft.isEmpty {
                     Text("Ask anything…")
@@ -178,7 +184,7 @@ private struct AIChatComposer: View {
 
     private var controls: some View {
         HStack(spacing: Theme.Spacing.md) {
-            ComposerIconButton(symbol: "paperclip", help: attachHelp) {
+            ComposerIconButton(symbol: "paperclip", help: attachHelp, shortcut: "⌘O") {
                 coordinator.chooseFiles(for: chat)
             }
             AIModelPicker(chat: chat, selected: coordinator.model(for: chat), coordinator: coordinator)
@@ -198,10 +204,10 @@ private struct AIChatComposer: View {
     private var attachHelp: String {
         let can = coordinator.capabilities(for: chat)
         switch (can.images, can.documents) {
-        case (true, true): return "Attach images, PDFs or text files"
-        case (true, false): return "Attach images or text files"
-        case (false, true): return "Attach PDFs or text files"
-        case (false, false): return "Attach text files"
+        case (true, true): return "Attach images, PDFs, text files or a folder"
+        case (true, false): return "Attach images, text files or a folder"
+        case (false, true): return "Attach PDFs, text files or a folder"
+        case (false, false): return "Attach text files or a folder"
         }
     }
 
@@ -231,6 +237,7 @@ private struct AIChatComposer: View {
 private struct ComposerIconButton: View {
     let symbol: String
     let help: String
+    let shortcut: String
     let action: () -> Void
 
     var body: some View {
@@ -238,7 +245,7 @@ private struct ComposerIconButton: View {
             Image(systemName: symbol)
         }
         .buttonStyle(.borderless)
-        .help(help)
+        .help("\(help)  \(shortcut)")
         .accessibilityLabel(help)
     }
 }

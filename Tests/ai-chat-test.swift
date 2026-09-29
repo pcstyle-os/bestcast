@@ -68,6 +68,8 @@ struct AIChatTests {
         searchFindsChatsByTheirMessages()
         await temporaryChatsAreNeverSaved()
         await chatInstructionsPersistAndCascade()
+        await aLibraryAnswersWithCitedExcerpts()
+        await aLibraryIsSavedPerChatAndPrunedWithIt()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -1760,6 +1762,118 @@ final class StalledProvider: AIProvider, @unchecked Sendable {
             continuation.yield(.finished)
             continuation.finish()
         }
+    }
+}
+
+extension AIChatTests {
+    static func libraryFolder(_ name: String) -> URL {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tinycast-library-\(name)-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let files = [
+            "falcon.md": "Project Falcon notes. The launch code for Falcon is seven four two. "
+                + "The rocket leaves the pad at dawn on Thursday.",
+            "pasta.txt": "Boil the water, salt it well, and cook the pasta until it is al dente."
+        ]
+        for (name, text) in files {
+            try? Data(text.utf8).write(to: folder.appendingPathComponent(name))
+        }
+        return folder
+    }
+
+    /// Indexing runs off-main and has no fixed length, so the waits poll rather than sleep once.
+    static func settleLibrary(_ chat: AIChatState) async {
+        for _ in 0..<1_000 where chat.isStreaming || chat.library.isIndexing {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    /// A question asked while the folder is still being read waits for it, then cites what it used.
+    static func aLibraryAnswersWithCitedExcerpts() async {
+        let (store, directory) = temporaryStore("library")
+        let folder = libraryFolder("answers")
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+            try? FileManager.default.removeItem(at: folder)
+        }
+        let libraries = ChatLibraryStore(directory: directory.appendingPathComponent("libraries"))
+        let chat = AIChatState(history: store, libraries: libraries)
+        chat.library.add([folder], savingAs: chat.librarySaveID)
+        expect(chat.library.isIndexing, "attaching a folder starts reading it")
+        let provider = ScriptedProvider(rounds: [[.text("It is seven four two [1]."), .finished]])
+        expect(
+            chat.send("What is the launch code for Falcon?", using: provider),
+            "a question can be sent while the folder is read")
+        await settleLibrary(chat)
+        let sent = provider.requests.last?.messages.last?.text ?? ""
+        expect(sent.contains("launch code for Falcon is seven"), "the matching excerpt is sent")
+        expect(sent.contains("[1] ") && sent.contains("falcon.md"), "under its number and file name")
+        expect(sent.hasSuffix("What is the launch code for Falcon?"), "the question follows its excerpts")
+        let reply = chat.session.messages.last
+        expect(
+            reply?.sources.first.map { $0.number == 1 && $0.path.hasSuffix("falcon.md") } == true,
+            "the reply keeps the sources it was given")
+        expect(
+            store.session(id: chat.session.id)?.messages.last?.sources == reply?.sources,
+            "and they survive a reload")
+        expect(
+            chat.session.messages.first?.text == "What is the launch code for Falcon?",
+            "the stored question is what was typed, never the excerpts")
+        if case .ready = chat.library.phase {
+            expect(chat.library.summary?.files == 2, "both files are indexed")
+        } else {
+            expect(false, "the library is ready once the reply is in")
+        }
+
+        let before = chat.library.roots
+        chat.library.reindex(savingAs: chat.librarySaveID)
+        chat.library.cancel()
+        expect(
+            chat.library.phase == .ready && chat.library.roots == before,
+            "stopping a reindex keeps the index that was there")
+    }
+
+    /// A saved chat reopens with its files; deleting it takes the index with it.
+    static func aLibraryIsSavedPerChatAndPrunedWithIt() async {
+        let (store, directory) = temporaryStore("library-saved")
+        let folder = libraryFolder("saved")
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+            try? FileManager.default.removeItem(at: folder)
+        }
+        let librariesURL = directory.appendingPathComponent("libraries")
+        let libraries = ChatLibraryStore(directory: librariesURL)
+        let chats = AIChatSurfacesState(history: store, libraries: libraries)
+        let chat = chats.window
+        chat.library.add([folder], savingAs: chat.librarySaveID)
+        await settleLibrary(chat)
+        chat.send("When does the rocket leave?", using: ScriptedProvider(rounds: [[.text("Dawn."), .finished]]))
+        await settleLibrary(chat)
+        let id = chat.session.id
+        let file = librariesURL.appendingPathComponent("\(id.uuidString).plist")
+        expect(FileManager.default.fileExists(atPath: file.path), "the index is saved under the chat")
+
+        chats.newWindowChat()
+        expect(chats.window.library.isEmpty, "a new chat starts with no files")
+        expect(chats.openInWindow(id: id), "the saved chat reopens")
+        await settleLibrary(chats.window)
+        for _ in 0..<200 where chats.window.library.isEmpty {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        expect(chats.window.library.phase == .ready, "with its files, read back rather than re-indexed")
+
+        let temporary = AIChatState(history: store, libraries: libraries, isTemporary: true)
+        expect(temporary.librarySaveID == nil, "a temporary chat's index is never written")
+
+        try? Data("stray".utf8).write(to: librariesURL.appendingPathComponent("stray.plist"))
+        chats.delete(id: id)
+        for _ in 0..<200 where FileManager.default.fileExists(atPath: file.path) {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        expect(!FileManager.default.fileExists(atPath: file.path), "deleting the chat drops its index")
+        expect(
+            !FileManager.default.fileExists(atPath: librariesURL.appendingPathComponent("stray.plist").path),
+            "and anything else no chat owns")
     }
 }
 
