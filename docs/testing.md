@@ -447,6 +447,8 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
   (open a long clipboard history); Caps Lock's Quick Press Escape still closes the palette
 - Hold the Hyper key while a dictation tool types a phrase, then release: no Quick Press fires, and
   the next plain keystroke carries no chord
+- With Hyper on right Option and Goldfish on its default right Option, use Goldfish's key a few
+  times, then type: plain keys carry no chord, and Hyper+key still fires
 - Every binding survives quit and relaunch
 - `Enable Commands` off leaves every pane-owned command listed, searchable and firing — Notes,
   Clipboard, Emoji, File Search, Snippets, Quicklinks, Calendar, AI and the two layout commands

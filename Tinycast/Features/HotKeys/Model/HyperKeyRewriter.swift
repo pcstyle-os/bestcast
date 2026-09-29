@@ -51,8 +51,6 @@ struct HyperKeyRewriter: Sendable {
     private(set) var isHolding = false
     private var holdStartedAt: ContinuousClock.Instant?
     private var otherKeyPressed = false
-    /// Fresh or after a cancel, toggling can't tell which way the key moves next; its flags can.
-    private var resyncsOnNextTransition = true
 
     init(configuration: Configuration = Configuration()) {
         self.configuration = configuration
@@ -68,7 +66,6 @@ struct HyperKeyRewriter: Sendable {
         isHolding = false
         holdStartedAt = nil
         otherKeyPressed = false
-        resyncsOnNextTransition = true
     }
 
     // MARK: - Event decisions
@@ -123,15 +120,20 @@ struct HyperKeyRewriter: Sendable {
         return decideModifierTransition(flagsRaw: flagsRaw, swapKeyCode: false, at: now)
     }
 
-    /// docs/features/hotkeys.md#press-tracking-uses-toggle-semantics
+    /// docs/features/hotkeys.md#press-tracking
     private mutating func decideModifierTransition(
         flagsRaw: UInt64, swapKeyCode: Bool, at now: ContinuousClock.Instant
     ) -> Outcome {
         let keyCode: Int64? = swapKeyCode ? Int64(kVK_Control) : nil
-        let isPress = !isHolding && !isReleaseAfterCancel(flagsRaw)
-        resyncsOnNextTransition = false
+        // Another tool on the same key can add or eat a transition; toggling would invert for good.
+        let isPress: Bool
+        switch reportedDirection(flagsRaw) {
+        case .down?: isPress = true
+        case .up?: isPress = false
+        case nil: isPress = !isHolding
+        }
         if isPress {
-            beginHold(at: now)
+            if !isHolding { beginHold(at: now) }
             return Outcome(.rewrite(flags: hyperized(flagsRaw), keyCode: keyCode))
         }
         let quickPress = isHolding ? endHold(at: now) : nil
@@ -139,13 +141,16 @@ struct HyperKeyRewriter: Sendable {
             .rewrite(flags: flagsRaw & ~strippedFlagsRaw, keyCode: keyCode), quickPress: quickPress)
     }
 
-    private func isReleaseAfterCancel(_ flagsRaw: UInt64) -> Bool {
-        guard resyncsOnNextTransition, let ownFlag = configuration.key.ownFlag,
-            let deviceBit = Self.ownDeviceBit(of: configuration.key), flagsRaw & deviceBit == 0
-        else { return false }
-        // A set left-twin device bit proves sides are reported, so the shared mask is the twin's.
+    private enum Direction { case down, up }
+
+    /// Nil when the keyboard reports no sides, which leaves only toggling to go on.
+    private func reportedDirection(_ flagsRaw: UInt64) -> Direction? {
+        guard let ownFlag = configuration.key.ownFlag,
+            let deviceBit = Self.ownDeviceBit(of: configuration.key)
+        else { return nil }
+        if flagsRaw & deviceBit != 0 { return .down }
         let leftTwinBit = Self.deviceBits(for: ownFlag) & ~deviceBit
-        return flagsRaw & ownFlag.rawValue == 0 || flagsRaw & leftTwinBit != 0
+        return flagsRaw & ownFlag.rawValue == 0 || flagsRaw & leftTwinBit != 0 ? .up : nil
     }
 
     // MARK: - Hold state machine
@@ -154,7 +159,6 @@ struct HyperKeyRewriter: Sendable {
         isHolding = true
         holdStartedAt = now
         otherKeyPressed = false
-        resyncsOnNextTransition = false
     }
 
     private mutating func endHold(at now: ContinuousClock.Instant) -> QuickPress? {

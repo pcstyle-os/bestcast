@@ -182,20 +182,24 @@ bit they are entitled to. A classic `IOHIDSystem` connection reads and drives th
 lock state; it is used only by the explicit Quick Press toggle and the one-time unlatch when the remap
 is installed.
 
-### Press tracking uses toggle semantics
+### Press tracking
 
-`flagsChanged` does not describe its own direction, so a modifier-style Hyper key is tracked by
-toggling. The obvious alternative — querying `CGEventSource` key state — **races the release**,
-inverting the state machine and breaking Quick Press.
+`flagsChanged` does not name its own direction, but a right-side key's device bit does: set on the
+press, clear on the release. So a modifier-style Hyper key reads each transition from the event
+itself — the right-side bit set is a press; the bit clear, with the generic flag clear too or
+accounted for by the left twin's device bit, is a release. Querying `CGEventSource` key state
+instead **races the release**, inverting the state machine and breaking Quick Press; reading the
+event's own flags does not. Toggling is only the fallback for a keyboard that reports no sides.
+
+Toggling everywhere used to be the rule, and another tool on the same physical key broke it:
+Goldfish's default key is right Option, and one transition it added or ate inverted the machine for
+good, leaving Hyper down while the key was up. Reading the bit makes a repeated press keep the one
+hold and a press after an eaten release start one, so the next real release always lets go.
 
 A disabled tap is where a release goes missing, so **every re-enable drops the hold** — whether the
 callback revives the tap on `tapDisabledByTimeout`/`tapDisabledByUserInput` or the watchdog finds it
-off — and so do a session switch and a teardown. Hyper cannot stay stuck down across the gap. Dropping
-it creates the opposite hazard: if the key is still physically held, its release would toggle a fresh
-hold on and invert the machine for good. So the first transition after a drop — or after a fresh tap
-is installed — resyncs from the event itself: when the key's right-side device bit is clear and its
-generic flag is either clear too or accounted for by the left twin's device bit, it is a release and
-passes stripped without starting a hold. Only that one event reads flags; toggling resumes after it.
+off — and so do a session switch and a teardown. The key's next transition then says for itself
+which way it went, so a key still held across the gap releases cleanly.
 An F18 Caps Lock needs none of this, since keyDown/keyUp already say which way they went.
 `hotkey-test` drives both halves — a release lost while disabled, and a key held across the gap.
 
@@ -271,7 +275,7 @@ system never waits on them to deliver a keystroke, and everything they feed is m
 Like every keyboard tap it needs the **Accessibility** grant and never prompts for it. A one-second
 watchdog runs while a key is configured: it retries installation until the grant lands, notices
 revocation, and revives a tap the system disabled on timeout or user input, dropping any hold as it
-does (see [toggle semantics](#press-tracking-uses-toggle-semantics)). On
+does (see [press tracking](#press-tracking)). On
 fast user switching another session owns the keyboard, so half-held state is dropped, rewriting
 stops and the watchdog stands down until this session is active again. The HID remap outlives the
 process, so `applicationWillTerminate` hands the key back to the system before exiting.

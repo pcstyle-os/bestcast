@@ -74,6 +74,7 @@ struct DoubleTapDetectorTests {
         hyperQuickPress()
         hyperSynthetics()
         hyperCancelledHold()
+        hyperSharedKey()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -719,6 +720,28 @@ struct DoubleTapDetectorTests {
         expect(
             keys.modifier(flags: nonCoalesced, at: 560).quickPress == nil,
             "an injected phrase under Hyper makes the press a combo, so nothing fires")
+    }
+
+    static func hyperSharedKey() {
+        var doubled = HyperKeys(.rightOption)
+        _ = doubled.modifier(flags: rightOptionDown, at: 0)
+        _ = doubled.modifier(flags: rightOptionDown, at: 5)
+        expect(doubled.rewriter.isHolding, "a second tool's repeated press keeps the one hold")
+        _ = doubled.modifier(flags: nonCoalesced, at: 60)
+        expect(
+            !doubled.rewriter.isHolding && doubled.key(kVK_ANSI_K, at: 90) == .init(.pass),
+            "and the real release still ends it, so Hyper is not left down")
+
+        var eaten = HyperKeys(.rightOption)
+        _ = eaten.modifier(flags: rightOptionDown, at: 0)
+        _ = eaten.modifier(flags: rightOptionDown, at: 400)
+        expect(eaten.rewriter.isHolding, "a press after an eaten release is a press, not a release")
+        _ = eaten.modifier(flags: nonCoalesced, at: 450)
+        expect(!eaten.rewriter.isHolding, "so its release lets go")
+
+        var strayRelease = HyperKeys(.rightOption)
+        _ = strayRelease.modifier(flags: nonCoalesced, at: 0)
+        expect(!strayRelease.rewriter.isHolding, "a stray release never starts a hold")
     }
 
     static func hyperCancelledHold() {
