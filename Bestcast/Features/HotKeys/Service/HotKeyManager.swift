@@ -18,6 +18,7 @@ final class HotKeyManager {
     var onRunAppleShortcut: ((UUID) -> Void)?
     var onRunAIPreset: ((UUID) -> Void)?
     var onRunExtensionCommand: ((String) -> Void)?
+    var onRunExtensionTrigger: ((String) -> Void)?
     /// Names what only the stores know; the fixed catalogs resolve here. Set in `AppCore.start()`.
     var displayName: ((HotKeyAction) -> String?)?
     /// Whether the action's launcher category is switched on. Set in `AppCore.start()`.
@@ -63,6 +64,7 @@ final class HotKeyManager {
     private let boundAppleShortcutKey = "boundAppleShortcutIDs"
     private let boundAIPresetKey = "boundAIPresetIDs"
     private let boundExtensionCommandKey = "boundExtensionCommandEntryIDs"
+    private let boundExtensionTriggerKey = "boundExtensionTriggerIDs"
 
     func start(
         customCommandIDs: Set<UUID>, quicklinkIDs: Set<UUID>, windowLayoutIDs: Set<UUID>,
@@ -96,6 +98,10 @@ final class HotKeyManager {
     /// Never pruned at launch: not-installed-yet and gone are indistinguishable there.
     var boundExtensionCommandEntryIDs: [String] {
         UserDefaults.standard.stringArray(forKey: boundExtensionCommandKey) ?? []
+    }
+
+    var boundExtensionTriggerIDs: [String] {
+        UserDefaults.standard.stringArray(forKey: boundExtensionTriggerKey) ?? []
     }
 
     /// Bundle IDs holding a per-app hotkey, so `start()` knows which records to load.
@@ -206,6 +212,10 @@ final class HotKeyManager {
             var set = Set(boundExtensionCommandEntryIDs)
             if binding == nil { set.remove(entryID) } else { set.insert(entryID) }
             UserDefaults.standard.set(Array(set), forKey: boundExtensionCommandKey)
+        case .extensionTrigger(let id):
+            var set = Set(boundExtensionTriggerIDs)
+            if binding == nil { set.remove(id) } else { set.insert(id) }
+            UserDefaults.standard.set(Array(set), forKey: boundExtensionTriggerKey)
         case .togglePalette, .command, .systemAction, .windowCommand:
             break
         }
@@ -253,6 +263,7 @@ final class HotKeyManager {
         actions += boundAppleShortcutIDs.map { .appleShortcut(id: $0) }
         actions += boundAIPresetIDs.map { .aiPreset(id: $0) }
         actions += boundExtensionCommandEntryIDs.map { .extensionCommand(entryID: $0) }
+        actions += boundExtensionTriggerIDs.map { .extensionTrigger(id: $0) }
         actions += SystemAction.ID.allCases.map { .systemAction(id: $0) }
         actions += WindowCommand.ID.allCases.map { .windowCommand(id: $0) }
         candidateActionsCache = actions
@@ -290,6 +301,8 @@ final class HotKeyManager {
             return displayName?(action) ?? "Quick AI Preset"
         case .extensionCommand:
             return displayName?(action) ?? "Extension Command"
+        case .extensionTrigger:
+            return displayName?(action) ?? "Extension Automation"
         }
     }
 
@@ -332,6 +345,7 @@ final class HotKeyManager {
         case .appleShortcut(let id): onRunAppleShortcut?(id)
         case .aiPreset(let id): onRunAIPreset?(id)
         case .extensionCommand(let entryID): onRunExtensionCommand?(entryID)
+        case .extensionTrigger(let id): onRunExtensionTrigger?(id)
         }
         return true
     }

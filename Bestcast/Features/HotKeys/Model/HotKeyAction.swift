@@ -20,6 +20,8 @@ enum HotKeyAction: Hashable, Sendable {
     case aiPreset(id: UUID)
     /// Keyed by `AppEntry.id`, which is what survives a reinstall of the extension.
     case extensionCommand(entryID: String)
+    /// A `selection.hotkey` trigger, keyed `<extension>/trigger/<name>`.
+    case extensionTrigger(id: String)
 
     /// The UserDefaults key, and the `HotKeyCenter` registration id: one per action.
     var defaultsKey: String {
@@ -40,6 +42,7 @@ enum HotKeyAction: Hashable, Sendable {
         case .appleShortcut(let id): "hotkey.appleShortcut." + id.uuidString.lowercased()
         case .aiPreset(let id): "hotkey.aiPreset." + id.uuidString.lowercased()
         case .extensionCommand(let entryID): "hotkey.extensionCommand." + entryID
+        case .extensionTrigger(let id): "hotkey.extensionTrigger." + id
         }
     }
 

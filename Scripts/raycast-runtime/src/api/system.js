@@ -218,8 +218,10 @@ export function captureException(error) {
   console.error(error instanceof Error ? error.stack || error.message : String(error));
 }
 
-export function launchCommand(options) {
-  return hostCall("system", "launchCommand", [options]);
+// Resolves with a value only when Swift ran the command to completion for `awaitResult`.
+export async function launchCommand(options) {
+  const reply = await hostCall("system", "launchCommand", [options]);
+  return reply !== null && typeof reply === "object" && "result" in reply ? reply.result : undefined;
 }
 
 export function updateCommandMetadata(metadata) {

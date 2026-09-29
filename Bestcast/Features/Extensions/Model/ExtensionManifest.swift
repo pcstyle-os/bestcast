@@ -232,6 +232,8 @@ struct ExtensionManifest: Sendable, Hashable {
     let tools: [ExtensionTool]
     /// `ai.instructions`: what the model is told whenever the extension is addressed.
     let aiInstructions: String?
+    /// The `bestcast` object as written; `triggers` and `exports` decode it on demand.
+    let bestcastJSON: Data?
 
     /// `platforms` is absent on older manifests, which predate Windows support and are macOS-only.
     var supportsMacOS: Bool {
@@ -280,5 +282,8 @@ struct ExtensionManifest: Sendable, Hashable {
         tools = (json["tools"] as? [Any] ?? []).compactMap(ExtensionTool.init(json:))
         aiInstructions = ((json["ai"] as? [String: Any])?["instructions"] as? String)
             .flatMap { $0.isEmpty ? nil : $0 }
+        bestcastJSON = (json["bestcast"] as? [String: Any]).flatMap {
+            try? JSONSerialization.data(withJSONObject: $0, options: .sortedKeys)
+        }
     }
 }

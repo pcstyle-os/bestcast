@@ -37,6 +37,12 @@ protocol ExtensionHostContext: AnyObject {
     func getOAuthTokens(providerId: String) -> String?
     func setOAuthTokens(providerId: String, tokens: String)
     func removeOAuthTokens(providerId: String)
+    /// No person is watching: pasting into, or reading the selection of, another app is refused.
+    var isUnattended: Bool { get }
+}
+
+extension ExtensionHostContext {
+    var isUnattended: Bool { false }
 }
 
 /// A toast as the palette shows it.
@@ -129,6 +135,8 @@ final class ExtensionHostBridge: ExtensionHostAPI {
     private let clipboardStore: ClipboardStore
     private let fetcher: ExtensionFetcher
     let ai = ExtensionAIBridge()
+    /// `@bestcast/api/compose` and awaited `launchCommand`; a one-shot run swaps in its own scope.
+    var compose: ExtensionComposeBridge?
     private let sockets = ExtensionWebSocketBridge()
 
     init(clipboardStore: ClipboardStore, fetcher: ExtensionFetcher = ExtensionFetcher()) {
@@ -141,6 +149,7 @@ final class ExtensionHostBridge: ExtensionHostAPI {
         bridge.context = context
         bridge.ai.makeProvider = ai.makeProvider
         bridge.ai.canAccess = ai.canAccess
+        bridge.compose = compose
         return bridge
     }
 
@@ -165,6 +174,12 @@ final class ExtensionHostBridge: ExtensionHostAPI {
         case "proc" where method == "read": return try await ExtensionAsyncProcess.read(arguments)
         case "proc": return try await ExtensionAsyncProcess.wait(arguments.first)
         case "oauth": return try await oauth(method: method, arguments: arguments)
+        case "bestcastCompose":
+            let (context, caller) = try requireContext()
+            guard let compose else { throw ExtensionHostError.unsupported("callExport") }
+            return try await compose.perform(
+                method: method, arguments: arguments, caller: caller,
+                isBackground: context.activeLaunchType == .background)
         default: throw ExtensionHostError.unknown("\(api).\(method)")
         }
     }
@@ -185,6 +200,9 @@ final class ExtensionHostBridge: ExtensionHostAPI {
     // MARK: - Clipboard
 
     private func clipboard(method: String, arguments: [RenderValue]) throws -> Any? {
+        if method == "paste", context?.isUnattended == true {
+            throw ExtensionHostError.unsupported("Clipboard.paste from an automation")
+        }
         switch method {
         case "copy", "paste":
             let content = arguments.first?.objectValue ?? [:]
@@ -418,6 +436,10 @@ final class ExtensionHostBridge: ExtensionHostAPI {
             else { throw ExtensionHostError.unsupported("getFrontmostApplication") }
             return describe(application: url)
 
+        case "selectedText" where context?.isUnattended == true,
+            "selectedFinderItems" where context?.isUnattended == true:
+            throw ExtensionHostError.unsupported("Reading the selection from an automation")
+
         case "selectedText":
             return try selectedText()
 
@@ -436,6 +458,16 @@ final class ExtensionHostBridge: ExtensionHostAPI {
             let launchType: ExtensionLaunchType =
                 options["type"]?.stringValue == ExtensionLaunchType.background.rawValue
                 ? .background : .userInitiated
+            if options["awaitResult"]?.boolValue == true, let compose,
+                let caller = context?.activeExtensionName,
+                (options["extensionName"]?.stringValue ?? caller) == caller,
+                compose.canAwait(command: name, of: caller)
+            {
+                let value = try await compose.runCommand(
+                    name, of: caller, arguments: launchArguments, launchType: launchType,
+                    launchContext: options["context"]?.objectValue ?? [:])
+                return ["result": value]
+            }
             try context?.launch(
                 command: name, extensionName: options["extensionName"]?.stringValue,
                 arguments: launchArguments, fallbackText: options["fallbackText"]?.stringValue,

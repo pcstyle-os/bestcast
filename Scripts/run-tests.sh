@@ -329,6 +329,8 @@ run ext-icon-test          Bestcast/Platform/Appearance.swift \
                            Bestcast/Features/Extensions/Model/ExtensionBootConfig.swift \
                            Bestcast/Features/Extensions/Model/ExtensionLaunchType.swift \
                            Bestcast/Features/Extensions/Model/ExtensionManifest.swift \
+                           Bestcast/Features/Extensions/Model/ExtensionTrigger.swift \
+                           Bestcast/Features/Extensions/Model/ExtensionTriggerSchedule.swift \
                            Bestcast/Features/Extensions/Model/ExtensionRefreshPolicy.swift \
                            Bestcast/Features/Extensions/Model/ExtensionRefreshState.swift \
                            Bestcast/Features/Extensions/Model/RenderNode.swift \
@@ -499,6 +501,8 @@ run ext-cleanup-test       $E/Service/ExtensionCleanup.swift \
                            $E/Service/ExtensionCatalog.swift \
                            Bestcast/Platform/AppDisplayName.swift \
                            $E/Model/ExtensionManifest.swift \
+                           $E/Model/ExtensionTrigger.swift \
+                           $E/Model/ExtensionTriggerSchedule.swift \
                            $E/Model/ExtensionLaunchType.swift \
                            $E/Model/ExtensionRefreshPolicy.swift \
                            $E/Model/ExtensionRefreshState.swift
@@ -546,6 +550,8 @@ run slow ext-test          -parse-as-library \
                            $E/Model/ExtensionFormField.swift \
                            $E/Model/ExtensionGridLayout.swift \
                            $E/Model/ExtensionManifest.swift \
+                           $E/Model/ExtensionTrigger.swift \
+                           $E/Model/ExtensionTriggerSchedule.swift \
                            $E/Model/ExtensionRefreshPolicy.swift \
                            $E/Model/ExtensionRefreshState.swift \
                            $E/Model/RenderNode.swift \
@@ -683,6 +689,27 @@ run ext-tools-test         Bestcast/Features/AI/Model/*.swift $W \
                            $E/Model/ExtensionLaunchType.swift \
                            $E/Model/ExtensionRefreshPolicy.swift \
                            $E/Model/ExtensionRefreshState.swift
+run ext-triggers-test      $E/Model/ExtensionBootConfig.swift \
+                           $E/Model/ExtensionLaunchType.swift \
+                           $E/Model/ExtensionManifest.swift \
+                           $E/Model/ExtensionRefreshPolicy.swift \
+                           $E/Model/ExtensionRefreshState.swift \
+                           $E/Model/RenderNode.swift \
+                           $E/Model/ExtensionDeepLink.swift \
+                           $E/Model/ExtensionTrigger.swift \
+                           $E/Model/ExtensionTriggerSchedule.swift \
+                           $E/Model/ExtensionTriggerPolicy.swift \
+                           $E/Service/ExtensionTriggerStore.swift \
+                           Bestcast/Features/AI/Model/JSONValue.swift \
+                           Bestcast/Platform/AppDisplayName.swift \
+                           Bestcast/Platform/Compression/Zlib.swift \
+                           Bestcast/Platform/ProcessExit.swift \
+                           $E/Service/ExtensionCatalog.swift \
+                           $E/Service/ExtensionFetcher.swift \
+                           $E/Service/ExtensionNodeShims.swift \
+                           $E/Service/ExtensionOAuthKeychain.swift \
+                           $E/Service/ExtensionOAuthSession.swift \
+                           $E/Service/ExtensionRuntime.swift
 run -O text-diff-test     Bestcast/Features/QuickActions/Model/TextDiffEngine.swift
 run index text-diff-performance Bestcast/Features/QuickActions/Model/TextDiffEngine.swift
 run quick-action-test      Bestcast/Features/Settings/AppSettingsKey.swift \

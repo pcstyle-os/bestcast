@@ -31,7 +31,8 @@ A backup carries five independently selectable categories, ticked on export and 
   statement. Writing it any other way is the first line of a migration, and the project has none.
 - **Extensions, AI chat history, Keychain material and anything in `Caches` never travel.** An
   extension is third-party code and third-party data; chat history and API keys stay on the Mac that
-  had them; a cache regenerates on its own.
+  had them; a cache regenerates on its own. `extension-triggers.json` stays too: it is automation
+  consent ([extensions.md](extensions.md#automations)).
 - **`BackupCategory` names every category, and its `descriptor` switch is exhaustive.** A new case
   fails to build until it names a label, a symbol, a bundle subpath and a count noun — the same
   bargain `AppEntry.Kind` makes, and why the bundle layout is never spelled out twice.

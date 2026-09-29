@@ -68,6 +68,8 @@ the first successful read of the library, since a failed read looks exactly like
 (see [apple-shortcuts.md](apple-shortcuts.md#sweeping-deleted-shortcuts)).
 Quick AI presets index in `boundAIPresetIDs` and prune at launch like the five above; deleting one
 in Settings also clears its binding (see [ai.md](ai.md#presets)).
+Extension automations index `<extension>/trigger/<name>` in `boundExtensionTriggerIDs`; uninstall
+clears them (see [extensions.md](extensions.md#automations)).
 
 `HotKeyBinding` takes the synthesised `Codable`, so a `.combo` writes
 `{"combo":{"_0":{"carbonKeyCode":N,"carbonModifiers":N}}}` and a `.doubleTap` writes

@@ -36,6 +36,7 @@ struct ExtensionsSettingsView: View {
                 install
                 library
                 compatibility
+                ExtensionAutomationsSection()
             }
             .settingsEnabled(settings.extensionsEnabled)
 
@@ -405,6 +406,7 @@ private struct ExtensionDisclosure: View {
                     CommandRows(installed: installed, command: command)
                 }
             }
+            ExtensionAutomationsBlock(installed: installed)
             HStack {
                 Spacer()
                 Button("Uninstall…", role: .destructive, action: onUninstall)

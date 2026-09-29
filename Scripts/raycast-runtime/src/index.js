@@ -15,6 +15,7 @@ import { NavigationRoot, setFieldCommandHandler } from "./api/components.js";
 import { Surface } from "./reconciler.js";
 import { raycastApi } from "./api/index.js";
 import { configureSystem, runToastAction } from "./api/system.js";
+import { composeModule } from "./api/bestcast-compose.js";
 import { WebSocket } from "./websocket.js";
 
 const reactModule = {
@@ -33,6 +34,7 @@ defineModule("react", reactModule);
 defineModule("react/jsx-runtime", jsxModule);
 defineModule("react/jsx-dev-runtime", jsxModule);
 defineModule("@raycast/api", raycastApi);
+defineModule("@bestcast/api/compose", composeModule);
 // react-dom only appears in bundles defensively; make the import resolve and the calls explain.
 defineModule("react-dom", {
   render: () => {

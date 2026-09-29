@@ -39,11 +39,14 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
     let appearances = ExtensionAppearanceStore()
     private let commandMetadata = ExtensionCommandMetadataStore(
         fileURL: ExtensionCatalog.commandMetadataFile())
+    /// Automations and composed calls: consent, event sources and the one-shot runs they start.
+    let triggers = ExtensionTriggerEngine(
+        store: ExtensionTriggerStore(fileURL: ExtensionCatalog.triggersFile()))
     @ObservationIgnored private let runtime: ExtensionRuntime
-    @ObservationIgnored private let bridge: ExtensionHostBridge
+    @ObservationIgnored let bridge: ExtensionHostBridge
     @ObservationIgnored private let oauthSession = ExtensionOAuthSession()
     @ObservationIgnored private weak var appIndex: AppIndex?
-    @ObservationIgnored private weak var coordinator: ExtensionCoordinator?
+    @ObservationIgnored private(set) weak var coordinator: ExtensionCoordinator?
 
     /// The entry ids an uninstall invalidated, so another feature can drop what it keyed to them.
     @ObservationIgnored var onDidUninstall: (([String]) -> Void)?
@@ -62,6 +65,8 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         bridge = ExtensionHostBridge(clipboardStore: clipboardStore)
         runtime = ExtensionRuntime(hostAPI: bridge)
         bridge.context = self
+        triggers.manager = self
+        bridge.compose = ExtensionComposeBridge(engine: triggers, scope: ExtensionRunScope())
     }
 
     func configureAI(
@@ -89,6 +94,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         guard enabled != isEnabled else { return }
         isEnabled = enabled
         guard enabled else {
+            triggers.stopAll()
             menuBars?.stop()
             menuBars = nil
             await stop()
@@ -290,6 +296,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         storage.removeAll(extension: installedExtension.manifest.name)
         commandMetadata.removeAll(extension: installedExtension.manifest.name)
         appearances.set(nil, for: installedExtension.manifest.name)
+        triggers.forget(installedExtension)
         onDidUninstall?(entryIDs)
         await refresh()
     }
@@ -964,6 +971,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
     }
 
     func launch(_ link: ExtensionDeepLink) throws {
+        if link.triggerName != nil { return triggers.runDeepLink(link) }
         guard let (owner, command) = resolve(link) else {
             throw ExtensionLaunchError.unknownCommand(link.commandName)
         }

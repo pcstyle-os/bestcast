@@ -295,6 +295,8 @@ final class AppCore {
                         subscription: self.chatGPTSubscription, installedAI: self.installedAI)
                 })
             extensions.start(appIndex: appIndex, coordinator: extensionCoordinator)
+            extensions.triggers.start(
+                clipboardStore: clipboardStore, hotKeys: hotKeys, injector: textInjector)
             extensionCoordinator.applyEnabled()
             fileSearchCoordinator.applyEnabled()
             windowSwitchCoordinator.applyEnabled()
@@ -396,6 +398,9 @@ final class AppCore {
             hotKeys.onRunAIPreset = { [weak self] id in self?.quickAICoordinator.startPreset(id: id) }
             hotKeys.onRunExtensionCommand = { [weak self] entryID in
                 self?.extensionCoordinator.runExtensionCommand(entryID: entryID)
+            }
+            hotKeys.onRunExtensionTrigger = { [weak self] id in
+                self?.extensions.triggers.fireHotKey(id: id)
             }
             extensions.onDidUninstall = { [weak self] entryIDs in
                 self?.extensionCoordinator.removeExtensionReferences(entryIDs: entryIDs)
@@ -526,6 +531,8 @@ final class AppCore {
             return aiSettings.preset(id: id)?.launcherName
         case .extensionCommand(let entryID):
             return appIndex.apps.first { $0.kind == .extensionCommand && $0.id == entryID }?.name
+        case .extensionTrigger(let id):
+            return extensions.triggers.displayName(hotKeyID: id)
         case .togglePalette, .command, .systemAction, .windowCommand:
             return nil
         }

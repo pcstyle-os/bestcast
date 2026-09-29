@@ -624,6 +624,9 @@ enum SettingsSearchCatalog {
             group: .extensionsCompatibility, "Compatibility",
             keywords: ["supported", "unsupported", "raycast api"]),
         .init(
+            .extensionsAutomations, "Pause automations",
+            keywords: ["triggers", "clipboard", "schedule", "shortcut", "compose", "background"]),
+        .init(
             .extensionsStorage, "Leftover files",
             keywords: ["clean up", "disk", "reclaim", "cache"])
     ]

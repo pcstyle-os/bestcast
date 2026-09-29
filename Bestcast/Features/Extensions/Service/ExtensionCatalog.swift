@@ -77,6 +77,11 @@ enum ExtensionCatalog {
         supportDirectory().appendingPathComponent("extension-commands.json", isDirectory: false)
     }
 
+    /// Consent lives apart from `settings.json` and every backup, so neither can carry a grant.
+    static func triggersFile() -> URL {
+        supportDirectory().appendingPathComponent("extension-triggers.json", isDirectory: false)
+    }
+
     /// Per-extension `environment.supportPath` — an extension's own scratch directory.
     static func supportPath(for name: String) -> URL {
         supportRoot().appendingPathComponent(safeName(name), isDirectory: true)
@@ -199,7 +204,7 @@ enum ExtensionCatalog {
         }
     }
 
-    /// Manifest, built commands and `assets/` only — never `node_modules` or `.js.map`s.
+    /// Manifest, built commands, `assets/` and `bestcast` files, never `node_modules` or maps.
     @discardableResult
     static func install(from source: URL) throws -> InstalledExtension {
         guard let manifest = try? ExtensionManifest.load(directory: source) else {
@@ -232,6 +237,16 @@ enum ExtensionCatalog {
                 if fm.fileExists(atPath: item.path) {
                     try fm.copyItem(at: item, to: destination.appendingPathComponent(folder))
                 }
+            }
+            for path in manifest.bestcastFiles {
+                let item = source.appendingPathComponent(path)
+                let target = destination.appendingPathComponent(path)
+                guard fm.fileExists(atPath: item.path), !fm.fileExists(atPath: target.path) else {
+                    continue
+                }
+                try fm.createDirectory(
+                    at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try fm.copyItem(at: item, to: target)
             }
             try restoreExecutablePermissions(in: destination)
         } catch {

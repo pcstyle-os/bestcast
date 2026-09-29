@@ -17,6 +17,8 @@ produces, rendered natively into the palette. No Electron, no browser, no Node.j
   serialized by `ExtensionMenuBarManager`. Every menu session has its own bridge and an immutable
   extension namespace, so storage, preferences, OAuth and command launches cannot target the palette's
   extension. Shutdown cancels pending host tasks; a generation check rejects replies from old contexts.
+  Automations and composed calls sit outside this cap on purpose: each is a one-shot context that
+  `ExtensionTriggerEngine` runs one at a time — see [Automations](#automations).
 - **Bridges share one private HTTP transport, never execution state.** Cookies, credential storage and
   URL caching are disabled. Individual task cancellation leaves other requests running; releasing the
   fetcher invalidates its session so CFNetwork does not retain discarded connections and sessions.
@@ -39,6 +41,15 @@ produces, rendered natively into the palette. No Electron, no browser, no Node.j
   them only through `@handle`; a tool that is not clearly read-only runs only after the user agrees.
   `ExtensionToolSession` boots, loads, calls and throws the runtime away, so no tool state outlives
   its call. See [AI tools](#ai-tools).
+- **Automation consent never travels.** Every trigger's switch, the Share copied text and Type the
+  result opt-ins, the master pause and each cross-extension approval live in
+  `extension-triggers.json` alone, so no settings backup and no `settings.json` mirror can carry a
+  grant. Every trigger starts off, and uninstall forgets the extension's triggers, its shortcuts and
+  every approval it gave or received.
+- **An automation never shows UI by itself.** Its one-shot host refuses windows, alerts, paste,
+  selection reads and OAuth sign-in; a toast becomes a HUD at most once per trigger every ten
+  seconds, and an error lands in Settings, never in a dialog. The one exception is the approval a
+  person's own foreground command asks for when it first calls another extension's export.
 - **`SymbolCatalog` reads a system bundle, not API.** The list comes from `CoreGlyphs.bundle` at
   runtime; every read stays optional and falls back to `SymbolCatalog.suggested`, and Apple's restricted
   marks are never offered.
@@ -145,6 +156,13 @@ Two host-call flavours:
 | `UI/ExtensionMenuBarImage.swift` | small native icons with light/dark variants |
 | `Model/ExtensionManifest.swift` | `package.json` → commands, preferences, arguments, tools, `ai.instructions` |
 | `Model/ExtensionRefreshPolicy.swift` | background-refresh decisions: interval parsing, due dates, backoff |
+| `Model/ExtensionTrigger.swift` | the `bestcast` manifest key → triggers, exports, the files install copies |
+| `Model/ExtensionTriggerSchedule.swift` | a trigger's `every` / `at` schedule and its next date |
+| `Model/ExtensionTriggerPolicy.swift` | automation decisions: verdicts, backoff, auto-disable, chaining |
+| `Service/ExtensionTriggerStore.swift` | `extension-triggers.json`: consent, pause, history, approvals |
+| `Service/ExtensionTriggerEngine.swift` | arms only what enabled triggers need, queues and runs them |
+| `Service/ExtensionTriggerRunner.swift` | one export or `no-view` command in a one-shot context |
+| `Service/ExtensionComposeBridge.swift` | `@bestcast/api/compose` and the awaited `launchCommand` |
 | `Model/ExtensionLaunchType.swift` | `userInitiated` / `background`, mirroring `@raycast/api` `LaunchType` |
 | `Model/RenderNode.swift` | the decoded render tree (`RenderTree` / `RenderNode` / `RenderValue`) |
 | `Model/ExtensionAppearance.swift` | the per-extension icon override and its tint palette |
@@ -225,6 +243,10 @@ background `no-view` launches use the transient lane at utility priority and lea
 a user-initiated view launch from a menu opens the palette. Menu toasts are suppressed; errors appear
 in the menu and user-initiated failures also use the HUD. `updateCommandMetadata` publishes subtitles
 for the executing command, including menu commands, without changing another runtime's command.
+`launchCommand({name, type: LaunchType.Background, awaitResult: true})` on one of the caller's own
+`no-view` commands runs it in a one-shot context and resolves with what its default export returns,
+reached through `{result: …}` from the host; anything else keeps Raycast's fire-and-forget semantics
+and resolves `undefined`. A trigger's `command` target runs the same way.
 
 Menu-bar icons retain successful small raster variants and let AppKit choose the drawing appearance.
 Failed loads retry on the next session, never on each React render. Native rows retain no render tree. Do not
@@ -622,6 +644,58 @@ commands run on their own lane in `ExtensionMenuBarManager` but read the same po
 its failure backoff and its per-command phase — measured from the same `lastRun`, with a ten-second
 interval floor instead of sixty.
 
+Background refresh re-runs a command on a timer; a trigger reacts to something happening, or runs at
+a time of day — see [Automations](#automations).
+
+## Automations
+
+An extension may declare triggers and exports under a `bestcast` key in `package.json`. Raycast
+ignores the key, so the same package still builds and runs there.
+
+```json
+"bestcast": {
+  "triggers": [
+    { "name": "tidy", "title": "Tidy copied links", "on": "clipboard.changed",
+      "filter": { "kind": "text", "match": "^https?://" }, "export": "triggers/tidy.js",
+      "then": [{ "export": "triggers/notify.js" }], "throttle": "10s" }
+  ],
+  "exports": [
+    { "name": "shorten", "export": "exports/shorten.js", "public": true,
+      "description": "Shortens a URL" }
+  ]
+}
+```
+
+- **Events:** `clipboard.changed`, `app.activated`, `app.deactivated`, `schedule`
+  (`{every: "15m"}` or `{at: "09:30", weekdays: [1, 5]}`, ISO weekdays), `system.wake`,
+  `system.sleep`, `network.changed` (reachability only, never the network's name), `selection.hotkey`
+  and `deeplink` (`bestcast://extensions/<extension>/trigger/<name>?…`, query items in
+  `payload.query`). `bundleIds` narrows the app events; `filter` narrows the clipboard by `kind` and
+  a `match` regex.
+- **Targets:** `export` names a prebuilt CommonJS file inside the extension whose default export
+  receives `{trigger, type, payload, previous?}`; each `then` step gets the previous step's result as
+  `previous`. `command` names a `no-view` command instead, launched as `background` with
+  `launchContext.bestcastTrigger` set to the event. `ray build` compiles only commands, so an export
+  file has to be built already; install copies every file a trigger or export names.
+- **Consent:** each trigger has its own switch under its extension in Settings, off until turned on.
+  A clipboard trigger sees only the kind of copy unless Share copied text is on, and concealed copies
+  never reach it. `replacesSelection` types a string result over the selection only while Type the
+  result is on. Settings › Extensions › Automations pauses everything, and so does turning extensions
+  off.
+- **Failure:** three failures in a row turn a trigger off with one HUD; before that it backs off for
+  1, 5 and 30 minutes. The last error shows in the Automations section and under the trigger.
+- **Composition:** `@bestcast/api/compose` gives `callExport(extension, name, input)` and
+  `listExports()`. An extension calls its own exports freely; another extension's must be `public`,
+  and the first call asks once — "<A> wants to use <B>’s shorten" — then remembers the answer as an
+  approved caller, revocable under the target extension. A call from a background run cannot ask, so
+  it fails until approved. Chains stop at four exports deep and refuse a cycle.
+
+Each fired trigger runs in a fresh one-shot runtime at utility priority, one at a time: at most 16
+events wait, and the oldest are dropped past that. Clipboard triggers ride the clipboard history, so
+they need it on. `ExtensionTriggerPolicy` holds the decisions — verdicts, backoff, chaining — and
+`Tests/ext-triggers-test.swift` drives it together with the manifest parsing and the store. The types
+for extension authors are in `Scripts/raycast-runtime/types/bestcast-triggers.d.ts`.
+
 ## What's supported
 
 **Components** — `List` (+ `Item`, `Section`, `EmptyView`, `Item.Detail`, `Dropdown`), `Grid`
@@ -891,6 +965,8 @@ never shares with an installed copy.
 | Menu-bar activation and snapshot | `extension-commands.json` | yes |
 | Icon override | `UserDefaults` → `extensionAppearances` | yes |
 | Command shortcuts | `UserDefaults` → `hotkey.extensionCommand.<entry id>` | yes |
+| Automation consent, approvals, errors | `extension-triggers.json` | yes |
+| Automation shortcuts | `UserDefaults` → `hotkey.extensionTrigger.<extension>/trigger/<name>` | yes |
 | Favorites, hidden items | `UserDefaults` → `favoriteApps`, `hiddenItemKeys` | yes |
 | User alias | `UserDefaults` → `launcherAliases` | yes |
 | Launch ranking | `launcher-ranking.json` | yes |
