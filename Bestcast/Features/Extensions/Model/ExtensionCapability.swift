@@ -50,7 +50,7 @@ enum ExtensionCapability: String, CaseIterable, Codable, Sendable {
         case .calendarRead: "read your calendar events"
         case .calculator: "use the calculator"
         case .aiHandoff: "open Quick AI and AI Chat"
-        case .aiTools: "run Bestcast's AI tools"
+        case .aiTools: "use Bestcast's AI tools, which read your clipboard, notes and files"
         }
     }
 }

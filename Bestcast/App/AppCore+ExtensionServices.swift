@@ -140,9 +140,9 @@ final class AppExtensionServices: ExtensionBestcastServices {
 
     // MARK: - Notes
 
-    func readNote() async throws -> [String: Any] {
+    func readNote() async throws -> String {
         try await requireNote()
-        return ["title": core.notesStore.activeTitle, "text": core.notesStore.source]
+        return core.notesStore.source
     }
 
     func appendToNote(_ text: String) async throws {
@@ -349,7 +349,9 @@ final class AppExtensionServices: ExtensionBestcastServices {
             expression, now: Date(), calendar: .current, rates: core.currencyRates.rates,
             region: RegionCurrency.code, format: .english)
         guard case .value(let display, let copyText)? = result?.payload else { return nil }
-        return ["result": display, "raw": copyText]
+        var value: [String: Any] = ["result": display]
+        if let raw = Double(copyText) { value["raw"] = raw }
+        return value
     }
 
     // MARK: - AI

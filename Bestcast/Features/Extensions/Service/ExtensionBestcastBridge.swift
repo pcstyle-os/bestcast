@@ -76,7 +76,7 @@ protocol ExtensionBestcastServices: AnyObject {
     ) throws -> String
     func openSnippetEditor(name: String?, text: String, keyword: String?)
 
-    func readNote() async throws -> [String: Any]
+    func readNote() async throws -> String
     func appendToNote(_ text: String) async throws
 
     func quicklinks() -> [[String: Any]]
@@ -145,11 +145,16 @@ final class ExtensionBestcastBridge {
         }
 
         guard let route = Self.routes[method] else { throw Self.unknown(method) }
+        guard arguments.reduce(0, { $0 + Self.textLength($1) }) <= Self.maxArgumentLength else {
+            throw BestcastServiceError(message: "bestcast.\(method) was sent too much text.")
+        }
         try await authorize(
             route.capability, subject: { try self.subject(for: method, call: call, services: services) },
-            name: name, declared: declared,
-            isImplicit: route.isImplicit, canPrompt: canPrompt || route.skipsPrompt,
+            name: name, declared: declared, isImplicit: route.isImplicit, canPrompt: canPrompt,
             skipsPrompt: route.skipsPrompt, services: services, grants: grants)
+        guard canPrompt || !route.presents else {
+            throw BestcastPermissionError(ExtensionGrantPolicy.denied, capability: route.capability.rawValue)
+        }
         return try await serve(method, call: call, name: name, services: services, grants: grants)
     }
 
@@ -161,6 +166,20 @@ final class ExtensionBestcastBridge {
         var isImplicit = false
         /// Opens an editor instead of acting; saving there is the consent.
         var skipsPrompt = false
+        /// Brings up a window or a dialog, which a background run must never do.
+        var presents = false
+    }
+
+    /// Far past any real snippet or note, so a call cannot flood a store or hide behind a preview.
+    private static let maxArgumentLength = 100_000
+
+    private static func textLength(_ value: RenderValue) -> Int {
+        switch value {
+        case .string(let text): text.count
+        case .array(let items): items.reduce(0) { $0 + textLength($1) }
+        case .object(let fields): fields.reduce(0) { $0 + $1.key.count + textLength($1.value) }
+        default: 0
+        }
     }
 
     private static let routes: [String: Route] = [
@@ -170,14 +189,15 @@ final class ExtensionBestcastBridge {
         "snippets.search": Route(capability: .snippetsRead),
         "snippets.expand": Route(capability: .snippetsRead),
         "snippets.create": Route(capability: .snippetsWrite),
-        "snippets.openEditor": Route(capability: .snippetsWrite, isImplicit: true, skipsPrompt: true),
+        "snippets.openEditor": Route(
+            capability: .snippetsWrite, isImplicit: true, skipsPrompt: true, presents: true),
         "notes.read": Route(capability: .notesRead),
         "notes.append": Route(capability: .notesWrite),
         "quicklinks.list": Route(capability: .quicklinksRead),
-        "quicklinks.open": Route(capability: .quicklinksWrite),
+        "quicklinks.open": Route(capability: .quicklinksWrite, presents: true),
         "quicklinks.create": Route(capability: .quicklinksWrite),
         "quicklinks.openEditor": Route(
-            capability: .quicklinksWrite, isImplicit: true, skipsPrompt: true),
+            capability: .quicklinksWrite, isImplicit: true, skipsPrompt: true, presents: true),
         "windows.list": Route(capability: .windowsRead),
         "windows.setBounds": Route(capability: .windowsWrite),
         "windows.applyLayout": Route(capability: .windowsWrite),
@@ -188,10 +208,10 @@ final class ExtensionBestcastBridge {
         "windows.setWindowBounds": Route(capability: .windowsWrite, isImplicit: true),
         "calendar.events": Route(capability: .calendarRead),
         "calculator.evaluate": Route(capability: .calculator),
-        "ai.openQuickAI": Route(capability: .aiHandoff),
-        "ai.openChat": Route(capability: .aiHandoff),
+        "ai.openQuickAI": Route(capability: .aiHandoff, presents: true),
+        "ai.openChat": Route(capability: .aiHandoff, presents: true),
         "ai.tools.list": Route(capability: .aiTools),
-        "ai.tools.call": Route(capability: .aiTools)
+        "ai.tools.call": Route(capability: .aiTools, presents: true)
     ]
 
     // MARK: - Consent
@@ -291,35 +311,39 @@ final class ExtensionBestcastBridge {
         switch method {
         case "snippets.create":
             let draft = call.object(0)
-            let name = draft["name"]?.stringValue ?? ""
-            let keyword = draft["keyword"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+            let name = Self.preview(draft["name"]?.stringValue ?? "")
+            let keyword = draft["keyword"]?.stringValue.flatMap { $0.isEmpty ? nil : Self.preview($0) }
             return "Create snippet \u{2018}\(name)\u{2019}" + (keyword.map { " with keyword \($0)" } ?? "")
+                + "\n\n\u{201C}\(Self.preview(draft["text"]?.stringValue ?? ""))\u{201D}"
         case "notes.append":
             return "Add to your note: \u{201C}\(Self.preview(call.string(0) ?? ""))\u{201D}"
         case "quicklinks.open":
             let name = services.quicklinkName(id: call.string(0) ?? "") ?? call.string(0) ?? ""
-            return "Open quicklink \u{2018}\(name)\u{2019}"
+            let query = call.string(1).map { " with \u{201C}\(Self.preview($0))\u{201D}" } ?? ""
+            return "Open quicklink \u{2018}\(Self.preview(name))\u{2019}" + query
         case "quicklinks.create":
             let draft = call.object(0)
-            return "Create quicklink \u{2018}\(draft["name"]?.stringValue ?? "")\u{2019} for "
+            return "Create quicklink \u{2018}\(Self.preview(draft["name"]?.stringValue ?? ""))\u{2019} for "
                 + Self.preview(draft["link"]?.stringValue ?? "")
         case "windows.setBounds", "windows.setWindowBounds":
             let id = method == "windows.setBounds" ? call.string(0) : call.object(0)["id"]?.stringValue
             let window = try services.windows().first { $0.id == id }
-            let label = window.map { "\($0.app) \u{2014} \($0.title)" } ?? "a window"
+            let label = window.map { Self.preview("\($0.app) \u{2014} \($0.title)") } ?? "a window"
             return "Move and resize \(label)"
         case "windows.applyLayout":
-            return "Apply window layout \u{2018}\(call.string(0) ?? "")\u{2019}"
+            return "Apply window layout \u{2018}\(Self.preview(call.string(0) ?? ""))\u{2019}"
         case "windows.runCommand":
-            return "Run \u{2018}\(call.string(0) ?? "")\u{2019} on the front window"
+            return "Run \u{2018}\(Self.preview(call.string(0) ?? ""))\u{2019} on the front window"
         default:
             return nil
         }
     }
 
+    /// A clipped preview states the whole length, so a write cannot hide its tail past the cut.
     private static func preview(_ text: String) -> String {
-        let flat = text.replacingOccurrences(of: "\n", with: " ")
-        return flat.count > 120 ? String(flat.prefix(120)) + "\u{2026}" : flat
+        let flat = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+        guard flat.count > 120 else { return flat }
+        return String(flat.prefix(120)) + "\u{2026} (\(text.count) characters)"
     }
 
     // MARK: - Serving

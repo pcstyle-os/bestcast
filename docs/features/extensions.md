@@ -870,17 +870,21 @@ because Spaces have no public API.
 **Consent.** The first call to a read shows *"<Extension> wants to read your clipboard history"* with
 Don't Allow and Allow, through `DialogController`. A write asks every time and names what it will
 do — *"Create snippet 'Sig' with keyword ;s"* — and adds Always Allow, which upgrades the grant.
-Dialogs queue one at a time. A background launch never prompts, so it is refused. An undeclared
+Dialogs queue one at a time, and a clipped preview states the whole length. A background launch
+never prompts, so it is refused, and it may never open an editor, a quicklink or AI. A call carrying
+more than 100,000 characters is refused before anything asks. An undeclared
 capability throws `BestcastPermissionError("undeclared capability <name>")`; a refusal, a revoke or
 a switched-off feature throws `"denied"`. A refused read is remembered until quit, so a loop cannot
 turn one question into a nag. `ai.tools.call` runs through `BuiltInToolCoordinator`, so a tool that
 writes still asks as it does in AI Chat. `ExtensionGrantPolicy.decide` is the whole table, and
-`ext-bestcast-api-test` pins it.
+`ext-bestcast-api-test` pins it. This is a consent layer, not a sandbox: an extension still has the
+Node `fs` and `child_process` shims, so it guards against the well-behaved overreaching, not malware.
 
 **Settings › Extensions › Permissions** lists every extension that declares or holds a capability.
 Each capability shows when it was allowed and last used, or "Asks on first use" when it is declared
 but not yet granted. It has its own Revoke, and each extension has Revoke All. Uninstall forgets
-every grant, and switching extensions off cancels any call still waiting on a dialog.
+every grant, a rescan forgets those of an extension whose folder is gone, and switching extensions
+off cancels any call still waiting on a dialog.
 
 ## What isn't supported yet
 

@@ -62,7 +62,7 @@ declare module "@bestcast/api" {
   };
 
   export const notes: {
-    read(): Promise<{ title: string; text: string }>;
+    read(): Promise<string>;
     append(text: string): Promise<void>;
   };
 
@@ -114,7 +114,7 @@ declare module "@bestcast/api" {
   };
 
   export const calculator: {
-    evaluate(expression: string): Promise<{ result: string; raw?: string } | null>;
+    evaluate(expression: string): Promise<{ result: string; raw?: number } | null>;
   };
 
   export const ai: {

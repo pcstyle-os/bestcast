@@ -18,6 +18,7 @@ struct ExtensionPermissionsSection: View {
                     } trailing: {
                         Button("Revoke All") { grants.revokeAll(extension: entry.name) }
                             .disabled(grants.grants(for: entry.name).isEmpty)
+                            .accessibilityLabel("Revoke all for \(entry.title)")
                     }
                     ForEach(capabilities(of: entry), id: \.self) { capability in
                         capabilityRow(capability, of: entry)
@@ -67,6 +68,7 @@ struct ExtensionPermissionsSection: View {
         return SettingsRow(title: Self.sentence(capability.title), subtitle: status(capability, grant)) {
             if grant != nil {
                 Button("Revoke") { grants.revoke(capability, extension: entry.name) }
+                    .accessibilityLabel("Revoke \(capability.title) for \(entry.title)")
             }
         }
         .padding(.leading, SettingsListMetrics.iconSize + Theme.Spacing.lg)

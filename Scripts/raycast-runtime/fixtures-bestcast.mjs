@@ -58,7 +58,7 @@ calls = await run(`
   try { await bestcast.windows.list(); throw Error("should fail"); }
   catch (error) { if (error instanceof bestcast.BestcastPermissionError || error.message !== "boom") throw error; }
 `, {
-  "bestcast.calculator.evaluate": () => ({ result: "4", raw: "4" }),
+  "bestcast.calculator.evaluate": () => ({ result: "4", raw: 4 }),
   "bestcast.clipboardHistory.search": () =>
     [{ id: "a", kind: "text", preview: "x", copiedAt: "2026-02-03T04:05:06Z" }],
   "bestcast.calendar.events": () => [],

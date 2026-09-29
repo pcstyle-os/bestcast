@@ -149,6 +149,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         guard isEnabled else { return }
         if found != installed {
             installed = found
+            grants.forgetAll(except: Set(found.map(\.manifest.name)))
             publishLauncherEntries()
             restartBackgroundLoop()
         }

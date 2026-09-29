@@ -75,6 +75,15 @@ final class ExtensionGrantStore {
         revokeAll(extension: name)
     }
 
+    /// A folder deleted outside Bestcast must not hand its grants to the next one of that name.
+    func forgetAll(except installed: Set<String>) {
+        refusals = refusals.filter { installed.contains($0.key) }
+        let kept = records.filter { installed.contains($0.key) }
+        guard kept.count != records.count else { return }
+        records = kept
+        flush()
+    }
+
     /// Last-used stamps are cosmetic, so they coalesce rather than write on every call.
     func touch(_ capability: ExtensionCapability, extension name: String) {
         guard var list = records[name],

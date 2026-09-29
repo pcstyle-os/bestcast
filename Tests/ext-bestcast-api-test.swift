@@ -137,7 +137,7 @@ struct BestcastAPITests {
         func openSnippetEditor(name: String?, text: String, keyword: String?) {
             editors.append("snippet:\(name ?? ""):\(text)")
         }
-        func readNote() async throws -> [String: Any] { ["title": "Note", "text": "hi"] }
+        func readNote() async throws -> String { "hi" }
         func appendToNote(_ text: String) async throws {}
         func quicklinks() -> [[String: Any]] { [] }
         func quicklinkName(id: String) -> String? { nil }
@@ -156,7 +156,7 @@ struct BestcastAPITests {
         func runWindowCommand(_ command: String) throws {}
         func calendarEvents(from start: Date, to end: Date) throws -> [[String: Any]] { [] }
         func evaluate(_ expression: String) -> [String: Any]? {
-            expression == "2+2" ? ["result": "4", "raw": "4"] : nil
+            expression == "2+2" ? ["result": "4", "raw": 4] : nil
         }
         func openQuickAI(prompt: String?) {}
         func openChat(prompt: String?, mention: String?) {}
@@ -227,7 +227,7 @@ struct BestcastAPITests {
         _ = await refusal(bridge, "snippets.create", [draft])
         check("a write asks on every call", services.asked.count == 2 && services.created == ["Sig", "Sig"])
         check("the write prompt names its subject",
-            services.asked.first?.message == "Create snippet \u{2018}Sig\u{2019} with keyword ;s"
+            services.asked.first?.message == "Create snippet \u{2018}Sig\u{2019} with keyword ;s\n\n\u{201C}Hi\u{201D}"
                 && services.asked.first?.offersAlways == true)
         check("Allow once keeps no write grant",
             bridge.grants?.grant(for: fixtureName, capability: .snippetsWrite) == nil)
@@ -273,6 +273,13 @@ struct BestcastAPITests {
         check("createQuicklink opens the editor without asking or declaring",
             await refusal(bridge, "quicklinks.openEditor", [editorDraft]) == nil
                 && services.asked.isEmpty && services.editors == ["quicklink:Link:https://a.b"])
+        check("a background run cannot open an editor",
+            await refusal(bridge, "quicklinks.openEditor", [editorDraft], canPrompt: false)?.reason
+                == "denied" && services.editors.count == 1)
+        let flood = RenderValue.object(["name": .string("x"), "text": .string(String(repeating: "a", count: 100_001))])
+        check("an oversized write is refused before it asks",
+            await refusal(bridge, "snippets.create", [flood])?.capability == "?"
+                && services.asked.isEmpty)
 
         let capabilities = try? await bridge.perform(
             method: "capabilities", arguments: [], extension: fixtureName,
@@ -286,6 +293,10 @@ struct BestcastAPITests {
                 && states["clipboardHistory.read"] == "denied" && states["notes.read"] == "undeclared",
             "\(states)")
 
+        bridge.grants?.forgetAll(except: ["someone-else"])
+        check("a vanished extension's grants are forgotten",
+            ExtensionGrantStore(fileURL: file).grants(for: fixtureName).isEmpty)
+        bridge.grants?.grant(.clipboardHistoryRead, always: false, extension: fixtureName)
         bridge.grants?.revokeAll(extension: fixtureName)
         check("Revoke all clears the file",
             ExtensionGrantStore(fileURL: file).grants(for: fixtureName).isEmpty)
