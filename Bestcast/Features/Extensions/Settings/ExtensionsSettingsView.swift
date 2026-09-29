@@ -433,8 +433,7 @@ private struct ExtensionDisclosure: View {
                 if !installed.manifest.commands.isEmpty {
                     rule
                     heading(installed.manifest.commands.count == 1 ? "Command" : "Commands")
-                    ForEach(Array(installed.manifest.commands.enumerated()), id: \.element.id) {
-                        index, command in
+                    ForEach(Array(installed.manifest.commands.enumerated()), id: \.element.id) { index, command in
                         if index > 0 { rule }
                         CommandRows(installed: installed, command: command)
                     }
@@ -445,8 +444,7 @@ private struct ExtensionDisclosure: View {
                         rule
                     }
                     heading(installed.manifest.tools.count == 1 ? "AI Tool" : "AI Tools")
-                    ForEach(Array(installed.manifest.tools.enumerated()), id: \.element.id) {
-                        index, tool in
+                    ForEach(Array(installed.manifest.tools.enumerated()), id: \.element.id) { index, tool in
                         if index > 0 { rule }
                         SettingsCardRow(title: tool.title, detail: tool.description) { EmptyView() }
                     }

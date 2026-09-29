@@ -210,8 +210,7 @@ final class ExtensionRuntime: @unchecked Sendable {
     private func installHost(in context: JSContext) {
         let host = JSValue(newObjectIn: context)
 
-        let log: @convention(block) (String, String, String) -> Void = {
-            [weak self] level, message, stack in
+        let log: @convention(block) (String, String, String) -> Void = { [weak self] level, message, stack in
             self?.report(level: level, message: message, stack: stack.isEmpty ? nil : stack)
         }
         let render: @convention(block) (String, String) -> Void = { [weak self] session, json in
