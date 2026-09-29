@@ -336,12 +336,16 @@ enum AIChatActionsMenu {
                 })
         }
         let messages = chat.session.messages
-        if let reply = messages.last(where: { $0.role == .assistant }) {
+        if !messages.isEmpty {
+            // An unanswered last question is re-asked whole, never cut back to an earlier reply.
+            let target = messages.last?.role == .assistant ? messages.last?.id : nil
             let retry = NSMenuItem(title: "Retry With", action: nil, keyEquivalent: "")
             retry.image = NSImage(
                 systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
-            retry.submenu = retryMenu(reply: reply.id, chat: chat, coordinator: coordinator)
+            retry.submenu = retryMenu(reply: target, chat: chat, coordinator: coordinator)
             menu.addItem(retry)
+        }
+        if let reply = messages.last(where: { $0.role == .assistant }) {
             menu.addItem(
                 ClosureMenuItem(
                     coordinator.speaker.speakingID == reply.id ? "Stop Speaking" : "Speak Last Reply",
@@ -359,7 +363,7 @@ enum AIChatActionsMenu {
     }
 
     private static func retryMenu(
-        reply: UUID, chat: AIChatState, coordinator: AIChatCoordinator
+        reply: UUID?, chat: AIChatState, coordinator: AIChatCoordinator
     ) -> NSMenu {
         let menu = NSMenu()
         for group in coordinator.modelGroups {
