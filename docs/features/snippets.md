@@ -22,6 +22,10 @@ another app.
   `NSApp.keyWindow` first, and only falls back to the frontmost app when no window of ours holds key.
   A key window of ours that is *not* an `InjectableTextView` — the palette's own search field, a
   Settings form — resolves to no target at all, so a keyword typed there expands nowhere.
+- **`{ai}` asks a model only with a second, separate consent.** `snippetAIPlaceholders` is off out of
+  the box, turned on only through its Settings dialog, excluded from backups and absent from
+  `settings.json`. Off, or with AI off, the token expands as written. On, a fill never holds an
+  expansion past `SnippetAIPrompt.fillTimeout`, and a reply that fails or is late expands empty.
 - The on-disk Markdown format is user-authored and user-editable — an interchange format, not an internal
   one.
 
@@ -137,8 +141,10 @@ so a migrated snippet keeps working.
 | `{argument options="a, b, c"}`             | The prompt offers a picker instead of a text field                                                                                                                                                                 |
 | `{snippet:Name}` · `{snippet name="Name"}` | Another snippet resolved by name, then keyword                                                                                                                                                                     |
 | `{cursor}`                                 | Final insertion point                                                                                                                                                                                              |
+| `{ai prompt="…"}`                          | The default model's reply to the prompt, when [AI placeholders](#ai-placeholders-and-drafts) are on; otherwise left as written                                                                                     |
 
-The editor's **Insert…** menu lists every token above; parameters and modifiers are typed by hand. A
+The editor's **Insert…** menu lists every token above except `{ai}`, which it lists only while AI
+placeholders are on; parameters and modifiers are typed by hand. A
 parameter value needs quotes only to carry a `|`: an unquoted one runs to the next `key=`, so
 `{date format=MMMM d, yyyy}` keeps its spaces the way Raycast writes it.
 
@@ -168,6 +174,28 @@ the original reference token visible when a target is missing, cyclic, or beyond
 All cursor tokens are removed. The first cursor in the final expanded traversal wins, including one
 inside a nested snippet, and its offset uses Swift `Character` boundaries so composed Unicode moves
 the caret correctly.
+
+## AI placeholders and drafts
+
+Settings → Snippets → **Fill AI placeholders** is `snippetAIPlaceholders`. Turning it on asks first
+through `DialogController`, because every expansion of a snippet holding `{ai}` then sends that
+prompt to the default model in Settings → AI. It is a capability grant, so it rides neither a
+backup nor `settings.json`.
+
+`SnippetTemplateEngine.aiPrompts` collects every distinct prompt the expansion would reach, nested
+snippets included, before anything is typed. `SnippetCoordinator` then runs a
+`SnippetAIFillSession`: one request per prompt through `QuickActionRunner.stream`, a progress HUD
+with Cancel, and a deadline of `SnippetAIPrompt.fillTimeout` (10 seconds). The session settles
+once, with what has arrived; a prompt that failed or had not answered becomes an empty string, and
+the replies go into `ExpansionContext.aiAnswers` for the ordinary expansion. Typing anything
+cancels the fill and the expansion the way it cancels a pending automatic expansion, and Cancel
+does the same. The prompt is literal text: tokens inside it are not expanded, and nothing from the
+target app is sent with it.
+
+The snippet editor's **Generate with AI…** button (⌘J, shown while AI is on) opens a description
+field above the text. Return sends it with `SnippetAIPrompt.draftInstructions`, which list only the
+tokens a fresh template can use unaided, and the reply replaces the text with Revert one click away.
+Stop cancels it, and so does closing the editor.
 
 ## Launcher and automatic keywords
 
@@ -417,3 +445,11 @@ a given app takes is a manual check.
 - Type a keyword, then keep typing before the expansion lands: the expansion is abandoned rather than
   landing mid-word.
 - Type a keyword whose text the app changed underneath it: refused, with the keyword left alone.
+- With **Fill AI placeholders** off, a snippet holding `{ai prompt="Say hi"}` expands the token as
+  written. Turning it on asks first; declining leaves it off.
+- On, the same keyword shows the progress HUD and then types the reply. Typing during the fill, or
+  Cancel, abandons the expansion with the keyword left alone; with the network off it expands empty
+  within 10 seconds.
+- In the editor, ⌘J opens Generate with AI, Return fills the text, Revert restores it, and Stop or
+  closing the editor cancels a request under way. With AI off neither the button nor the AI Insert
+  section shows.

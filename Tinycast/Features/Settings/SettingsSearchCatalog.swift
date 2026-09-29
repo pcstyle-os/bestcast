@@ -407,7 +407,10 @@ enum SettingsSearchCatalog {
             keywords: ["add", "keyword", "expansion"]),
         .init(
             .snippetsLibrary, "Snippets Folder",
-            keywords: ["reveal", "finder", "markdown", "files", "location", "path", "dotfiles"])
+            keywords: ["reveal", "finder", "markdown", "files", "location", "path", "dotfiles"]),
+        .init(
+            .snippetsAI, "Fill AI placeholders",
+            keywords: ["ai prompt", "generate", "model", "dynamic"])
     ]
 
     private static let navigation: [SettingsSearchEntry] = [

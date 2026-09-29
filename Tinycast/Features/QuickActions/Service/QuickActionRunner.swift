@@ -65,9 +65,10 @@ final class QuickActionRunner {
         return try await stream(request, using: provider, onDelta: onDelta)
     }
 
-    private static func stream(
+    /// Notes and snippets reuse this, so every one-shot writing request trims and fails alike.
+    static func stream(
         _ request: AIRequest, using provider: any AIProvider,
-        onDelta: @MainActor (String) -> Void
+        onDelta: @MainActor (String) -> Void = { _ in }
     ) async throws -> String {
         var text = ""
         for try await event in provider.stream(request) {

@@ -47,6 +47,22 @@ final class QuickAICoordinator {
         send(prompt)
     }
 
+    /// A note's Ask About Note: a fresh chat with the note staged, sent at once if a question came.
+    func ask(aboutNote text: String, titled title: String, question: String) {
+        guard settings.aiEnabled else { return }
+        chat.startNewChat()
+        let name = "\(title).md"
+        let document = AIDocument(data: Data(text.utf8), mimeType: "text/plain", name: name)
+        let refusal = chat.attach(ChatAttachment(payload: .document(document), name: name, preview: nil))
+        paletteCoordinator.showPalette(mode: .ai)
+        if let refusal {
+            core.showMessage(refusal.message, tone: .neutral)
+            return
+        }
+        let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !question.isEmpty { send(question) }
+    }
+
     /// A preset opens its own fresh chat, so its prompt never rewrites a conversation under way.
     func startPreset(id: UUID) {
         guard settings.aiEnabled, core.aiSettings.preset(id: id) != nil else { return }

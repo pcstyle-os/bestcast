@@ -14,6 +14,8 @@ enum SnippetTemplateEngine {
         /// Read only by AI Commands; nil leaves the placeholder as written, so a snippet never asks.
         var frontmostApp: String?
         var browserTab: String?
+        /// `{ai}` replies by prompt, filled only when the reader opted in; nil leaves the token.
+        var aiAnswers: [String: String]?
 
         var clipboard: String { clipboardHistory.first ?? "" }
 
@@ -24,6 +26,7 @@ enum SnippetTemplateEngine {
                 calendar: calendar, locale: locale, timeZone: timeZone, makeUUID: makeUUID)
             copy.frontmostApp = frontmostApp
             copy.browserTab = browserTab
+            copy.aiAnswers = aiAnswers
             return copy
         }
 
@@ -98,6 +101,7 @@ enum SnippetTemplateEngine {
         case snippet
         case frontmostApp
         case browserTab
+        case ai
     }
 
     /// Formatting the result asks for: none for a snippet, percent-encoding for a quicklink URL.
@@ -187,9 +191,42 @@ enum SnippetTemplateEngine {
             case .cursor: found.insert(.cursor)
             case .snippetReference: found.insert(.snippet)
             case .fact(let fact, _, _): found.insert(fact.placeholder)
+            case .ai: found.insert(.ai)
             }
         }
         return found
+    }
+
+    /// Every distinct `{ai}` prompt expansion would reach, nested snippets included, in order.
+    static func aiPrompts(in record: StoredSnippet, snippets: [StoredSnippet]) -> [String] {
+        var prompts: [String] = []
+        collectAIPrompts(
+            in: record.snippet.text, snippets: snippets.sorted { $0.id < $1.id }, depth: 0,
+            visitedIDs: [record.id], into: &prompts)
+        return prompts
+    }
+
+    /// Walks references exactly as `expandText` does, so it never asks for a reply nobody reads.
+    private static func collectAIPrompts(
+        in text: String, snippets: [StoredSnippet], depth: Int,
+        visitedIDs: Set<StoredSnippet.ID>, into prompts: inout [String]
+    ) {
+        for segment in parseSegments(text) {
+            switch segment {
+            case .ai(let prompt, _, _):
+                if !prompts.contains(prompt) { prompts.append(prompt) }
+            case .snippetReference(let key, _):
+                guard depth < maximumReferenceDepth,
+                    let target = resolveReference(key, snippets: snippets),
+                    !visitedIDs.contains(target.id)
+                else { continue }
+                collectAIPrompts(
+                    in: target.snippet.text, snippets: snippets, depth: depth + 1,
+                    visitedIDs: visitedIDs.union([target.id]), into: &prompts)
+            default:
+                continue
+            }
+        }
     }
 
     /// Whether the template reads the selection. Parsed, so a literal brace run doesn't count.
@@ -254,6 +291,7 @@ enum SnippetTemplateEngine {
         case cursor
         case snippetReference(key: String, source: String)
         case fact(ContextFact, source: String, modifiers: [Modifier])
+        case ai(prompt: String, source: String, modifiers: [Modifier])
     }
 
     private enum ContextFact {
@@ -356,6 +394,12 @@ enum SnippetTemplateEngine {
                     continue
                 }
                 result.append(apply(modifiers, to: value, encoding: encoding))
+            case .ai(let prompt, let source, let modifiers):
+                guard let answers = context.aiAnswers else {
+                    result.append(source)
+                    continue
+                }
+                result.append(apply(modifiers, to: answers[prompt] ?? "", encoding: encoding))
             case .snippetReference(let key, let source):
                 guard depth < maximumReferenceDepth,
                     let target = resolveReference(key, snippets: snippets),
@@ -510,6 +554,12 @@ enum SnippetTemplateEngine {
         case "browser-tab":
             guard token.hasOnly(["format"]) else { return nil }
             return .fact(.browserTab, source: source, modifiers: modifiers)
+        case "ai":
+            guard let prompt = token.parameters["prompt"],
+                !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                token.hasOnly(["prompt"])
+            else { return nil }
+            return .ai(prompt: prompt, source: source, modifiers: modifiers)
         case "snippet":
             guard let name = token.parameters["name"]?.trimmingCharacters(in: .whitespaces),
                 !name.isEmpty, token.hasOnly(["name"]), modifiers.isEmpty

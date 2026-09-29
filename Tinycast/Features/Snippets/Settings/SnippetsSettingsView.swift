@@ -46,6 +46,7 @@ struct SnippetsSettingsView: View {
                 FeatureCommandsSection(owner: .snippets, anchor: .snippetsCommands)
                 library
                 libraryNotices
+                aiSection
             }
             .settingsEnabled(settings.snippetsEnabled)
         }
@@ -94,6 +95,26 @@ struct SnippetsSettingsView: View {
             }
         } header: {
             SettingsSectionHeader(.snippetsLibrary)
+        }
+    }
+
+    /// Enabling is consent to send prompts from any keyword, so it uses the confirming setter.
+    private var aiSection: some View {
+        Section {
+            Toggle(
+                isOn: Binding(
+                    get: { settings.snippetAIPlaceholders },
+                    set: { core.snippetCoordinator.setAIPlaceholdersEnabled($0) })
+            ) {
+                SettingsRowTitle(.snippetsAI, "Fill AI placeholders")
+                Text(
+                    settings.aiEnabled
+                        ? "Expanding {ai prompt=\"…\"} sends that prompt to your default model."
+                        : "Needs AI, turned on in Settings → AI.")
+            }
+            .settingsEnabled(settings.aiEnabled)
+        } header: {
+            SettingsSectionHeader(.snippetsAI)
         }
     }
 
@@ -216,8 +237,16 @@ private struct SnippetEditorPanel: View {
     let record: StoredSnippet?
 
     @Environment(\.settingsEditorDismiss) private var dismiss
+    @Environment(AppCore.self) private var core
+    @Environment(AppSettings.self) private var settings
     @Environment(SnippetsStore.self) private var store
     @FocusState private var isTemplateFocused: Bool
+    @FocusState private var isDescriptionFocused: Bool
+    @State private var isDescribing = false
+    @State private var snippetDescription = ""
+    @State private var generation: Task<Void, Never>?
+    /// The template before the last Generate, so Revert can put it back.
+    @State private var textBeforeGeneration: String?
     @State private var name: String
     @State private var keyword: String
     @State private var text: String
@@ -288,7 +317,17 @@ private struct SnippetEditorPanel: View {
                 Text("Template")
                     .font(.callout.weight(.medium))
                 Spacer()
+                if settings.aiEnabled {
+                    Button("Generate with AI…", systemImage: "sparkles", action: toggleDescribing)
+                        .buttonStyle(.borderless)
+                        .keyboardShortcut("j", modifiers: .command)
+                        .help("Generate with AI  \u{2318}J")
+                        .accessibilityLabel("Generate template with AI")
+                }
                 placeholderMenu
+            }
+            if isDescribing, settings.aiEnabled {
+                generator
             }
             TextEditor(text: $text, selection: $selection)
                 .font(.body.monospaced())
@@ -296,6 +335,77 @@ private struct SnippetEditorPanel: View {
                 .focused($isTemplateFocused)
                 .accessibilityLabel("Snippet template")
                 .accessibilityHint("Enter the text Tinycast expands.")
+        }
+        .onDisappear(perform: stopGenerating)
+    }
+
+    private var generator: some View {
+        HStack(spacing: Theme.Spacing.md) {
+            TextField("Describe the snippet, for example a polite meeting decline", text: $snippetDescription)
+                .settingsEditorTextField()
+                .focused($isDescriptionFocused)
+                .disabled(generation != nil)
+                .onSubmit(generate)
+                .accessibilityLabel("Snippet description")
+                .accessibilityHint("Press Return to generate a template. Command-J closes this field.")
+            if generation != nil {
+                ProgressView().controlSize(.small)
+                Button("Stop", action: stopGenerating)
+                    .accessibilityLabel("Stop generating")
+            } else if let textBeforeGeneration {
+                Button("Revert") {
+                    text = textBeforeGeneration
+                    self.textBeforeGeneration = nil
+                }
+                .help("Put back the template from before Generate")
+            }
+            Button("Generate", action: generate)
+                .disabled(
+                    generation != nil
+                        || snippetDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty)
+        }
+    }
+
+    private func toggleDescribing() {
+        if isDescribing {
+            closeDescribing()
+        } else {
+            isDescribing = true
+            isDescriptionFocused = true
+        }
+    }
+
+    private func closeDescribing() {
+        stopGenerating()
+        isDescribing = false
+        isTemplateFocused = true
+    }
+
+    /// Cleared here, not when the request ends, so a route slow to cancel cannot hold the field.
+    private func stopGenerating() {
+        generation?.cancel()
+        generation = nil
+    }
+
+    private func generate() {
+        let description = snippetDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard generation == nil, !description.isEmpty else { return }
+        errorMessage = nil
+        generation = Task {
+            do {
+                let draft = try await core.snippetCoordinator.draftSnippet(describing: description)
+                guard !Task.isCancelled else { return }
+                generation = nil
+                textBeforeGeneration = text
+                text = draft
+                selection = nil
+                isTemplateFocused = true
+            } catch {
+                guard !Task.isCancelled else { return }
+                generation = nil
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -319,6 +429,11 @@ private struct SnippetEditorPanel: View {
             }
             Section("Snippets") {
                 placeholderItem("{snippet name=\"Name\"}")
+            }
+            if settings.aiEnabled, settings.snippetAIPlaceholders {
+                Section("AI") {
+                    placeholderItem("{ai prompt=\"Prompt\"}")
+                }
             }
         }
         .menuStyle(.borderlessButton)

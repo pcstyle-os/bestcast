@@ -150,6 +150,9 @@ private struct NoteTitlebarActions: View {
             action("plus", "Create Note", "Create Note  ⌘N", notes.createNote)
             action("rectangle.stack", "Browse Notes", "Browse Notes  ⌘P", notes.searchNotes)
             action("folder", "Open Notes Folder", "Open Notes Folder  ⌘O", notes.openNotesFolder)
+            if notes.isAIAvailable, notes.hasActiveNote {
+                action("sparkles", "AI Actions", "AI Actions  ⌘J", notes.toggleAIMenu)
+            }
         }
         .padding(Theme.Spacing.xs)
         .frosted(in: Capsule())

@@ -39,6 +39,9 @@ commands and global shortcuts can show, search, or extend the collection.
   so a typed keyword — and the Snippets browser's ↵ — is written straight into the text storage
   rather than posted as events at whichever app happens to be frontmost. Nothing else in Tinycast
   adopts it: see [snippets.md](snippets.md#text-delivery-and-pasteboard-safety).
+- **An AI reply lands only where it was asked for.** Nothing reaches the note until ↵ accepts a
+  preview, it lands only on the exact source the request read, and it lands through `performEdit`
+  as one step ⌘Z takes back. With AI off there is no AI button and no AI menu.
 
 ## Storage and identity
 
@@ -105,9 +108,9 @@ failed flush retains the draft for retry.
 - **Create Note** creates and selects one unique Untitled note, including from an empty channel.
 - **Search Notes** shows the same panel with the switcher open and its search field focused.
 
-Command-N creates, Command-P opens or refocuses the switcher, Command-O opens the Notes folder, and
-Command-F opens AppKit's find bar in the active note. Escape closes the find bar or switcher before
-hiding; Command-W and the red traffic light both hide directly. Hiding
+Command-N creates, Command-P opens or refocuses the switcher, Command-O opens the Notes folder,
+Command-F opens AppKit's find bar in the active note, and Command-J opens the [AI menu](#ai-actions).
+Escape closes the find bar, AI menu or switcher before hiding; Command-W and the red traffic light both hide directly. Hiding
 restores the prior external application or Tinycast window and flushes without delaying the order-out —
 but only while that app is still the frontmost one, so closing a window the user has already left behind
 leaves them in whatever app they moved to.
@@ -115,10 +118,11 @@ Command-Q is bound to nothing app-wide, so no chord over Notes can quit Tinycast
 
 Both windows are one `NotesPanel`, a non-activating floating panel that owns the Escape rule and reads
 ⌘⌫. They differ only in style mask and in the `commandChords` their controller installs: the note window
-claims ⌘N, ⌘P, ⌘O, ⌘F and ⌘W, and the switcher reads ⌘N plus ⌘W and ⌘P as dismissals.
+claims ⌘N, ⌘P, ⌘O, ⌘F, ⌘W, ⌘J and ⌘K, and the switcher reads ⌘N plus ⌘W and ⌘P as dismissals.
 
 AppKit draws the note window's chrome. Its 52-point title bar holds the traffic lights, the centred
-active title, and one frosted capsule of Create, Browse, and Open Folder. The title is drawn, not
+active title, and one frosted capsule of Create, Browse, Open Folder and, while AI is on and a note
+is open, AI Actions. The title is drawn, not
 native, so it centres on the window; it is not hit-testable, so dragging it moves the window.
 The yellow and green traffic lights are disabled; double-clicking the free title bar moves the
 unchanged window to the top-right of its current screen's visible area.
@@ -234,8 +238,9 @@ reaches autosave.
 | ⌥⌘1, ⌥⌘2, ⌥⌘3 | heading 1, 2, 3 |
 | ⌥⌘0 | plain paragraph |
 
-Digits match by key code. The text view sees these chords before `NotesPanel` claims its own, and none
-collide. In a note, ⌘E replaces AppKit's Use Selection for Find.
+Digits match by key code. The text view sees these chords before `NotesPanel` claims its own, so ⌘K
+is Link while Markdown renders and the editor has focus, and opens the AI menu otherwise. In a note,
+⌘E replaces AppKit's Use Selection for Find.
 
 AppKit still owns typing, selection, Cut, Copy, Paste, Select All, Find, marked text, emoji, combining
 characters and undo grouping. Copy yields raw Markdown and VoiceOver reads the source. Changing the note
@@ -288,6 +293,39 @@ character count comes straight off `NSTextStorage.length` and sits in a footer u
 the leading end of the formatting bar's band while the bar shows. Both belong to the editor surface,
 so neither appears when no note is active.
 
+## AI actions
+
+While `aiEnabled` is on, ⌘J, the title bar's sparkles button, or ⌘K where the editor has not claimed
+it opens the AI menu. Pressing any of them again closes it. `NoteAIWindowController` hangs it off the
+note as a borderless child window where the switcher sits, and it closes like a popover when it
+resigns key: a click back in the note drops an unaccepted reply. It works on the selection when there
+is one, otherwise on the whole note, and says which in its header. `NoteAITarget` refuses an empty
+note and anything over Quick Actions' 32 KB ceiling with a HUD rather than a menu.
+
+The menu lists Continue Writing, Summarize, Fix Spelling & Grammar, Make Shorter, Make Longer, Change
+Tone… and Translate… (submenus), and Ask About Note. The field above filters it; any other text adds
+**Edit with Prompt** and **Ask About Note** rows that carry it. Translate lists the Mac's preferred
+languages first, then common ones, and a typed language that is not listed. `NoteAIMenu` builds the
+rows and `NoteAIAction` holds each action's instructions, so both are pure and in `notes-test`.
+
+Running an action streams through `QuickActionRunner.stream` on `AppCore.writingProvider()` — the
+default model in Settings → AI, with Apple Intelligence's permissive guardrails — and nothing else.
+The reply previews in place: a word diff for actions that replace text, the plain reply for Continue
+and Summarize. ↵ takes the primary placement and ⌘↵ the alternate one:
+
+| Action | ↵ | ⌘↵ |
+| --- | --- | --- |
+| Continue Writing | Insert, straight after the text | — |
+| Summarize | Insert Below, as its own paragraph | Replace |
+| every other action | Replace | Insert Below |
+
+`NotesCoordinator.acceptAI` first compares the editor's string with the one the request read and
+refuses with a HUD if they differ, then `NoteAIEdit.plan` builds one `NoteEditPlan` that selects the
+inserted text. Escape steps back one level — a running reply stops, a preview or failure returns to
+the menu, a submenu to the root — and closes at the root. ⌘C copies a finished reply. Ask About Note
+starts a new Quick AI chat with the whole note attached as a text document, sending the typed
+question if there is one. Turning AI off closes the menu and cancels its request.
+
 ## Autosave
 
 Editor changes update the main-actor draft immediately and debounce save for 300 milliseconds. Only the
@@ -316,4 +354,5 @@ pasting a URL, and the formatting reports and `format(_:)` the formatting bar us
 `Tests/notes-editor-performance.swift` times install, typing and caret moves on a
 100,000-character note; its budget is in `docs/testing.md`. Window chrome is not automated:
 the Notes manual sweep in `docs/testing.md` covers commands, shortcuts, switcher, focus restoration,
-Finder, Trash recovery, and accessibility.
+Finder, Trash recovery, the AI menu, and accessibility. `notes-test` covers the AI menu's rows, the
+target it resolves and every placement's edit plan; the menu window and streaming are manual.
