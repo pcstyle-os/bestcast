@@ -70,6 +70,7 @@ final class AppCore {
     @ObservationIgnored private(set) lazy var mcp = MCPServerManager(oauth: mcpOAuth)
     let quickActionSettings = QuickActionSettingsStore()
     let customQuickActions = CustomQuickActionStore()
+    let aiInbox = AIInboxStore(directory: AppPaths.applicationSupport())
     let chatGPTSubscription = ChatGPTSubscriptionManager()
     let installedAI = InstalledAIManager()
 
@@ -202,6 +203,10 @@ final class AppCore {
         injector: textInjector, appIndex: appIndex, hotKeys: hotKeys, favorites: favorites,
         visibility: visibility, ranking: launcherRanking, aliases: aliases,
         paletteCoordinator: paletteCoordinator, core: self)
+    @ObservationIgnored private(set) lazy var aiInboxCoordinator = AIInboxCoordinator(
+        settings: settings, aiSettings: aiSettings, commands: customQuickActions, inbox: aiInbox,
+        appIndex: appIndex, palette: palette, paletteCoordinator: paletteCoordinator,
+        directory: AppPaths.applicationSupport(), core: self)
     @ObservationIgnored private(set) lazy var mcpCoordinator = MCPCoordinator(
         settings: settings, store: mcpSettings, manager: mcp, core: self)
     /// Its own window and lifecycle, like Settings; Quick AI is the palette's half of the feature.
@@ -268,6 +273,11 @@ final class AppCore {
             }
 
             appIndex.start(settings: settings)
+            // Each consumer checks its own switch, so one hook serves both.
+            clipboardStore.onTextCaptured = { [weak self] item in
+                self?.clipboardInsightIndexer?.enqueue(item)
+                self?.aiInboxCoordinator.clipboardCaptured(item)
+            }
             clipboardCoordinator.applyEnabled()
             extensions.configureAI(
                 canAccess: { [weak self] in self?.aiSettings.defaultModel != nil },
@@ -294,10 +304,12 @@ final class AppCore {
             mcpCoordinator.applyEnabled()
             customQuickActions.onChange = { [weak self] _ in
                 self?.quickActionCoordinator.applyCustomQuickActionsPresence()
+                self?.aiInboxCoordinator.commandsChanged()
             }
             // Before `hotKeys.start` even when off: the prune reads it.
             customQuickActions.load()
             quickActionCoordinator.applyEnabled()
+            aiInboxCoordinator.applyEnabled()
             customCommands.onChange = { [weak self] _ in
                 self?.customCommandCoordinator.applyCustomCommandsPresence()
             }
@@ -550,7 +562,6 @@ final class AppCore {
         guard settings.clipboardEnabled, settings.aiEnabled, aiSettings.passive.clipboardIntelligence,
             clipboardStore.setInsightsEnabled(true)
         else {
-            clipboardStore.onTextCaptured = nil
             clipboardStore.setInsightsEnabled(false)
             clipboardInsightIndexer?.stop()
             return
@@ -561,7 +572,6 @@ final class AppCore {
                 store: clipboardStore,
                 summarize: { [weak self] in await self?.passiveAICoordinator.summarize($0) })
         clipboardInsightIndexer = indexer
-        clipboardStore.onTextCaptured = { [weak indexer] in indexer?.enqueue($0) }
         indexer.start()
     }
 
@@ -703,6 +713,14 @@ final class AppCore {
         track(
             { _ = $0.quickActionsEnabled },
             reproject: { $0.quickActionCoordinator.applyEnabled() })
+        track(
+            {
+                _ = $0.aiEnabled
+                _ = $0.quickActionsEnabled
+            }, reproject: { $0.aiInboxCoordinator.applyEnabled() })
+        track(
+            aiSettings, { _ = $0.scheduledCommandsEnabled },
+            reproject: { $0.aiInboxCoordinator.applyEnabled() })
         track({ _ = $0.calendarEnabled }, reproject: { $0.calendarCoordinator.applyEnabled() })
         track(
             {

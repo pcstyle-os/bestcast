@@ -6,6 +6,7 @@ enum CommandID: String, CaseIterable, Sendable {
     case quickAI = "command:ai-chat"
     case aiChat = "command:ai-chat-window"
     case askAIByVoice = "command:ask-ai-by-voice"
+    case aiInbox = "command:ai-inbox"
     case fixGrammar = "command:fix-grammar"
     case rewrite = "command:rewrite"
     case translate = "command:translate"
@@ -55,6 +56,7 @@ enum CommandID: String, CaseIterable, Sendable {
         case .quickAI: return "Quick AI"
         case .aiChat: return "AI Chat"
         case .askAIByVoice: return "Ask AI by Voice"
+        case .aiInbox: return "AI Inbox"
         case .fixGrammar: return BuiltInQuickAction.fixGrammar.title
         case .rewrite: return BuiltInQuickAction.rewrite.title
         case .translate: return BuiltInQuickAction.translate.title
@@ -106,6 +108,7 @@ enum CommandID: String, CaseIterable, Sendable {
         case .quickAI: return "sparkles"
         case .aiChat: return "bubble.left.and.bubble.right"
         case .askAIByVoice: return "mic"
+        case .aiInbox: return "tray.full"
         case .fixGrammar: return BuiltInQuickAction.fixGrammar.symbol
         case .rewrite: return BuiltInQuickAction.rewrite.symbol
         case .translate: return BuiltInQuickAction.translate.symbol
@@ -218,7 +221,7 @@ extension SettingsTab {
         switch self {
         case .quicklinks:
             [.createQuicklink, .searchQuicklinks, .importQuicklinks, .exportQuicklinks]
-        case .ai: [.quickAI, .aiChat, .askAIByVoice]
+        case .ai: [.quickAI, .aiChat, .askAIByVoice, .aiInbox]
         case .quickActions: [.fixGrammar, .rewrite, .translate, .summarize, .browseAICommands]
         case .fileSearch: [.searchFiles]
         case .notes: [.showNotes, .createNote, .searchNotes]

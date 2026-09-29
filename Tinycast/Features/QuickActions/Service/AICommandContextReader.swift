@@ -5,12 +5,12 @@ import AppKit
 enum AICommandContextReader {
     static func gather(
         _ facts: Set<AICommandTemplate.Fact>, target: NSRunningApplication?,
-        injector: TextInjector
+        injector: TextInjector, clipboard copied: String? = nil
     ) async throws -> SnippetTemplateEngine.ExpansionContext {
         // Read before the selection, whose borrowed ⌘C briefly owns the pasteboard.
         var clipboard: [String] = []
         if facts.contains(.clipboard) {
-            let text = NSPasteboard.general.string(forType: .string) ?? ""
+            let text = copied ?? NSPasteboard.general.string(forType: .string) ?? ""
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw QuickActionFailure.clipboardEmpty
             }

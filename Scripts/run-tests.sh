@@ -680,6 +680,15 @@ run ai-command-test        Tinycast/Features/Settings/AppSettingsKey.swift \
                            Tinycast/Features/Snippets/Model/SnippetTemplateEngine.swift \
                            Tinycast/Features/QuickActions/Model/*.swift \
                            Tinycast/Features/QuickActions/Settings/QuickActionSettingsStore.swift
+run ai-schedule-test       Tinycast/Features/Settings/AppSettingsKey.swift \
+                           Tinycast/Features/AI/Model/AIConnection.swift \
+                           Tinycast/Features/AI/Model/AppleIntelligence.swift \
+                           Tinycast/Features/AI/Model/ChatGPTSubscription.swift \
+                           Tinycast/Features/AI/Model/InstalledAI.swift \
+                           Tinycast/Features/Snippets/Model/Snippet.swift \
+                           Tinycast/Features/Snippets/Model/SnippetTemplateEngine.swift \
+                           Tinycast/Features/QuickActions/Model/*.swift \
+                           Tinycast/Features/QuickActions/Settings/QuickActionSettingsStore.swift
 run apple-intelligence-test Tinycast/Features/Settings/AppSettingsKey.swift \
                            Tinycast/Features/AI/Model/*.swift \
                            Tinycast/Features/AI/Service/AIProvider.swift \

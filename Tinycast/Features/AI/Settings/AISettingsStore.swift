@@ -60,6 +60,13 @@ final class AISettingsStore {
             defaults.set(voiceSpeaksReplies, forKey: AppSettingsKey.aiVoiceSpeaksReplies.rawValue)
         }
     }
+    /// The kill switch over every scheduled or clipboard-triggered AI Command.
+    var scheduledCommandsEnabled: Bool {
+        didSet {
+            defaults.set(
+                scheduledCommandsEnabled, forKey: AppSettingsKey.aiScheduledCommands.rawValue)
+        }
+    }
     var quickAIPresets: [QuickAIPreset] {
         didSet {
             guard let data = try? JSONEncoder().encode(quickAIPresets) else { return }
@@ -120,6 +127,8 @@ final class AISettingsStore {
             defaults.object(forKey: AppSettingsKey.aiVoiceAutoSend.rawValue) as? Bool ?? false
         voiceSpeaksReplies =
             defaults.object(forKey: AppSettingsKey.aiVoiceSpeaksReplies.rawValue) as? Bool ?? false
+        scheduledCommandsEnabled =
+            defaults.object(forKey: AppSettingsKey.aiScheduledCommands.rawValue) as? Bool ?? true
         quickAIPresets =
             defaults.data(forKey: AppSettingsKey.aiQuickAIPresets.rawValue)
             .flatMap { try? JSONDecoder().decode([QuickAIPreset].self, from: $0) } ?? []

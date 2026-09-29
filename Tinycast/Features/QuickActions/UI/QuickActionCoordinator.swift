@@ -320,15 +320,21 @@ final class QuickActionCoordinator {
         guard Permissions.isAccessibilityTrusted() else { throw QuickActionFailure.needsAccessibility }
     }
 
-    /// The exchange is saved first, so the window opens it like any chat from history.
     private func continueInChat(_ state: QuickActionPanelState, reply: String) {
-        guard settings.aiEnabled, let rendered = state.rendered else { return }
+        guard let rendered = state.rendered else { return }
+        continueInChat(
+            prompt: rendered.chatPrompt, reply: reply, model: store.model(for: state.action))
+    }
+
+    /// The exchange is saved first, so the window opens it like any chat from history.
+    func continueInChat(prompt: String, reply: String, model: AIModelSelection?) {
+        guard settings.aiEnabled else { return }
         let session = ChatSession(
             messages: [
-                ChatMessage(role: .user, text: rendered.chatPrompt),
+                ChatMessage(role: .user, text: prompt),
                 ChatMessage(role: .assistant, text: reply)
             ],
-            model: store.model(for: state.action) ?? core.aiSettings.defaultModel)
+            model: model ?? core.aiSettings.defaultModel)
         core.chatHistory.save(session)
         guard core.chatHistory.conversation(id: session.id) != nil else {
             core.showMessage("The chat could not be saved", tone: .danger)

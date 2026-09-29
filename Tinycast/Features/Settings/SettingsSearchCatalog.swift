@@ -324,6 +324,9 @@ enum SettingsSearchCatalog {
             .aiPassive, "Clipboard intelligence",
             keywords: ["summary", "title", "kind", "clipboard history"]),
         .init(
+            .aiScheduledCommands, "Run AI Commands by themselves",
+            keywords: ["schedule", "automation", "inbox", "trigger", "background", "kill switch"]),
+        .init(
             .aiMCPServers, "Enable MCP servers",
             keywords: ["tools", "model context protocol"]),
         .init(

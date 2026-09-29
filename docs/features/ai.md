@@ -1220,3 +1220,6 @@ three are capability grants with no key.
 `aiVoiceAutoSend` and `aiVoiceSpeaksReplies` stay behind too. The first decides whether dictated
 words go to a provider unread, and the second makes the Mac talk back; each is this Mac's choice.
 Both are mirrored in `settings.json`, as `ai.voiceAutoSend` and `ai.voiceSpeaksReplies`.
+`aiScheduledCommands`, the **Scheduled Commands** kill switch, stays behind like Passive AI's: it
+lets AI Commands send what they read to a model with nobody there, so it has no key either. How
+those runs work is in [quick-actions.md](quick-actions.md#running-by-itself).
