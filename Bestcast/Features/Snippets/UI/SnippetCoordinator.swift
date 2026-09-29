@@ -17,6 +17,8 @@ final class SnippetCoordinator {
     /// The consent dialog and the `pendingSnippetEdit` handoff to the Settings pane.
     private unowned let core: AppCore
     private var aiFill: SnippetAIFillSession?
+    /// Set by `AppCore` to ask an opted-in extension for an `{ext:…}` value; nil expands them empty.
+    var resolveExternal: (@MainActor (SnippetTemplateEngine.ExternalPlaceholder) async -> String?)?
 
     init(
         store: SnippetsStore,
@@ -236,6 +238,41 @@ final class SnippetCoordinator {
         let context = injector.captureExpansionContext(
             target: target,
             clipboardHistory: clipboardHistoryForExpansion())
+        let external = SnippetTemplateEngine.externalPlaceholders(in: record, snippets: records)
+        guard !external.isEmpty else {
+            fillAndExpand(
+                record: record, records: records, context: context, target: target,
+                expectedKeyword: expectedKeyword, keywordLength: keywordLength,
+                automaticGeneration: automaticGeneration, confirmation: confirmation)
+            return
+        }
+        let resolve = resolveExternal
+        Task { [weak self] in
+            var values: [SnippetTemplateEngine.ExternalPlaceholder: String] = [:]
+            if let resolve {
+                for placeholder in external {
+                    if let value = await resolve(placeholder) { values[placeholder] = value }
+                }
+            }
+            var resolved = context
+            resolved.externalValues = values
+            self?.fillAndExpand(
+                record: record, records: records, context: resolved, target: target,
+                expectedKeyword: expectedKeyword, keywordLength: keywordLength,
+                automaticGeneration: automaticGeneration, confirmation: confirmation)
+        }
+    }
+
+    private func fillAndExpand(
+        record: StoredSnippet,
+        records: [StoredSnippet],
+        context: SnippetTemplateEngine.ExpansionContext,
+        target: InjectionTarget?,
+        expectedKeyword: String?,
+        keywordLength: Int,
+        automaticGeneration: UInt?,
+        confirmation: String?
+    ) {
         let prompts = SnippetTemplateEngine.aiPrompts(in: record, snippets: records)
         guard !prompts.isEmpty, settings.snippetAIPlaceholders, settings.aiEnabled else {
             expand(

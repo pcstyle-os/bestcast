@@ -106,6 +106,20 @@ final class DialogController: NSObject, NSWindowDelegate {
         return state.values
     }
 
+    /// True on Save; the caller reads each toggle back out of `state`.
+    func confirmContributions(title: String, state: ExtensionContributionConsentState) async -> Bool {
+        let request = DialogRequest(
+            title: "Allow \(title) to extend Bestcast?",
+            message: "Everything starts off. You can change these later in Settings › Extensions.",
+            symbol: "puzzlepiece.extension", tone: .neutral,
+            actions: [
+                DialogAction(title: "Save"),
+                DialogAction(title: "Not Now", role: .cancel)
+            ],
+            defaultIndex: 0, cancelIndex: 1, accessory: .extensionContributions(state))
+        return await present(request) == 0
+    }
+
     /// A blank answer is a real one, clearing the alias; nil means the dialog was cancelled.
     func editAlias(for name: String, current: String?) async -> String? {
         let state = DialogTextState(prompt: "Alias", text: current ?? "")
@@ -145,7 +159,7 @@ final class DialogController: NSObject, NSWindowDelegate {
             let width =
                 switch request.accessory {
                 case nil, .volume, .text, .hotKey: metrics.size.dialogCompactWidth
-                case .eventDraft, .snippetArguments: metrics.size.dialogWidth
+                case .eventDraft, .snippetArguments, .extensionContributions: metrics.size.dialogWidth
                 }
             let focus = DialogView.ButtonFocus()
             let content = hostingView(

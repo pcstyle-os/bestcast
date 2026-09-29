@@ -289,7 +289,7 @@ offered under a `Use “…” with…` header **below every result**, whatever 
 row leads because it recognised the query; a fallback trails because nothing did.
 
 `Fallback` (`Launcher/Model/`) is the whole vocabulary — `.builtin(Builtin)` for the four shipped
-destinations and `.quicklink(UUID)` for a user's own. `Builtin` exists rather than a bare `CommandID`
+destinations, `.quicklink(UUID)` for a user's own and `.extensionCommand` for an extension's. `Builtin` exists rather than a bare `CommandID`
 so `FallbackCoordinator.run` is **exhaustive**: a fifth built-in cannot compile without saying where
 its query goes. `Fallback.id` is deliberately the row's own `AppEntry.id`, which is what lets a stored
 order name a live row across a rename or a reinstall.
@@ -301,6 +301,7 @@ order name a live row across a rename or a reinstall.
 | Run Shell Command | `/bin/zsh`, streamed into the Command Output window | always |
 | Define Word | the dictionary screen, already showing the entry (see [dictionary.md](dictionary.md)) | the Define Word command is visible in Settings › Commands |
 | a quicklink | its first `{argument}` | `quicklinksEnabled`, and the link has a placeholder |
+| an extension command | the command's `fallbackText` | the extension declares it and it is opted in (see [Contributions](extensions.md#contributions)) |
 
 **A quicklink earns a fallback row by declaring a placeholder**, nothing else —
 `QuicklinkDestination.containsPlaceholder`. `openQuicklink(id:filling:)` assigns the query to the
@@ -606,6 +607,12 @@ not on a suggestion. An answer row is shown only while its query still equals th
 keystroke hides it before the coordinator has even retired it. ⌘K lists every suggestion, or the
 answer's **Open in Quick AI** and **Copy Answer** (⇧⌘C).
 
+**Extension search rows join the same leading section, after passive AI's.** Each opted-in provider's
+rows are `.extensionResult` cases under their own header (`LeadingSection.headers`), read from
+`ExtensionSearchCoordinator.sections(for:)` only while their query equals the search field, and never
+on a pinned argument row. `ExtensionSearchCoordinator` applies the same rule when it publishes: rows
+that land at or above the highlight move it down by their count. Their ⌘K is the row's own actions.
+
 ## Notes commands
 
 `CommandID.showNotes`, `.createNote`, and `.searchNotes` publish the three Notes entry points while the
@@ -680,8 +687,11 @@ whose icon moved.
 | Manage | Add / Remove from Favorites ⇧⌘F and the moves, Pin / Unpin ⌘., Configure ⇧⌘,, Record / Change Hotkey ⌥⌘R, Add / Edit Alias ⌥⌘A, Reset Ranking, Hide from Search ⇧⌘H, Disable Command ⇧⌘D |
 | Copy | Copy Name ⌥⌘C, Copy Bundle ID ⇧⌘B (applications), Copy Deeplink ⇧⌘C (every row a hotkey can run, applications aside) |
 | App / Extension | Restart, Quit, Uninstall; background refresh, Configure Extension ⇧⌘,, Uninstall Extension |
+| <Extension> | each opted-in contributed action for the row's kind, one group per extension, last |
 
-A query-driven row gets none of Manage or Copy, for the reason it can't be a favorite.
+A query-driven row gets none of Manage or Copy, for the reason it can't be a favorite. The
+contributed groups come from `ExtensionSearchCoordinator.rowActions(for:)`, which picks targets by
+`AppEntry.Kind` alone: an application, snippet or quicklink row.
 
 - **Configure** opens `AppEntry.settingsPane`: the `settingsOwner` a feature pane claimed through
   `SettingsTab.ownedCommands`, otherwise the kind's own pane. An extension command's Configure

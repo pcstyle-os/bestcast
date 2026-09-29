@@ -228,6 +228,7 @@ struct ExtensionStorePanel: View {
                         Task { @MainActor in installing[listing.id] = progress }
                     })
                 installed.insert(listing.name)
+                core.extensionSearch.offerContributions(forExtensionNamed: listing.name)
             } catch {
                 failures[listing.id] = error.localizedDescription
             }

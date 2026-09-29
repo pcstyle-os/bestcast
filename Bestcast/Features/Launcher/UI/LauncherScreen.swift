@@ -36,6 +36,8 @@ struct LauncherScreen: PaletteScreen {
     /// Passive AI's rows above everything: selection suggestions, or the query's answer.
     private let passiveSelection: PassiveSelection?
     private let passiveAnswer: PassiveAnswer?
+    /// Opted-in extensions' rows for this very query, after passive AI's.
+    private let extensionSections: [ExtensionSearchSection]
     private let leadingCount: Int
     /// Resolved in `init`: the palette indexes this several times per event, so it can't recompute.
     let rows: [Row]
@@ -99,9 +101,17 @@ struct LauncherScreen: PaletteScreen {
         let passiveAnswer = pinned == nil ? answer : nil
         self.passiveSelection = passiveSelection
         self.passiveAnswer = passiveAnswer
-        let leading =
+        let extensionSections =
+            pinned == nil && vm.argumentEntryID == nil ? core.extensionSearch.sections(for: vm.query) : []
+        self.extensionSections = extensionSections
+        let passiveRows =
             passiveSelection.map { $0.items.map(Row.selection) }
             ?? passiveAnswer.map { [Row.answer($0.query)] } ?? []
+        let leading =
+            passiveRows
+            + extensionSections.flatMap { section in
+                section.items.map { Row.extensionResult(section: section, item: $0) }
+            }
         self.leadingCount = leading.count
         self.results = results
         self.calc = calc
@@ -132,6 +142,8 @@ struct LauncherScreen: PaletteScreen {
         case fallback(Fallback, AppEntry)
         case selection(PassiveSelectionItem)
         case answer(String)
+        /// Host-drawn from an extension's data; the extension never supplies the view.
+        case extensionResult(section: ExtensionSearchSection, item: ExtensionSearchItem)
 
         var id: String {
             switch self {
@@ -142,6 +154,8 @@ struct LauncherScreen: PaletteScreen {
             case .fallback(let fallback, _): return "fallback-" + fallback.id
             case .selection(let item): return item.id
             case .answer: return "passive-answer"
+            case .extensionResult(let section, let item):
+                return "extension-result-" + section.id + "-" + item.id
             }
         }
     }
@@ -162,6 +176,7 @@ struct LauncherScreen: PaletteScreen {
         case .fallback(let fallback, _): return fallback.openVerb
         case .selection(let item): return item == .ask ? "Ask AI" : item.title
         case .answer: return "Open in Quick AI"
+        case .extensionResult(_, let item): return item.actions.first?.title ?? "Open"
         case nil: return "Open Application"
         }
     }
@@ -242,7 +257,7 @@ struct LauncherScreen: PaletteScreen {
     private func isCardSelected(_ selection: Int) -> Bool {
         switch row(at: selection) {
         case .calc, .meeting, .color: return true
-        case .entry, .fallback, .selection, .answer, nil: return false
+        case .entry, .fallback, .selection, .answer, .extensionResult, nil: return false
         }
     }
 
@@ -289,6 +304,8 @@ struct LauncherScreen: PaletteScreen {
             return passiveSelection.map { PassiveAIActionsMenu.content(selection: $0, core: core) }
         case .answer:
             return passiveAnswer.map { PassiveAIActionsMenu.content(answer: $0, core: core) }
+        case .extensionResult(let section, let item):
+            return core.extensionSearch.menu(for: item, extensionName: section.extensionName)
         case nil:
             return nil
         }
@@ -303,6 +320,7 @@ struct LauncherScreen: PaletteScreen {
         case .entry(let app), .fallback(_, let app): return app.name
         case .selection(let item): return item.title
         case .answer(let query): return "AI answer to \(query)"
+        case .extensionResult(_, let item): return item.title
         case nil: return nil
         }
     }
@@ -321,6 +339,9 @@ struct LauncherScreen: PaletteScreen {
             core.fallbackCoordinator.run(fallback, query: vm.query)
         case .selection(let item): core.passiveAICoordinator.run(item)
         case .answer: core.passiveAICoordinator.openAnswerInQuickAI()
+        case .extensionResult(let section, let item):
+            guard let action = item.actions.first else { return }
+            core.extensionSearch.perform(action, extensionName: section.extensionName)
         case nil: break
         }
     }
@@ -560,9 +581,18 @@ struct LauncherScreen: PaletteScreen {
         guard !leading.isEmpty else { return nil }
         let selection = passiveSelection
         let answer = passiveAnswer
+        let passiveCount = leadingCount - extensionSections.reduce(0) { $0 + $1.items.count }
+        var headers: [Int: String] = [:]
+        var start = passiveCount
+        for section in extensionSections {
+            if start > 0 { headers[start] = section.title }
+            start += section.items.count
+        }
+        let passiveTitle = answer == nil ? "Selected Text" : "AI"
         return LauncherList.LeadingSection(
-            title: answer == nil ? "Selected Text" : "AI",
+            title: passiveCount > 0 ? passiveTitle : extensionSections.first?.title ?? passiveTitle,
             rowIDs: leading.map(\.id),
+            headers: headers,
             row: { index, selected in
                 switch leading[index] {
                 case .selection(let item):
@@ -572,6 +602,9 @@ struct LauncherScreen: PaletteScreen {
                 case .answer:
                     guard let answer else { return AnyView(EmptyView()) }
                     return AnyView(PassiveAnswerRow(answer: answer, selected: selected))
+                case .extensionResult(let section, let item):
+                    return AnyView(
+                        ExtensionSearchResultRow(item: item, source: section.title, selected: selected))
                 default:
                     return AnyView(EmptyView())
                 }

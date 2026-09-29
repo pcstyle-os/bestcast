@@ -57,6 +57,8 @@ struct DialogView: View {
                 case .eventDraft(let draft): EventDraftFields(state: draft)
                 case .snippetArguments(let arguments): SnippetArgumentFields(state: arguments)
                 case .text(let text): DialogTextInput(state: text)
+                case .extensionContributions(let consent):
+                    ExtensionContributionConsentView(state: consent)
                 case .hotKey(let action, let hotKeys):
                     ShortcutCaptureField(action: action) { onChoose(request.cancelIndex) }
                         .environment(hotKeys)

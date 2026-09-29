@@ -333,6 +333,7 @@ run ext-icon-test          Bestcast/Platform/Appearance.swift \
                            Bestcast/Features/Extensions/Model/ExtensionRefreshState.swift \
                            Bestcast/Features/Extensions/Model/RenderNode.swift \
                            Bestcast/Features/Extensions/Service/ExtensionCatalog.swift \
+                           Bestcast/Features/Extensions/Model/ExtensionContribution.swift \
                            Bestcast/Features/Extensions/Service/ExtensionFetcher.swift \
                            Bestcast/Platform/ProcessExit.swift \
                            Bestcast/Features/Extensions/Service/ExtensionNodeShims.swift \
@@ -497,6 +498,7 @@ W=Bestcast/Features/WindowManagement/Model/WindowCommand.swift
 run symbols-test           $E/Service/SymbolCatalog.swift
 run ext-cleanup-test       $E/Service/ExtensionCleanup.swift \
                            $E/Service/ExtensionCatalog.swift \
+                           $E/Model/ExtensionContribution.swift \
                            Bestcast/Platform/AppDisplayName.swift \
                            $E/Model/ExtensionManifest.swift \
                            $E/Model/ExtensionLaunchType.swift \
@@ -552,6 +554,7 @@ run slow ext-test          -parse-as-library \
                            $E/Model/ExtensionPickerItem.swift \
                            $E/Model/ExtensionSearchAccessory.swift \
                            $E/Service/ExtensionCatalog.swift \
+                           $E/Model/ExtensionContribution.swift \
                            $E/Service/ExtensionFetcher.swift \
                            Bestcast/Platform/ProcessExit.swift \
                            $E/Service/ExtensionIconCache.swift \
@@ -760,6 +763,42 @@ run installed-ai-test     Bestcast/Features/AI/Model/*.swift $W \
                           Bestcast/Features/AI/Service/InstalledCLIProvider.swift \
                           Bestcast/Features/AI/Service/InstalledAIProbe.swift \
                           Bestcast/Features/AI/Service/InstalledAIManager.swift
+run slow ext-surfaces-test Bestcast/Features/AI/Model/*.swift $W \
+                           $E/Model/ExtensionContribution.swift \
+                           $E/Model/ExtensionSearchResult.swift \
+                           $E/Model/ExtensionSearchScheduler.swift \
+                           $E/Model/ExtensionToolPolicy.swift \
+                           $E/Model/ExtensionBootConfig.swift \
+                           $E/Model/ExtensionLaunchType.swift \
+                           $E/Model/ExtensionManifest.swift \
+                           $E/Model/ExtensionRefreshPolicy.swift \
+                           $E/Model/ExtensionRefreshState.swift \
+                           $E/Model/RenderNode.swift \
+                           $E/Service/ExtensionCatalog.swift \
+                           $E/Service/ExtensionContributionRunner.swift \
+                           $E/Service/ExtensionToolSession.swift \
+                           $E/Service/ExtensionRuntime.swift \
+                           $E/Service/ExtensionFetcher.swift \
+                           $E/Service/ExtensionNodeShims.swift \
+                           $E/Service/ExtensionOAuthKeychain.swift \
+                           $E/Service/ExtensionOAuthSession.swift \
+                           Bestcast/Platform/AppDisplayName.swift \
+                           Bestcast/Platform/ProcessExit.swift \
+                           Bestcast/Platform/Compression/Zlib.swift \
+                           Bestcast/Features/Backup/Service/Scrypt.swift \
+                           Bestcast/Features/Launcher/Model/Fallback.swift \
+                           Bestcast/Features/Launcher/Model/CommandID.swift \
+                           Bestcast/Features/HotKeys/Model/HotKeyAction.swift \
+                           Bestcast/Features/QuickActions/Model/QuickAction.swift \
+                           Bestcast/Features/QuickActions/Model/BuiltInQuickAction.swift \
+                           Bestcast/Features/QuickActions/Model/CustomQuickAction.swift \
+                           Bestcast/Features/QuickActions/Model/AICommandOptions.swift \
+                           Bestcast/Features/Quicklinks/Model/Quicklink.swift \
+                           Bestcast/Features/Quicklinks/Model/QuicklinkDestination.swift \
+                           Bestcast/Features/SystemActions/Model/SystemAction.swift \
+                           Bestcast/Features/Settings/SettingsTab.swift \
+                           Bestcast/Features/Snippets/Model/Snippet.swift \
+                           Bestcast/Features/Snippets/Model/SnippetTemplateEngine.swift
 
 if [ "$emit_db" -eq 1 ]; then
     printf ']\n' >> "$DB"

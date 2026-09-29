@@ -63,6 +63,7 @@ enum DialogAccessory {
     case text(DialogTextState)
     /// Recording starts once the panel is key, since any window resigning key ends it.
     case hotKey(HotKeyAction, HotKeyManager)
+    case extensionContributions(ExtensionContributionConsentState)
 
     /// Whether ←/→/↑/↓ belong to the control rather than to whatever has focus inside it.
     var claimsArrowKeys: Bool {
