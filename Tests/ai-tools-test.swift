@@ -259,8 +259,11 @@ struct AIToolsTests {
             "a quicklink shows the address it resolved to, not just its name")
         let long = BuiltInToolPrompt.quote(String(repeating: "a", count: 5_000))
         expect(
-            long.count == BuiltInToolPrompt.previewLength + 3,
+            long.hasPrefix("\u{201C}" + String(repeating: "a", count: BuiltInToolPrompt.previewLength))
+                && !long.contains(String(repeating: "a", count: BuiltInToolPrompt.previewLength + 1)),
             "a long write is clipped so the dialog stays a dialog")
+        expect(long.contains("5000 characters"), "and says how long the whole is")
+        expect(BuiltInToolPrompt.quote(" hi ") == "\u{201C}hi\u{201D}", "a short write is quoted whole")
         expect(
             BuiltInToolPrompt.make(for: .clipboardSearch(query: "", limit: 5), subject: nil) == nil,
             "a read has nothing to ask")
@@ -279,6 +282,7 @@ struct AIToolsTests {
         expect(!readable("/Users/adam/secret.txt"), "not a neighbour whose name starts the same")
         expect(!readable("~/Documents/../../bob/x.txt"), "`..` cannot climb out")
         expect(!readable("~/Library/Preferences/x.plist"), "not ~/Library")
+        expect(!readable("~/library/Preferences/x.plist"), "not ~/Library in another case")
         expect(!readable("~/.ssh/id_ed25519"), "not a hidden folder")
         expect(!readable("~/code/.env"), "not a hidden file anywhere under home")
     }
@@ -425,6 +429,12 @@ struct AIToolsTests {
         expect(
             entries.last?.objectValue?["annotations"]?.objectValue?["readOnlyHint"] == .bool(false),
             "a write is not advertised as read-only")
+
+        let huge = LoopbackMCP.clipped(String(repeating: "z", count: LoopbackMCP.maxResultBytes * 2))
+        expect(
+            huge.utf8.count < LoopbackMCP.maxResultBytes + 32 && huge.hasSuffix("truncated."),
+            "a CLI route's result is capped as the API loop's is")
+        expect(LoopbackMCP.clipped("short") == "short", "a small result goes through whole")
 
         let http = String(
             bytes: LoopbackMCP.http(status: "200 OK", body: Data("{}".utf8)), encoding: .utf8) ?? ""

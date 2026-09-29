@@ -383,9 +383,14 @@ final class AIChatCoordinator {
         let tools = tools(for: chat, scopedTo: scope)
         guard capabilities(for: chat).tools, !tools.isEmpty else { return provider }
         let chatID = chat.session.id
+        let offered = Set(tools.map(\.name))
         return AIToolLoopProvider(
             base: provider, tools: tools, maxRounds: core.aiSettings.toolRounds.limit
         ) { [mcp = core.mcpCoordinator, builtIn = core.builtInTools] call in
+            // A model can name a tool it was not given; the turn's scope is what it may run.
+            guard offered.contains(call.name) else {
+                return .failure(call.id, "\(call.name) is not available in this turn.")
+            }
             guard BuiltInToolCatalog.tool(wireName: call.name) == nil else {
                 return await builtIn.invoke(call)
             }

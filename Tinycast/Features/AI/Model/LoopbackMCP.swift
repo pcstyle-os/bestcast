@@ -4,6 +4,8 @@ import Foundation
 enum LoopbackMCP {
     /// A write carries at most 64 KB; escaping can double it, and nothing else comes close.
     static let maxRequestBytes = 256 * 1024
+    /// The API loop's per-result cap, so a CLI route's context fills no faster than that one.
+    static let maxResultBytes = 32_768
     static let pathPrefix = "/mcp/"
     static let serverName = "tinycast"
     static let version = "2025-06-18"
@@ -127,9 +129,18 @@ enum LoopbackMCP {
 
     static func toolResult(_ result: AIToolResult) -> JSONValue {
         .object([
-            "content": .array([.object(["type": .string("text"), "text": .string(result.content)])]),
+            "content": .array([
+                .object(["type": .string("text"), "text": .string(clipped(result.content))])
+            ]),
             "isError": .bool(result.isError)
         ])
+    }
+
+    static func clipped(_ content: String) -> String {
+        let utf8 = content.utf8
+        guard utf8.count > maxResultBytes else { return content }
+        // A cut can land mid-scalar; `String(decoding:)` turns the remainder into a replacement.
+        return String(decoding: Array(utf8.prefix(maxResultBytes)), as: UTF8.self) + "\n…truncated."
     }
 
     static func response(id: JSONValue, result: JSONValue) -> Data {
