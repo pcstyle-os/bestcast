@@ -133,6 +133,11 @@ enum SettingsBackupCoverage {
             + "launcher whose AI it cannot configure.",
         AppSettingsKey.aiQuickAIFollowUps.rawValue:
             "Changes the instructions every Quick AI turn carries, like the system prompt beside it.",
+        AppSettingsKey.aiVoiceAutoSend.rawValue:
+            "Decides whether dictated words leave for a provider unreviewed; an import must not "
+            + "make that choice for another Mac.",
+        AppSettingsKey.aiVoiceSpeaksReplies.rawValue:
+            "No other AI setting travels, and a Mac that starts talking back is a choice each makes.",
         AppSettingsKey.aiQuickAIPresets.rawValue:
             "A preset is standing instructions naming a model on this Mac's own connections; an "
             + "import must not carry either onto another Mac unseen.",

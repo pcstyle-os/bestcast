@@ -89,6 +89,8 @@ enum AppSettingsKey: String, CaseIterable {
     case aiAskFromRootSearch = "aiAskFromRootSearch"
     case aiQuickAIFollowUps = "aiQuickAIFollowUps"
     case aiQuickAIPresets = "aiQuickAIPresets"
+    case aiVoiceAutoSend = "aiVoiceAutoSend"
+    case aiVoiceSpeaksReplies = "aiVoiceSpeaksReplies"
     case aiPassiveModel = "aiPassiveModel"
     case aiPassiveInlineAnswers = "aiPassiveInlineAnswers"
     case aiPassiveSelectionSuggestions = "aiPassiveSelectionSuggestions"

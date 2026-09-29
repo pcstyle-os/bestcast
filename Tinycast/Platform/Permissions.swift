@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import EventKit
+import Speech
 // `@preconcurrency` downgrades AX diagnostics: the option key is a constant C global.
 @preconcurrency import ApplicationServices
 
@@ -76,6 +77,42 @@ enum Permissions {
     /// The one camera prompt, raised from the gesture that asked for it.
     nonisolated static func requestCameraAccess() async -> Bool {
         await AVCaptureDevice.requestAccess(for: .video)
+    }
+
+    /// Asks only for what is still undecided, microphone first, from the gesture that dictates.
+    nonisolated static func requestDictationAccess() async -> DictationAccess {
+        if AVAudioApplication.shared.recordPermission == .undetermined {
+            _ = await AVAudioApplication.requestRecordPermission()
+        }
+        guard AVAudioApplication.shared.recordPermission == .granted else {
+            return .microphoneDenied
+        }
+        var speech = SFSpeechRecognizer.authorizationStatus()
+        if speech == .notDetermined {
+            speech = await withCheckedContinuation { continuation in
+                SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
+            }
+        }
+        return speech == .authorized ? .granted : .speechDenied
+    }
+
+    @MainActor
+    static func openMicrophoneSettings() {
+        guard
+            let url = URL(
+                string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+        else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    @MainActor
+    static func openSpeechRecognitionSettings() {
+        guard
+            let url = URL(
+                string:
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition")
+        else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @MainActor

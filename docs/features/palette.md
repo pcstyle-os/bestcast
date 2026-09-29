@@ -517,6 +517,9 @@ Most ⌘/⌃ chords reach SwiftUI's `onKeyPress` fine. Several kinds do not. All
 handled in `PalettePanel.sendEvent` before `super` hands the event to the responder chain:
 
 - **A bare backspace** — the field editor consumes it as an edit (`onBareBackspace`).
+- **⌥Space and every Space release** — the field editor would type the space and never pass on a
+  keyUp, so Quick AI's hold-to-talk dictation takes both through `onDictationKey`. See
+  [ai.md](ai.md#voice-input).
 - **Chords with no main menu item** — ⌘, and ⌘w, which an app with a menu bar would never see here.
 - **The physical number-row slots.** `FavoriteSlots` matches ⌘1…⌘0 by key code before fixed command
   chords, then publishes the resolved position to the active screen. Only the launcher and clipboard

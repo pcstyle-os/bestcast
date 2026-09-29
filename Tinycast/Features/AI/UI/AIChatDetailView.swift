@@ -181,6 +181,9 @@ private struct AIChatComposer: View {
             ComposerIconButton(symbol: "paperclip", help: attachHelp) {
                 coordinator.chooseFiles(for: chat)
             }
+            DictationButton(isActive: coordinator.dictation.isActive(in: .window)) {
+                coordinator.dictation.toggle(in: .window)
+            }
             AIModelPicker(chat: chat, selected: coordinator.model(for: chat), coordinator: coordinator)
             AIReasoningPicker(chat: chat, coordinator: coordinator)
             AIToolsPicker(chat: chat, coordinator: coordinator)
@@ -220,7 +223,9 @@ private struct AIChatComposer: View {
 
     /// Return and the button are one action: Send, or Stop while a reply streams.
     private func submit() {
-        if chat.isStreaming {
+        if coordinator.dictation.submit(in: .window) {
+            return
+        } else if chat.isStreaming {
             coordinator.stopResponse(in: chat)
         } else if coordinator.send(chat.draft, in: chat) {
             chat.draft = ""
@@ -240,6 +245,22 @@ private struct ComposerIconButton: View {
         .buttonStyle(.borderless)
         .help(help)
         .accessibilityLabel(help)
+    }
+}
+
+/// The paperclip's neighbour: the same borderless glyph, filled and pulsing while it listens.
+private struct DictationButton: View {
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isActive ? "mic.fill" : "mic")
+                .symbolEffect(.pulse, isActive: isActive)
+        }
+        .buttonStyle(.borderless)
+        .help(isActive ? "Stop Dictation  ⌥Space" : "Start Dictation  ⌥Space")
+        .accessibilityLabel(isActive ? "Stop Dictation" : "Start Dictation")
     }
 }
 

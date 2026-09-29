@@ -8,6 +8,9 @@ struct ChatComposerTextView: NSViewRepresentable {
     let focusKey: UUID
     let onSubmit: () -> Void
 
+    /// How the window's key monitor tells its composer from the find and rename fields.
+    static let identifier = NSUserInterfaceItemIdentifier("AIChatComposer")
+
     private static var font: NSFont { .preferredFont(forTextStyle: .body) }
 
     func makeCoordinator() -> Coordinator { Coordinator(text: $text, onSubmit: onSubmit) }
@@ -32,6 +35,7 @@ struct ChatComposerTextView: NSViewRepresentable {
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.string = text
         textView.setAccessibilityLabel("Message")
+        textView.identifier = Self.identifier
         return scroll
     }
 

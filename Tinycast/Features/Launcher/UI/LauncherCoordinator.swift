@@ -173,6 +173,8 @@ final class LauncherCoordinator {
         switch id {
         case .quickAI:
             core.quickAICoordinator.show()
+        case .askAIByVoice:
+            core.dictationCoordinator.askByVoice()
         case .aiChat:
             dismissPalette()
             core.aiChatCoordinator.showWindow()

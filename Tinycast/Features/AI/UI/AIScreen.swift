@@ -7,6 +7,7 @@ struct AIScreen: PaletteScreen {
     let chat: AIChatState
     let coordinator: QuickAICoordinator
     let chatCoordinator: AIChatCoordinator
+    let dictation: DictationCoordinator
     /// The staged files' menu is the palette's to hang, like every other header menu.
     let openAttachments: () -> Void
 
@@ -27,6 +28,14 @@ struct AIScreen: PaletteScreen {
                     coordinator.stopResponse()
                 })
         }
+        let dictating = dictation.isActive(in: .quickAI)
+        items.append(
+            PopoverMenuItem(
+                title: dictating ? "Stop Dictation" : "Start Dictation",
+                systemImage: dictating ? "mic.slash" : "mic", shortcut: "⌥Space"
+            ) {
+                dictation.toggle(in: .quickAI)
+            })
         items.append(
             PopoverMenuItem(
                 title: chat.session.messages.isEmpty ? "Open AI Chat" : "Continue in AI Chat",
@@ -86,7 +95,9 @@ struct AIScreen: PaletteScreen {
 
     /// Return and the pill are the same action; an empty composer sends nothing.
     func activate(at selection: Int) {
-        if chat.isStreaming {
+        if dictation.submit(in: .quickAI) {
+            return
+        } else if chat.isStreaming {
             coordinator.stopResponse()
         } else if coordinator.send(vm.query) {
             vm.query = ""
@@ -123,11 +134,12 @@ struct AIScreen: PaletteScreen {
     ) -> PaletteHeaderAccessory? {
         let attachments = chat.pendingAttachments
         let addressed = chatCoordinator.addressedServer(in: vm.query)
-        guard !attachments.isEmpty || addressed != nil else { return nil }
+        let gap = metrics.spacing.sm
         let width =
-            (attachments.isEmpty ? 0 : AttachmentsPill.width(for: attachments, metrics))
-            + (addressed == nil ? 0 : ComposerChip.width(metrics))
-            + (attachments.isEmpty || addressed == nil ? 0 : metrics.spacing.sm)
+            (attachments.isEmpty ? 0 : AttachmentsPill.width(for: attachments, metrics) + gap)
+            + (addressed == nil ? 0 : ComposerChip.width(metrics) + gap)
+            + ComposerChip.width(metrics)
+        let dictating = dictation.isActive(in: .quickAI)
         return PaletteHeaderAccessory(
             width: width + metrics.spacing.md,
             fieldNames: [], firstIncompleteField: nil,
@@ -140,6 +152,7 @@ struct AIScreen: PaletteScreen {
                     if !attachments.isEmpty {
                         AttachmentsPill(attachments: attachments, onOpen: openAttachments)
                     }
+                    DictationChip(isActive: dictating) { dictation.toggle(in: .quickAI) }
                 }
                 // Clear of the caret, so a chip never reads as laid over the last word.
                 .padding(.leading, metrics.spacing.md)))

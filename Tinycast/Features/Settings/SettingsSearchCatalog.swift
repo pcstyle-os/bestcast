@@ -288,6 +288,12 @@ enum SettingsSearchCatalog {
             .aiQuickAI, "Follow-up suggestions",
             keywords: ["choices", "chips", "next question", "tab"]),
         .init(
+            .aiVoice, "Send when dictation ends",
+            keywords: ["voice", "dictate", "speech", "microphone", "mic", "talk", "auto send"]),
+        .init(
+            .aiVoice, "Read replies aloud",
+            keywords: ["voice", "speak", "conversation", "hands free", "text to speech"]),
+        .init(
             .aiPresets, "Add Preset",
             keywords: ["prompt", "persona", "template", "role", "hotkey", "shortcut"]),
         .init(

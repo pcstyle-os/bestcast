@@ -41,6 +41,7 @@ struct AISettingsView: View {
                 defaultModelSection
                 chatSection
                 QuickAISettingsSection()
+                VoiceSettingsSection()
                 conversationsSection
                 systemPromptSection
                 PassiveAISettingsSection()

@@ -91,6 +91,7 @@ Accessibility grant. Each entitlement in `Tinycast/Tinycast.entitlements` earns 
 | `com.apple.security.cs.allow-jit` | JavaScriptCore cannot JIT, and every extension command runs on the interpreter |
 | `com.apple.security.automation.apple-events` | Every Apple event is refused with `-1743` and no prompt — Get Info, the Finder selection an extension reads, and the System Events–driven system actions all die silently |
 | `com.apple.security.device.camera` | The camera prompt never appears and access resolves as denied |
+| `com.apple.security.device.audio-input` | The microphone prompt never appears, and dictation into AI resolves as denied |
 | `com.apple.security.personal-information.calendars` | `requestFullAccessToEvents()` returns `false` in milliseconds with no dialog, and Tinycast never appears under System Settings › Calendars |
 
 **A usage string is not enough under the hardened runtime.** `tccd` checks the matching entitlement
