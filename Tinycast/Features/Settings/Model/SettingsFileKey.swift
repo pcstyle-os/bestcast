@@ -40,6 +40,8 @@ enum SettingsFileKey: String, CaseIterable, Sendable {
     case aiToolRounds = "ai.toolRounds"
     case aiAskFromRootSearch = "ai.askFromRootSearch"
     case aiQuickAIFollowUps = "ai.followUpSuggestions"
+    case aiVoiceAutoSend = "ai.voiceAutoSend"
+    case aiVoiceSpeaksReplies = "ai.voiceSpeaksReplies"
     case aiPassiveInlineAnswers = "ai.passiveInlineAnswers"
     case quickActionLanguage = "quickActions.targetLanguage"
     case fileSearchEnabled = "fileSearch.enabled"

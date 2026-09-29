@@ -51,6 +51,15 @@ final class AISettingsStore {
             defaults.set(quickAIFollowUps, forKey: AppSettingsKey.aiQuickAIFollowUps.rawValue)
         }
     }
+    /// Off by default: dictation can mishear, so the words wait in the composer to be read.
+    var voiceAutoSend: Bool {
+        didSet { defaults.set(voiceAutoSend, forKey: AppSettingsKey.aiVoiceAutoSend.rawValue) }
+    }
+    var voiceSpeaksReplies: Bool {
+        didSet {
+            defaults.set(voiceSpeaksReplies, forKey: AppSettingsKey.aiVoiceSpeaksReplies.rawValue)
+        }
+    }
     var quickAIPresets: [QuickAIPreset] {
         didSet {
             guard let data = try? JSONEncoder().encode(quickAIPresets) else { return }
@@ -107,6 +116,10 @@ final class AISettingsStore {
             defaults.object(forKey: AppSettingsKey.aiAskFromRootSearch.rawValue) as? Bool ?? true
         quickAIFollowUps =
             defaults.object(forKey: AppSettingsKey.aiQuickAIFollowUps.rawValue) as? Bool ?? true
+        voiceAutoSend =
+            defaults.object(forKey: AppSettingsKey.aiVoiceAutoSend.rawValue) as? Bool ?? false
+        voiceSpeaksReplies =
+            defaults.object(forKey: AppSettingsKey.aiVoiceSpeaksReplies.rawValue) as? Bool ?? false
         quickAIPresets =
             defaults.data(forKey: AppSettingsKey.aiQuickAIPresets.rawValue)
             .flatMap { try? JSONDecoder().decode([QuickAIPreset].self, from: $0) } ?? []

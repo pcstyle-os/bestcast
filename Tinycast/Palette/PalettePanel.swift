@@ -19,6 +19,8 @@ final class PalettePanel: NSPanel {
     var onFieldEditorFocused: ((NSTextInputContext) -> Void)?
     /// Inline argument fields use arrows at their text boundaries to continue their focus ring.
     var onHeaderFieldBoundaryArrow: ((HeaderFieldBoundary) -> Bool)?
+    /// ⌥Space down and every Space up: hold-to-talk needs the release the field editor would eat.
+    var onDictationKey: ((NSEvent) -> Bool)?
     /// Arms hover from `sendEvent`, the one place both event streams pass through.
     weak var paletteState: PaletteState? {
         didSet {
@@ -176,6 +178,9 @@ final class PalettePanel: NSPanel {
         {
             return
         }
+        if Self.isDictationKey(event), onDictationKey?(event) == true {
+            return
+        }
         if event.type == .keyDown,
             Int(event.keyCode) == kVK_Escape,
             event.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift]),
@@ -204,6 +209,14 @@ final class PalettePanel: NSPanel {
         }
         super.sendEvent(event)
     }
+
+    /// The release counts whatever is still held, since ⌥ often lifts before Space does.
+    private static func isDictationKey(_ event: NSEvent) -> Bool {
+        guard Int(event.keyCode) == kVK_Space else { return false }
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        return event.type == .keyUp || (event.type == .keyDown && modifiers == .option)
+    }
+
     init<Content: View>(rootView: Content) {
         super.init(
             contentRect: NSRect(

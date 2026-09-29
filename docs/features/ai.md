@@ -14,12 +14,17 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
 ## Invariants
 
 - **AI is off out of the box, and off means fully off.** `AppSettings.aiEnabled` is the flag:
-  no `Quick AI` or `AI Chat` command in the launcher, no history database opened or created, no Codex
-  helper for chat, no stop for it on Tab's ring, the palette leaves `.ai` and the window closes.
+  no `Quick AI`, `AI Chat` or `Ask AI by Voice` command in the launcher, no history database
+  opened or created, no Codex helper for chat, no stop for it on Tab's ring, the palette leaves `.ai` and the window closes.
   Installed providers may still remain available for Quick Actions, which has its own switch and route. Turning AI off cancels
   every streaming reply and drops both transcripts, but touches neither the saved conversations in
   `ai-chats.sqlite3` nor a Keychain key. `aiEnabled` is excluded from settings backups like every
   other AI key, so an import can never arm a feature it cannot configure.
+- **Dictation is on-device and asked for, never ambient.** The microphone opens only after the
+  user's own mic press, ⌥Space or Ask AI by Voice, and closes when they stop, cancel, hide the
+  palette or turn AI off. Speech becomes text through `SpeechAnalyzer` on this Mac. When the model is
+  missing or the language is unsupported, dictation does nothing, and it never falls back to a
+  server. The only network use is Apple's own model download, and only after the user agrees to it.
 - **Installed model discovery is per-provider.** Settings → AI → Providers keeps Codex, Claude, Grok,
   OpenCode and Cursor visible with an individual toggle for each, all off by default. Turning one off cancels
   its check, clears its catalog and releases its process; Apple Intelligence is the default route when
@@ -397,7 +402,8 @@ the pill's job, so the header never has to fit a third control beside the switch
 The second footer control is the palette's normal Actions (`⌘K`) menu. It owns Continue in AI Chat
 (`⌘J`; Open AI Chat while the chat is empty), New Chat (`⌘N`), Chat History (`⌘Y`) and AI Settings
 (`⌥⌘,`), plus Stop Response (`⌘.`), Regenerate Response (`⌘R`), Copy Last Response (`⇧⌘C`) and
-Remove Attachments when those apply. The chords are Raycast's where it has one, and `AIScreen.perform`
+Remove Attachments when those apply, and Start Dictation (`⌥Space`) always. The chords are
+Raycast's where it has one, and `AIScreen.perform`
 maps each `PaletteShortcut` to its action. AI Settings takes ⌥⌘, because ⌘, stays the app's own
 Settings on every screen. Continuing closes the palette and carries the half-typed line into the
 window's composer with the conversation. Chat History is the palette's own browser over the same
@@ -457,7 +463,8 @@ unified toolbar whose title is the open chat's — so it takes the system's own 
 menus rather than the palette's scrim. `AIChatWindowChrome` owns the toolbar — the sidebar toggle
 and New Chat as two round buttons at the sidebar's trailing edge, then Find in Chat and Actions
 alone at the window's — the title, and one key monitor for ⌘V, ⌘F, ⌘G / ⇧⌘G, ⌘K, ⇧⌘N, Escape
-while an edit is open, and the Actions menu's own chords, and dies with the window. A temporary
+while an edit is open or dictation runs, ⌥Space in the composer, and the Actions menu's own chords,
+and dies with the window. A temporary
 chat's subtitle reads "Temporary · not saved to history", and its title is "Temporary Chat" until
 its first message.
 
@@ -483,7 +490,7 @@ its first message.
   Return / ⇧↩ in the field and ⌘G / ⇧⌘G anywhere. The sidebar's own filter is still there, by click.
 - **Actions** (⌘K): Quick AI's ⌘K menu for a window, on the same chords — Stop Response (`⌘.`), New
   Chat (`⌘N`), Regenerate (`⌘R`), Copy Last Response (`⇧⌘C`), Remove Attachments, Find in Chat
-  (`⌘F`) and AI Settings (`⌥⌘,`). The window adds:
+  (`⌘F`), AI Settings (`⌥⌘,`) and Start Dictation (`⌥Space`). The window adds:
   - New Temporary Chat (`⇧⌘N`).
   - Actions for the last turn: Edit Last Message, a Retry With submenu of every model, Speak Last
     Reply and Branch Chat.
@@ -584,6 +591,45 @@ streaming gets.
 It uses the system SQLite already linked by Tinycast, stores no provider credentials, and repairs a
 reply left streaming by a prior process into an interrupted failure when loaded.
 
+### Voice input
+
+Both composers take dictation. The trigger is a mic glyph, ⌘K → Start Dictation, or ⌥Space. In Quick
+AI, ⌥Space works anywhere on `.ai`. In the window, it works while the composer is focused, so the
+find and rename fields keep their own keys. `ChatComposerTextView.identifier` is how the window
+tells the composer apart. The launcher's `Ask AI by Voice` (`command:ask-ai-by-voice`, owned by the AI
+pane and bindable like any command) opens Quick AI already listening.
+
+- **Hold or tap.** `VoiceDictationMachine` in `Model/` is the pure half:
+  - Holding ⌥Space for at least `holdThreshold` (0.35 s) talks until release.
+  - A shorter tap latches, so the next ⌥Space stops it.
+  - The mic and ⌘K toggle.
+  - Return while listening stops, waits for the last words, and then sends.
+  - Escape cancels and puts back the text that was typed before dictation began.
+
+  Key repeats are swallowed so a hold never types spaces. The palette catches ⌥Space and its
+  release at `PalettePanel.onDictationKey`, before the field editor. The window catches them in its
+  key monitor, and a release is taken only when its press was.
+- **Live text.** `VoiceTranscript` keeps the settled pieces and the latest volatile guess on top of the
+  typed base. Each result rewrites the composer (`palette.query` or the window's `draft`), so the
+  words land as they are heard. Leaving Quick AI for its history or the launcher cancels it.
+- **Permissions on first use.** The first dictation asks for Microphone, then Speech Recognition,
+  through `Permissions.requestDictationAccess`. Each system prompt appears only while it is undecided.
+  After a refusal, Tinycast's own dialog names the permission and offers System Settings. Both usage
+  strings are in `Info.plist`, and the microphone's entitlement is in
+  [signing.md](../signing.md#hardened-runtime).
+- **The model.** `DictationService` (`nonisolated`, run through `Task.detached`) checks
+  `AssetInventory` for the current locale's `SpeechTranscriber` model. When it is missing, a dialog
+  offers Apple's download, with a progress HUD. An unsupported language shows a HUD and nothing more.
+  The audio tap is installed from a `nonisolated` function, because a closure isolated to an actor
+  traps on the audio thread.
+- **Send and speak.** **Send when dictation ends** (`aiVoiceAutoSend`, off by default) sends what was
+  heard when the user stops. Off, the words wait in the composer to be read first. **Read replies
+  aloud** (`aiVoiceSpeaksReplies`, off by default) has `ChatSpeaker` speak the reply to a dictated
+  question, which makes a small voice conversation. Starting dictation stops any speech, so the reply
+  is never heard and transcribed back into the question.
+- **Known limit.** A Carbon hotkey takes its chord before any window sees it, so with the palette
+  hotkey bound to ⌥Space, ⌥Space opens and closes the palette instead. The mic and ⌘K still work.
+
 ## Palette integration
 
 Two palette modes carry Quick AI, and neither changes the shell's rules:
@@ -620,8 +666,8 @@ Seven more `@MainActor @Observable` types join the shared state: `AISettingsStor
 `ChatGPTSubscriptionManager`, `InstalledAIManager`, `ChatHistoryStore`, `AIChatSurfacesState` (which
 owns every live `AIChatState`), `MCPSettingsStore` and `MCPServerManager`. `AIChatCoordinator` — the
 window, and every chat action either surface sends — is the nineteenth feature coordinator,
-`MCPCoordinator` the twentieth, `QuickAICoordinator` the twenty-first and `PassiveAICoordinator`
-the twenty-second.
+`MCPCoordinator` the twentieth, `QuickAICoordinator` the twenty-first, `PassiveAICoordinator`
+the twenty-second and `DictationCoordinator` — voice input for both composers — the twenty-third.
 
 ### Manual sweep
 
@@ -699,6 +745,21 @@ the twenty-second.
   Press ⌘N: the temporary chat is gone, and `ai-chats.sqlite3` has no trace of it.
 - ⌘K → Copy as Markdown puts the whole chat on the pasteboard as Markdown, a temporary chat
   included.
+- Dictation, on a fresh install:
+  - Press Quick AI's mic. The Microphone prompt appears, then the Speech Recognition prompt, and
+    then the model download dialog if the language's model is missing.
+  - Deny either permission and press the mic again. Tinycast's dialog names the permission, and
+    Open System Settings lands on its pane.
+- Dictation in use:
+  - Hold ⌥Space in Quick AI and speak. The words appear as you talk, and releasing leaves them in
+    the composer. Tap ⌥Space: it keeps listening until the next ⌥Space. Escape brings back what was
+    typed before.
+  - With Send when dictation ends on, releasing sends. Return while listening sends either way.
+  - In the window, ⌥Space in the composer dictates. ⌥Space in Find in Chat types a space.
+  - Run Ask AI by Voice from the launcher. Quick AI opens listening.
+  - With Read replies aloud on, a dictated question's reply is spoken. A typed question's is not.
+    Starting dictation stops the speech.
+  - Hide the palette or turn AI off mid-dictation. The mic indicator in the menu bar goes out.
 - Harnesses: `ai-provider-test` (endpoints, request bodies — web search on and off per route —
   stream decoding, Anthropic's search rows, failed and paused searches, citations with escaped
   titles and search offered only on Anthropic's own URL, persistence repair, Codex framing,
@@ -714,8 +775,9 @@ the twenty-second.
   framing, streaming and cleanup, and Claude's private MCP configuration, control channel, round
   cap, managed-policy branch and web-tool flags and rows, with servers and without) and `apple-intelligence-test` (status copy, snapshot deltas,
   transcript assembly, error mapping, plus one real generation when this Mac can run one) and
-  `quick-ai-test` (the question rule, instructions, follow-ups, code blocks, editing and presets),
-  all in `run-tests.sh`.
+  `quick-ai-test` (the question rule, instructions, follow-ups, code blocks, editing and presets,
+  voice settings) and `voice-input-test` (transcript assembly, hold, tap, toggle, Return and
+  Escape), all in `run-tests.sh`.
 
 ## Installed commands
 
@@ -1070,3 +1132,6 @@ unasked, and the route can move typed questions off the Mac. Only `ai.passiveInl
 the opt-in `settings.json` mirror: the route names a destination, and selection suggestions and
 clipboard intelligence read other apps' text as `clipboard.textSearchEnabled` reads images, so all
 three are capability grants with no key.
+`aiVoiceAutoSend` and `aiVoiceSpeaksReplies` stay behind too. The first decides whether dictated
+words go to a provider unread, and the second makes the Mac talk back; each is this Mac's choice.
+Both are mirrored in `settings.json`, as `ai.voiceAutoSend` and `ai.voiceSpeaksReplies`.

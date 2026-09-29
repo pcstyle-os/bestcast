@@ -26,6 +26,31 @@ struct ComposerChip: View {
     }
 }
 
+/// Quick AI's mic, sized as the `@server` pill so the strip's width sum stays one formula.
+struct DictationChip: View {
+    @Environment(\.metrics) private var metrics
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isActive ? "mic.fill" : "mic")
+                .font(metrics.typography.chip)
+                .symbolRenderingMode(.hierarchical)
+                .symbolEffect(.pulse, isActive: isActive)
+                .frame(width: metrics.size.chatAttachmentGlyph)
+                .foregroundStyle(isActive ? Color.accentColor : Theme.Colors.textSecondary)
+                .padding(.horizontal, metrics.spacing.sm)
+                .padding(.vertical, metrics.spacing.xxs)
+                .background(Capsule().fill(Theme.Colors.controlSurface))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .tooltip(isActive ? "Stop Dictation  ⌥Space" : "Start Dictation  ⌥Space", edge: .bottom)
+        .accessibilityLabel(isActive ? "Stop Dictation" : "Start Dictation")
+    }
+}
+
 /// The window composer's staged file: an image shows itself, a document its name, both an ✕.
 struct AttachmentChip: View {
     @Environment(\.metrics) private var metrics

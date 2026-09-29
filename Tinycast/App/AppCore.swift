@@ -213,6 +213,7 @@ final class AppCore {
         chats: aiChats, settings: settings, palette: palette,
         paletteCoordinator: paletteCoordinator, core: self)
     @ObservationIgnored private(set) lazy var passiveAICoordinator = PassiveAICoordinator(core: self)
+    @ObservationIgnored private(set) lazy var dictationCoordinator = DictationCoordinator(core: self)
 
     @ObservationIgnored private lazy var windowController = PaletteWindowController(core: self)
     @ObservationIgnored private lazy var messageHUD = MessageHUDController(settings: settings)

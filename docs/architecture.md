@@ -94,7 +94,7 @@ app: the stores (`AppIndex`, `ClipboardStore`, `SnippetsStore`, `QuicklinkStore`
 (`ClipboardManager`, the opt-in `ClipboardTextIndexer`, the opt-in `SettingsFileRepository`,
 `HotKeyManager`, `HyperKeyTap`, `RunningAppsMonitor`, `SnippetKeywordListener`), the shared state
 (`AppSettings`, `PaletteState`, `FileSearchSession`, `MenuSearchSession`, `UninstallSession`,
-`MeetingClock`), `NotesStore`, the twenty-one feature coordinators, and the
+`MeetingClock`), `NotesStore`, the twenty-three feature coordinators, and the
 window controllers.
 
 `AppDelegate.applicationDidFinishLaunching` calls `AppCore.shared.start()` and nothing else. That is the

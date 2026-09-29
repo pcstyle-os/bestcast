@@ -165,6 +165,10 @@ struct QuickAITests {
         expect(store.askAIFromRootSearch, "Ask AI from root search defaults on")
         expect(store.quickAIFollowUps, "follow-up suggestions default on")
         expect(store.quickAIPresets.isEmpty, "no presets ship")
+        expect(!store.voiceAutoSend, "dictated words wait to be reviewed by default")
+        expect(!store.voiceSpeaksReplies, "replies stay silent by default")
+        store.voiceAutoSend = true
+        expect(AISettingsStore(defaults: defaults).voiceAutoSend, "auto-send persists")
         store.quickAIPresets = [preset]
         expect(AISettingsStore(defaults: defaults).quickAIPresets == [preset], "presets persist")
         expect(store.preset(id: preset.id) == preset, "a preset is found by id")

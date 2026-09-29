@@ -152,6 +152,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         core.inputSourceSwitcher.endSession()
         core.calendarCoordinator.paletteDidHide()
         core.roomCoordinator.paletteDidHide()
+        core.dictationCoordinator.paletteDidHide()
         core.palette.noteVisible(false)
         core.clipboardStore.setTextSearchActive(false)
         // Drop the anchor, so the next summon re-resolves for the screen in use then.
@@ -396,8 +397,19 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         installPasteMonitor()
         // Handled at the panel: a focused preview answers Escape before the palette's own handler.
         panel.onEscape = { [weak self] in
-            guard let self, core.palette.fileSearchQuickLook else { return false }
+            guard let self else { return false }
+            if core.palette.mode == .ai, core.dictationCoordinator.cancel(in: .quickAI) {
+                return true
+            }
+            guard core.palette.fileSearchQuickLook else { return false }
             core.palette.fileSearchQuickLook = false
+            return true
+        }
+        panel.onDictationKey = { [weak self] event in
+            guard let dictation = self?.core.dictationCoordinator else { return false }
+            guard event.type == .keyDown else { return dictation.keyUp() }
+            guard self?.core.palette.mode == .ai else { return false }
+            dictation.keyDown(in: .quickAI, isRepeat: event.isARepeat)
             return true
         }
         // Handled at the panel: the field editor or a missing main menu eats these first.

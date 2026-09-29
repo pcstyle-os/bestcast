@@ -9,6 +9,7 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
     private static let search = NSToolbarItem.Identifier("AIChatSearch")
     private static let actions = NSToolbarItem.Identifier("AIChatActions")
     private static let escapeKeyCode: UInt16 = 53
+    private static let spaceKeyCode: UInt16 = 49
 
     private let coordinator: AIChatCoordinator
     private let chats: AIChatSurfacesState
@@ -185,18 +186,37 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
 
     /// The Actions menu's chords work with it closed too, so the window claims them before AppKit.
     private func installKeyMonitor() {
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, let window = self.window, event.window === window, window.isKeyWindow,
-                !event.isARepeat
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+            guard let self, let window = self.window, event.window === window, window.isKeyWindow
             else { return event }
+            if self.handleDictationKey(event, in: window) { return nil }
+            guard event.type == .keyDown, !event.isARepeat else { return event }
             return self.handle(event, in: window) ? nil : event
         }
+    }
+
+    /// Hold-to-talk needs the release too, and its repeats, which would otherwise type spaces.
+    private func handleDictationKey(_ event: NSEvent, in window: NSWindow) -> Bool {
+        guard event.keyCode == Self.spaceKeyCode else { return false }
+        let dictation = coordinator.dictation
+        guard event.type == .keyDown else { return dictation.keyUp() }
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        guard modifiers == .option,
+            (window.firstResponder as? NSView)?.identifier == ChatComposerTextView.identifier
+        else { return false }
+        dictation.keyDown(in: .window, isRepeat: event.isARepeat)
+        return true
     }
 
     private func handle(_ event: NSEvent, in window: NSWindow) -> Bool {
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
         let key = (ASCIIKeyboardLayout.character(for: event) ?? event.charactersIgnoringModifiers)?
             .lowercased()
+        if event.keyCode == Self.escapeKeyCode, modifiers.isEmpty,
+            coordinator.dictation.cancel(in: .window)
+        {
+            return true
+        }
         if event.keyCode == Self.escapeKeyCode, modifiers.isEmpty, chat.editingMessageID != nil,
             (window.firstResponder as? NSTextView)?.isFieldEditor != true
         {
@@ -268,6 +288,14 @@ enum AIChatActionsMenu {
                     coordinator.regenerate(in: chat)
                 })
         }
+        let dictating = coordinator.dictation.isActive(in: .window)
+        menu.addItem(
+            ClosureMenuItem(
+                dictating ? "Stop Dictation" : "Start Dictation",
+                symbol: dictating ? "mic.slash" : "mic", key: " ", modifiers: .option
+            ) {
+                coordinator.dictation.toggle(in: .window)
+            })
         addTurnItems(to: menu, chat: chat, coordinator: coordinator)
         menu.addItem(.separator())
         if chat.lastAssistantText != nil {

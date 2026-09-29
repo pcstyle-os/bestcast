@@ -16,6 +16,8 @@ final class AIChatCoordinator {
     @ObservationIgnored private var naming: [UUID: Task<Void, Never>] = [:]
     /// Read aloud on the reader's press only; nothing it says leaves the Mac.
     let speaker = ChatSpeaker()
+    /// Conversations whose next reply answers a dictated question, so it is read back aloud.
+    @ObservationIgnored private var askedAloud: Set<UUID> = []
     /// The window's Chat Instructions sheet; ⌘K opens it for whichever chat is showing.
     var showsChatInstructions = false
 
@@ -34,14 +36,19 @@ final class AIChatCoordinator {
             title: "AI Chat", contentSize: Theme.Size.aiChatWindow,
             minimumSize: Theme.Size.aiChatWindowMinimum, resizable: true,
             autosaveName: "AIChatWindow", activation: core.activationPolicy)
-        chats.onReplyFinished = { [weak self] chat in self?.nameIfNeeded(chat) }
+        chats.onReplyFinished = { [weak self] chat in
+            self?.nameIfNeeded(chat)
+            self?.speakIfAskedAloud(chat)
+        }
     }
 
     func applyEnabled() {
-        appIndex.setCommandsVisible([.aiChat, .quickAI], settings.aiEnabled)
+        appIndex.setCommandsVisible([.aiChat, .quickAI, .askAIByVoice], settings.aiEnabled)
         guard settings.aiEnabled else {
             for request in naming.values { request.cancel() }
             naming = [:]
+            core.dictationCoordinator.cancel()
+            askedAloud = []
             speaker.stop()
             // Before the handle closes: cancelling an open reply saves the conversation it ends.
             chats.reset()
@@ -86,6 +93,7 @@ final class AIChatCoordinator {
     /// The window's views read these through the coordinator, never through `AppCore`.
     var history: ChatHistoryStore { core.chatHistory }
     var aiSettings: AISettingsStore { core.aiSettings }
+    var dictation: DictationCoordinator { core.dictationCoordinator }
 
     func focusExisting() -> Bool {
         window.focus()
@@ -261,6 +269,7 @@ final class AIChatCoordinator {
     @discardableResult
     func send(_ input: String, in chat: AIChatState) -> Bool {
         guard settings.aiEnabled else { return false }
+        askedAloud.remove(chat.session.id)
         do {
             let address = MCPComposerAddress.parse(input, slugs: core.mcpCoordinator.slugs)
             let sent = chat.send(
@@ -275,6 +284,21 @@ final class AIChatCoordinator {
             chat.report(error.localizedDescription)
             return false
         }
+    }
+
+    /// A dictated question; with Read Replies Aloud on, its answer is spoken when it lands.
+    func sendSpoken(_ input: String, in chat: AIChatState) -> Bool {
+        guard send(input, in: chat) else { return false }
+        if aiSettings.voiceSpeaksReplies { askedAloud.insert(chat.session.id) }
+        return true
+    }
+
+    private func speakIfAskedAloud(_ chat: AIChatState) {
+        guard askedAloud.remove(chat.session.id) != nil,
+            let reply = chat.session.messages.last, reply.role == .assistant,
+            speaker.speakingID != reply.id
+        else { return }
+        speaker.toggle(reply.id, text: reply.text)
     }
 
     /// The same question, asked of whichever model is selected now, of the server it named.

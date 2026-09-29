@@ -71,6 +71,10 @@
 	<string>Tinycast reads today's and tomorrow's events so you can join a meeting from the palette.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Tinycast uses Bluetooth access only when you run the Toggle Bluetooth action.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Tinycast listens only while you dictate a question to AI, and only after you start dictation yourself.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Tinycast turns your dictated AI questions into text on this Mac. Your voice is never sent anywhere.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Tinycast</string>
 </dict>

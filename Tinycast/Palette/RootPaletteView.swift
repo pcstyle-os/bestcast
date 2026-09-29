@@ -98,7 +98,7 @@ struct RootPaletteView: View {
             return AIScreen(
                 vm: vm, metrics: metrics, chat: quickAI,
                 coordinator: core.quickAICoordinator, chatCoordinator: core.aiChatCoordinator,
-                openAttachments: toggleAIAttachments)
+                dictation: core.dictationCoordinator, openAttachments: toggleAIAttachments)
         case .aiHistory:
             return ChatHistoryScreen(
                 history: core.chatHistory, chat: quickAI, coordinator: core.quickAICoordinator,
