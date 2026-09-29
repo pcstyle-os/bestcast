@@ -13,6 +13,7 @@ final class AIChatSurfacesState {
     private var answeringElsewhere: [UUID: AIChatState] = [:]
 
     private let history: ChatHistoryStore
+    private let libraries: ChatLibraryStore?
 
     /// Handed to every state, so a chat that finishes its first answer can be named wherever it is.
     @ObservationIgnored var onReplyFinished: (@MainActor (AIChatState) -> Void)? {
@@ -23,14 +24,15 @@ final class AIChatSurfacesState {
         }
     }
 
-    init(history: ChatHistoryStore) {
+    init(history: ChatHistoryStore, libraries: ChatLibraryStore? = nil) {
         self.history = history
-        quickAI = AIChatState(history: history)
-        window = AIChatState(history: history)
+        self.libraries = libraries
+        quickAI = AIChatState(history: history, libraries: libraries)
+        window = AIChatState(history: history, libraries: libraries)
     }
 
     private func makeState(temporary: Bool = false) -> AIChatState {
-        let state = AIChatState(history: history, isTemporary: temporary)
+        let state = AIChatState(history: history, libraries: libraries, isTemporary: temporary)
         state.onReplyFinished = onReplyFinished
         return state
     }
@@ -77,7 +79,10 @@ final class AIChatSurfacesState {
     /// Quick AI's conversation moves over whole, reply and staged files included.
     @discardableResult
     func continueQuickAIInWindow(draft: String = "") -> Bool {
-        guard !quickAI.session.messages.isEmpty || !quickAI.pendingAttachments.isEmpty else {
+        guard
+            !quickAI.session.messages.isEmpty || !quickAI.pendingAttachments.isEmpty
+                || !quickAI.library.isEmpty
+        else {
             // Nothing moves, so the line joins the window chat's own unsent text rather than replace it.
             if !draft.isEmpty {
                 window.draft = window.draft.isEmpty ? draft : window.draft + "\n" + draft
@@ -95,6 +100,7 @@ final class AIChatSurfacesState {
     private func show(_ next: AIChatState) {
         if window.isTemporary {
             window.cancel()
+            window.library.reset()
         } else if window.isStreaming {
             answeringElsewhere[window.session.id] = window
         }
@@ -117,6 +123,7 @@ final class AIChatSurfacesState {
     func delete(id: UUID) {
         (holder(of: id) ?? window).delete(id: id)
         answeringElsewhere[id] = nil
+        pruneLibraries()
     }
 
     /// Every doomed reply is cancelled before the clear: a cancel saves, which would bring it back.
@@ -130,6 +137,14 @@ final class AIChatSurfacesState {
         answeringElsewhere = answeringElsewhere.filter { entry in
             !doomed.contains { $0 === entry.value }
         }
+        pruneLibraries()
+    }
+
+    /// A saved index outlives its chat only until this runs: deleted and pruned chats lose theirs.
+    func pruneLibraries() {
+        guard let libraries, history.isOpen else { return }
+        let kept = Set(history.conversations.map(\.id) + live.map(\.session.id))
+        Task.detached(priority: .utility) { libraries.prune(keeping: kept) }
     }
 
     /// Off, or quitting: every reply stops and saves, and both surfaces start over.

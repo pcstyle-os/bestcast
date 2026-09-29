@@ -236,7 +236,9 @@ final class AppCore {
         self.settings = settings
         self.chatHistory = chatHistory
         supportReminders = SupportReminderStore(settings: settings)
-        aiChats = AIChatSurfacesState(history: chatHistory)
+        aiChats = AIChatSurfacesState(
+            history: chatHistory,
+            libraries: ChatLibraryStore(directory: AppPaths.caches().appending(path: "ChatLibraries")))
         appIndex = AppIndex(ranking: launcherRanking, aliases: aliases)
         let clipboardManager = ClipboardManager(store: clipboardStore, settings: settings)
         self.clipboardManager = clipboardManager

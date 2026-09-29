@@ -242,6 +242,8 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
             coordinator.stopResponse(in: chat)
         case ([.command, .option], ","):
             coordinator.showSettings()
+        case ([.command], "o"):
+            coordinator.chooseFiles(for: chat)
         case ([.command], "v"):
             // The search and rename fields take a paste as text, whatever the board holds.
             guard (window.firstResponder as? NSTextView)?.isFieldEditor != true else { return false }
@@ -318,12 +320,17 @@ enum AIChatActionsMenu {
                     coordinator.exportChat(id: chat.session.id)
                 })
         }
+        menu.addItem(
+            ClosureMenuItem("Attach Files or Folder…", symbol: "paperclip", key: "o") {
+                coordinator.chooseFiles(for: chat)
+            })
         if !chat.pendingAttachments.isEmpty {
             menu.addItem(
                 ClosureMenuItem("Remove Attachments", symbol: "paperclip") {
                     coordinator.clearAttachments(in: chat)
                 })
         }
+        addLibraryItems(to: menu, library: chat.library, chat: chat, coordinator: coordinator)
         if saved {
             menu.addItem(.separator())
             let pinned = coordinator.isPinned(chat)
@@ -350,6 +357,27 @@ enum AIChatActionsMenu {
                 coordinator.showSettings()
             })
         return menu
+    }
+
+    private static func addLibraryItems(
+        to menu: NSMenu, library: ChatLibraryState, chat: AIChatState,
+        coordinator: AIChatCoordinator
+    ) {
+        if library.isIndexing {
+            menu.addItem(
+                ClosureMenuItem("Stop Reading Files", symbol: "xmark.circle") {
+                    coordinator.stopReadingFiles(in: chat)
+                })
+        } else if !library.isEmpty {
+            menu.addItem(
+                ClosureMenuItem("Reindex Files", symbol: "arrow.triangle.2.circlepath") {
+                    coordinator.reindexFiles(in: chat)
+                })
+            menu.addItem(
+                ClosureMenuItem("Remove Files", symbol: "books.vertical") {
+                    coordinator.removeFiles(in: chat)
+                })
+        }
     }
 
     /// The hover row's actions for the last turn, so the keyboard reaches them without a pointer.

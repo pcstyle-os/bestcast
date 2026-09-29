@@ -64,6 +64,7 @@ final class AIChatCoordinator {
             core.chatHistory.load()
             // Inside the enabled branch only: off means the file is untouched, however old it gets.
             applyRetention()
+            chats.pruneLibraries()
         }
     }
 
@@ -71,7 +72,7 @@ final class AIChatCoordinator {
         guard settings.aiEnabled,
             let cutoff = core.aiSettings.retention.cutoff(from: Date())
         else { return }
-        core.chatHistory.prune(before: cutoff)
+        if core.chatHistory.prune(before: cutoff) > 0 { chats.pruneLibraries() }
     }
 
     // MARK: - The window
@@ -431,7 +432,7 @@ final class AIChatCoordinator {
     /// The context card's facts; the gauge redraws per flush, so it skips the card's model title.
     func contextReport(for chat: AIChatState, detailed: Bool = true) -> ChatContextReport {
         let session = chat.session
-        let budget = contextBudget(for: chat)
+        let budget = chat.historyBudget(within: contextBudget(for: chat))
         let can = capabilities(for: chat)
         let scope = chat.toolScope
         return ChatContextReport(
@@ -459,6 +460,8 @@ final class AIChatCoordinator {
             ? pasteboard.availableType(from: [.png, .tiff]).flatMap { pasteboard.data(forType: $0) }
             : nil
         guard !files.isEmpty || pasted != nil else { return false }
+        let files = addingToLibrary(files, in: chat)
+        guard !files.isEmpty || pasted != nil else { return true }
         if let refusal = unattachable(files, in: chat) {
             core.showMessage(refusal.message, tone: .neutral)
             return true
@@ -479,7 +482,7 @@ final class AIChatCoordinator {
 
     /// A drop or the paperclip: the same refusals as a paste, since the route is what decides.
     func attach(files: [URL], to chat: AIChatState) {
-        let files = files.filter(\.isFileURL)
+        let files = addingToLibrary(files.filter(\.isFileURL), in: chat)
         guard !files.isEmpty else { return }
         if let refusal = unattachable(files, in: chat) {
             core.showMessage(refusal.message, tone: .neutral)
@@ -492,13 +495,44 @@ final class AIChatCoordinator {
     func chooseFiles(for chat: AIChatState) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         panel.prompt = "Attach"
-        panel.message = "Choose images, PDFs or text files to send with your next message."
+        panel.message = "Choose images, PDFs or text files to send, or a folder to chat with."
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK else { return }
         attach(files: panel.urls, to: chat)
+    }
+
+    /// Folders, and files too large to send whole, are indexed; the rest come back to be staged.
+    private func addingToLibrary(_ files: [URL], in chat: AIChatState) -> [URL] {
+        let readsDocuments = capabilities(for: chat).documents
+        var staged: [URL] = []
+        var library: [URL] = []
+        for file in files {
+            let values = try? file.resourceValues(
+                forKeys: [.isDirectoryKey, .isPackageKey, .fileSizeKey])
+            let isFolder = values?.isDirectory == true && values?.isPackage != true
+            let belongs = ChatLibraryPolicy.belongsInLibrary(
+                fileName: file.lastPathComponent, isDirectory: isFolder,
+                byteCount: values?.fileSize ?? 0, readsDocuments: readsDocuments)
+            if belongs { library.append(file) } else { staged.append(file) }
+        }
+        if !library.isEmpty { chat.library.add(library, savingAs: chat.librarySaveID) }
+        return staged
+    }
+
+    func stopReadingFiles(in chat: AIChatState) {
+        chat.library.cancel()
+    }
+
+    func reindexFiles(in chat: AIChatState) {
+        chat.library.reindex(savingAs: chat.librarySaveID)
+    }
+
+    /// Only the chat's index goes; the files themselves are never touched.
+    func removeFiles(in chat: AIChatState) {
+        chat.library.remove(savedAs: chat.librarySaveID)
     }
 
     func clearAttachments(in chat: AIChatState) {

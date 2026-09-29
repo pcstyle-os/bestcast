@@ -205,6 +205,13 @@ private struct ChatMessageView: View, @MainActor Equatable {
         return ChatReferences.extract(from: parts.text)
     }
 
+    /// The excerpts it cited, else all it was given; a reply that failed drew on none of them.
+    private var fileSources: [ChatSource] {
+        guard message.role == .assistant, message.state == .complete, !message.sources.isEmpty
+        else { return [] }
+        return ChatLibraryPolicy.cited(message.sources, in: parts.text)
+    }
+
     var body: some View {
         HStack {
             if message.role == .user { Spacer(minLength: metrics.spacing.xxl) }
@@ -331,6 +338,8 @@ private struct ChatMessageView: View, @MainActor Equatable {
                         choices: Array(parts.choices.prefix(choiceLimit)), onChoose: onChoose)
                 }
                 if !references.isEmpty { ChatSourcesView(references: references) }
+                let fileSources = fileSources
+                if !fileSources.isEmpty { ChatFileSourcesView(sources: fileSources) }
             }
             .environment(\.chatCitations, ChatReferences.numbers(for: references))
         } else {
@@ -400,6 +409,68 @@ private struct ChatSourceChip: View {
         .buttonStyle(.glass)
         .help(reference.url.absoluteString)
         .accessibilityLabel("Source \(index): \(reference.title), \(reference.host)")
+    }
+}
+
+/// The attached files a reply drew on, each opening the file it names.
+private struct ChatFileSourcesView: View {
+    @Environment(\.metrics) private var metrics
+    let sources: [ChatSource]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: metrics.spacing.sm) {
+            Text("From your files")
+                .font(metrics.typography.rowTrailing.weight(.semibold))
+                .foregroundStyle(Theme.Colors.textTertiary)
+            ChatFlowLayout(spacing: metrics.spacing.sm) {
+                ForEach(sources, id: \.self) { source in
+                    ChatFileSourceChip(source: source)
+                }
+            }
+        }
+        .padding(.top, metrics.spacing.xs)
+    }
+}
+
+private struct ChatFileSourceChip: View {
+    @Environment(\.metrics) private var metrics
+    let source: ChatSource
+
+    /// Read per render, which a finished reply's equatable view makes rare; a moved file says so.
+    private var exists: Bool { FileManager.default.fileExists(atPath: source.path) }
+
+    var body: some View {
+        let exists = exists
+        let url = URL(filePath: source.path)
+        Button {
+            if exists { NSWorkspace.shared.open(url) }
+        } label: {
+            HStack(spacing: metrics.spacing.xs) {
+                Text("\(source.number)")
+                    .font(metrics.typography.keyCap)
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Colors.textTertiary)
+                Text(source.label)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: Theme.Size.chatSourceTitle, alignment: .leading)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .strikethrough(!exists)
+            }
+            .font(metrics.typography.rowTrailing)
+            .padding(.horizontal, metrics.spacing.xs)
+        }
+        .buttonStyle(.glass)
+        .help(exists ? source.path : "No longer at \(source.path)")
+        .contextMenu {
+            Button("Open") { NSWorkspace.shared.open(url) }
+                .disabled(!exists)
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                .disabled(!exists)
+            Button("Copy Path") { Paster.copyPlainText(source.path) }
+        }
+        .accessibilityLabel(
+            "File source \(source.number): \(source.label)\(exists ? "" : ", missing")")
     }
 }
 

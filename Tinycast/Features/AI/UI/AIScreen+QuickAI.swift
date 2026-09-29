@@ -21,11 +21,18 @@ extension AIScreen {
                     coordinator.copyCodeBlock()
                 })
         }
+        items.append(
+            PopoverMenuItem(
+                title: "Attach Files or Folder…", systemImage: "paperclip", startsSection: true,
+                shortcut: "⌘O"
+            ) {
+                coordinator.chooseFiles()
+            })
+        items += libraryItems
         if let app = coordinator.targetAppName {
             items.append(
                 PopoverMenuItem(
-                    title: "Attach Selected Text", systemImage: "text.cursor",
-                    startsSection: true, shortcut: "⇧⌘S"
+                    title: "Attach Selected Text", systemImage: "text.cursor", shortcut: "⇧⌘S"
                 ) {
                     coordinator.attachSelection()
                 })
@@ -48,6 +55,26 @@ extension AIScreen {
                 })
         }
         return items
+    }
+
+    private var libraryItems: [PopoverMenuItem] {
+        let library = chat.library
+        if library.isIndexing {
+            return [
+                PopoverMenuItem(title: "Stop Reading Files", systemImage: "xmark.circle") {
+                    chatCoordinator.stopReadingFiles(in: chat)
+                }
+            ]
+        }
+        guard !library.isEmpty else { return [] }
+        return [
+            PopoverMenuItem(title: "Reindex Files", systemImage: "arrow.triangle.2.circlepath") {
+                chatCoordinator.reindexFiles(in: chat)
+            },
+            PopoverMenuItem(title: "Remove Files", systemImage: "books.vertical") {
+                chatCoordinator.removeFiles(in: chat)
+            }
+        ]
     }
 
     /// ↑ on an empty composer takes the last question back; otherwise the list keeps the arrow.

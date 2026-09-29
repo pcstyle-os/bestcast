@@ -117,6 +117,7 @@ struct AIScreen: PaletteScreen {
         case .copyFile where chat.lastAssistantText != nil: coordinator.copyLastResponse()
         case .copyName where coordinator.lastCodeBlock != nil: coordinator.copyCodeBlock()
         case .attachSelection: coordinator.attachSelection()
+        case .attachFiles: coordinator.chooseFiles()
         case .quickLook: coordinator.showHistory()
         case .pin where chat.isStreaming: coordinator.stopResponse()
         case .settings: chatCoordinator.showSettings()
@@ -165,18 +166,39 @@ struct AIScreen: PaletteScreen {
                 availability: { chatCoordinator.availability(for: chat) },
                 onConfigure: chatCoordinator.showSettings,
                 onAppear: chatCoordinator.prepareForChat,
-                onChoose: { coordinator.send($0) }))
+                onChoose: { coordinator.send($0) },
+                onStopReading: { chatCoordinator.stopReadingFiles(in: chat) },
+                onReindexFiles: { chatCoordinator.reindexFiles(in: chat) },
+                onRemoveFiles: { chatCoordinator.removeFiles(in: chat) }))
     }
 }
 
 private struct AIChatView: View {
+    @Environment(\.metrics) private var metrics
     let chat: AIChatState
     let availability: () -> String?
     let onConfigure: () -> Void
     let onAppear: () -> Void
     let onChoose: (String) -> Void
+    let onStopReading: () -> Void
+    let onReindexFiles: () -> Void
+    let onRemoveFiles: () -> Void
 
     var body: some View {
+        VStack(spacing: 0) {
+            if !chat.library.isEmpty {
+                ChatLibraryBar(
+                    library: chat.library, onStop: onStopReading, onReindex: onReindexFiles,
+                    onRemove: onRemoveFiles)
+                    .padding(.horizontal, metrics.spacing.lg)
+                    .padding(.top, metrics.spacing.sm)
+            }
+            transcript
+        }
+        .onAppear(perform: onAppear)
+    }
+
+    @ViewBuilder private var transcript: some View {
         Group {
             if chat.session.messages.isEmpty {
                 // Read in the body, so a CLI signing in or a provider switched on is seen at once.
@@ -195,7 +217,7 @@ private struct AIChatView: View {
                     onChoose: chat.isStreaming ? nil : onChoose)
             }
         }
-        .onAppear(perform: onAppear)
+        .frame(maxHeight: .infinity)
     }
 }
 

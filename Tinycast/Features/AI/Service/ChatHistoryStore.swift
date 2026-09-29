@@ -93,6 +93,14 @@ final class ChatHistoryStore {
             REFERENCES conversations(id) ON DELETE CASCADE,
           text TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS message_sources(
+          message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL,
+          number INTEGER NOT NULL,
+          path TEXT NOT NULL,
+          page INTEGER,
+          PRIMARY KEY(message_id, position)
+        );
         CREATE INDEX IF NOT EXISTS messages_by_conversation
           ON messages(conversation_id, position);
         CREATE INDEX IF NOT EXISTS conversations_by_recency
@@ -105,6 +113,9 @@ final class ChatHistoryStore {
     init(directory: URL) {
         databaseURL = directory.appendingPathComponent("ai-chats.sqlite3")
     }
+
+    /// Closed, the resident list is empty rather than true, so nothing may be judged gone by it.
+    var isOpen: Bool { database != nil }
 
     isolated deinit {
         sqlite3_close(database)
@@ -228,6 +239,7 @@ final class ChatHistoryStore {
         let images = images(forConversation: id, in: database)
         let documents = documents(forConversation: id, in: database)
         let searches = searches(forConversation: id, in: database)
+        let sources = sources(forConversation: id, in: database)
         let toolUses = toolUses(forConversation: id, in: database)
         let reasoning = reasoning(forConversation: id, in: database)
         let meta = messageMeta(forConversation: id, in: database)
@@ -255,7 +267,8 @@ final class ChatHistoryStore {
                     searches: searches[messageID] ?? [],
                     toolUses: toolUses[messageID] ?? [],
                     reasoning: reasoning[messageID] ?? [],
-                    usage: meta[messageID]?.usage, toolScope: meta[messageID]?.toolScope))
+                    usage: meta[messageID]?.usage, toolScope: meta[messageID]?.toolScope,
+                    sources: sources[messageID] ?? []))
         }
         return ChatSession(
             id: id, createdAt: createdAt, updatedAt: updatedAt, messages: messages,
@@ -503,6 +516,7 @@ final class ChatHistoryStore {
         return session.messages[rewriteFrom...].allSatisfy {
             saveImages(of: $0, in: database) && saveDocuments(of: $0, in: database)
                 && saveSearches(of: $0, in: database)
+                && saveSources(of: $0, in: database)
                 && saveToolUses(of: $0, in: database)
                 && saveReasoning(of: $0, in: database)
                 && saveMeta(of: $0, in: database)
@@ -567,6 +581,52 @@ final class ChatHistoryStore {
                     sequence: Int(sqlite3_column_int64(statement, 3))))
         }
         return searches
+    }
+
+    private func saveSources(of message: ChatMessage, in database: OpaquePointer) -> Bool {
+        guard !message.sources.isEmpty else { return true }
+        let sql = """
+            INSERT INTO message_sources(message_id, position, number, path, page)
+            VALUES(?, ?, ?, ?, ?);
+            """
+        guard let statement = prepare(sql, in: database) else { return false }
+        defer { sqlite3_finalize(statement) }
+        for (position, source) in message.sources.enumerated() {
+            bind(message.id.uuidString, to: statement, at: 1)
+            sqlite3_bind_int64(statement, 2, Int64(position))
+            sqlite3_bind_int64(statement, 3, Int64(source.number))
+            bind(source.path, to: statement, at: 4)
+            if let page = source.page { sqlite3_bind_int64(statement, 5, Int64(page)) }
+            guard sqlite3_step(statement) == SQLITE_DONE else { return false }
+            sqlite3_reset(statement)
+            sqlite3_clear_bindings(statement)
+        }
+        return true
+    }
+
+    private func sources(
+        forConversation id: UUID, in database: OpaquePointer
+    ) -> [UUID: [ChatSource]] {
+        let sql = """
+            SELECT s.message_id, s.number, s.path, s.page FROM message_sources s
+            JOIN messages m ON m.id = s.message_id
+            WHERE m.conversation_id = ? ORDER BY s.message_id, s.position;
+            """
+        guard let statement = prepare(sql, in: database) else { return [:] }
+        defer { sqlite3_finalize(statement) }
+        bind(id.uuidString, to: statement, at: 1)
+        var sources: [UUID: [ChatSource]] = [:]
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let messageID = UUID(uuidString: text(statement, 0)) else { continue }
+            let page =
+                sqlite3_column_type(statement, 3) == SQLITE_NULL
+                ? nil : Int(sqlite3_column_int64(statement, 3))
+            sources[messageID, default: []].append(
+                ChatSource(
+                    number: Int(sqlite3_column_int64(statement, 1)), path: text(statement, 2),
+                    page: page))
+        }
+        return sources
     }
 
     private func saveToolUses(of message: ChatMessage, in database: OpaquePointer) -> Bool {
