@@ -43,8 +43,8 @@ function collectEnums(source) {
     }
 
     if (current) {
-      const member = /^\s*([A-Za-z0-9_]+)\s*=\s*"([^"]*)"/.exec(line);
-      if (member) current.members.push([member[1], member[2]]);
+      const member = /^\s*(?:"([^"]+)"|([A-Za-z0-9_]+))\s*=\s*"([^"]*)"/.exec(line);
+      if (member) current.members.push([member[1] ?? member[2], member[3]]);
     }
 
     for (const char of line) {

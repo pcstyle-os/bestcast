@@ -1,6 +1,7 @@
 // The non-visual half of @raycast/api: clipboard, storage, cache, preferences, app lookup and the
 // window/feedback calls. Everything here is an async host call answered by Swift on the main actor.
 
+import { AI } from "./ai.js";
 import { hostCall } from "../host.js";
 import { nestedEnums } from "./enums.generated.js";
 
@@ -142,7 +143,7 @@ export const environment = new Proxy(
   {},
   {
     get(_target, key) {
-      if (key === "canAccess") return () => false;
+      if (key === "canAccess") return (capability) => capability === AI && boot.environment?.canAccessAI === true;
       return boot.environment?.[key];
     },
     has: (_target, key) => key in (boot.environment ?? {}),

@@ -128,6 +128,7 @@ final class ExtensionHostBridge: ExtensionHostAPI {
     weak var context: ExtensionHostContext?
     private let clipboardStore: ClipboardStore
     private let fetcher: ExtensionFetcher
+    let ai = ExtensionAIBridge()
     private let sockets = ExtensionWebSocketBridge()
 
     init(clipboardStore: ClipboardStore, fetcher: ExtensionFetcher = ExtensionFetcher()) {
@@ -138,6 +139,8 @@ final class ExtensionHostBridge: ExtensionHostAPI {
     func scoped(to context: ExtensionHostContext) -> ExtensionHostBridge {
         let bridge = ExtensionHostBridge(clipboardStore: clipboardStore, fetcher: fetcher)
         bridge.context = context
+        bridge.ai.makeProvider = ai.makeProvider
+        bridge.ai.canAccess = ai.canAccess
         return bridge
     }
 
@@ -155,6 +158,7 @@ final class ExtensionHostBridge: ExtensionHostAPI {
         case "window": return window(method: method, arguments: arguments)
         case "feedback": return try await feedback(method: method, arguments: arguments)
         case "system": return try await system(method: method, arguments: arguments)
+        case "ai": return try await ai.perform(method: method, arguments: arguments)
         case "fetch": return try await fetcher.request(arguments.first)
         case "websocket": return try await sockets.perform(method: method, arguments: arguments)
         case "dns": return await ExtensionNameResolver.resolve(arguments.first)
@@ -175,6 +179,7 @@ final class ExtensionHostBridge: ExtensionHostAPI {
     /// Called wherever a command's context is discarded: nothing left open outlives its session.
     func sessionEnded() {
         sockets.closeAll()
+        ai.closeAll()
     }
 
     // MARK: - Clipboard

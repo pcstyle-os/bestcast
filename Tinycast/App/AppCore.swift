@@ -264,6 +264,19 @@ final class AppCore {
 
             appIndex.start(settings: settings)
             clipboardCoordinator.applyEnabled()
+            extensions.configureAI(
+                canAccess: { [weak self] in self?.aiSettings.defaultModel != nil },
+                makeProvider: { [weak self] model in
+                    guard let self else {
+                        throw AIProviderError.unavailable("AI is no longer available.")
+                    }
+                    let selection = try ExtensionAIModelRouting.selection(
+                        requested: model, defaultModel: self.aiSettings.defaultModel,
+                        available: self.aiChatCoordinator.modelOptions.map(\.selection))
+                    return try AIProviderFactory.make(
+                        selection: selection, settings: self.aiSettings,
+                        subscription: self.chatGPTSubscription, installedAI: self.installedAI)
+                })
             extensions.start(appIndex: appIndex, coordinator: extensionCoordinator)
             extensionCoordinator.applyEnabled()
             fileSearchCoordinator.applyEnabled()
