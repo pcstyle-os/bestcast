@@ -65,6 +65,7 @@ enum SettingsFileSchema {
         case .aiToolRounds: return bind(ai, \.toolRounds)
         case .aiAskFromRootSearch: return bind(ai, \.askAIFromRootSearch)
         case .aiQuickAIFollowUps: return bind(ai, \.quickAIFollowUps)
+        case .aiPassiveInlineAnswers: return bind(ai.passive, \.inlineAnswers)
         case .quickActionLanguage: return bind(quickActions, \.settings.targetLanguage)
         case .fileSearchEnabled: return bind(settings, \.fileSearchEnabled)
         case .fileSearchScopes: return bind(settings, \.fileSearchScopes)

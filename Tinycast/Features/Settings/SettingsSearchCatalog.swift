@@ -303,6 +303,18 @@ enum SettingsSearchCatalog {
             .aiSystemPrompt, "Send a system prompt",
             keywords: ["instructions", "persona"]),
         .init(
+            .aiPassive, "Passive AI model",
+            keywords: ["on-device", "apple intelligence", "privacy", "background"]),
+        .init(
+            .aiPassive, "Answers in root search",
+            keywords: ["inline", "question", "ask", "launcher"]),
+        .init(
+            .aiPassive, "Selected text suggestions",
+            keywords: ["selection", "quick actions", "explain", "translate"]),
+        .init(
+            .aiPassive, "Clipboard intelligence",
+            keywords: ["summary", "title", "kind", "clipboard history"]),
+        .init(
             .aiMCPServers, "Enable MCP servers",
             keywords: ["tools", "model context protocol"]),
         .init(

@@ -64,7 +64,8 @@ struct ClipboardList: View {
                             ClipboardRow(
                                 item: item, selected: item.id == selectedID,
                                 imageURL: store.imageURL(for: item), slot: slot,
-                                queuePosition: pasteQueue.position(of: item.id)
+                                queuePosition: pasteQueue.position(of: item.id),
+                                insight: store.insights[item.id]
                             )
                             .selectionFrame(item.id == selectedID)
                             .contentShape(Rectangle())
@@ -141,6 +142,8 @@ struct ClipboardRow: View {
     let slot: Character?
     /// Where Paste Sequentially will paste this row, or nil when it is not waiting in the queue.
     let queuePosition: Int?
+    /// Passive AI's kind and summary for a text clip, when its clipboard switch is on.
+    var insight: ClipboardInsight?
     @Environment(PaletteState.self) private var palette
     @State private var hovered = false
 
@@ -154,10 +157,19 @@ struct ClipboardRow: View {
     var body: some View {
         HStack(spacing: metrics.spacing.lg) {
             thumbnail(item.colorValue)
-            Text(Self.title(for: item))
-                .font(metrics.typography.menuRow)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            VStack(alignment: .leading, spacing: metrics.spacing.xxs) {
+                Text(Self.title(for: item))
+                    .font(metrics.typography.menuRow)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if let summary = insight?.summary {
+                    Text(summary)
+                        .font(metrics.typography.rowTrailing)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
             Spacer(minLength: 0)
             if let queuePosition {
                 QueueBadge(position: queuePosition)
@@ -184,7 +196,11 @@ struct ClipboardRow: View {
 
     private var spokenDetail: String {
         let queued = queuePosition.map(QueueBadge.spokenLabel(for:))
-        let parts = [item.kind == .file ? "File" : nil, item.isPinned ? "Pinned" : nil, queued]
+        let kind = contentKind.flatMap { $0 == .prose ? nil : $0.title }
+        let parts = [
+            item.kind == .file ? "File" : kind, insight?.summary, item.isPinned ? "Pinned" : nil,
+            queued,
+        ]
         return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
@@ -211,7 +227,7 @@ struct ClipboardRow: View {
                 ColorSwatch(color: color)
                     .frame(width: metrics.size.rowIcon, height: metrics.size.rowIcon)
             } else {
-                glyphTile("doc.text")
+                glyphTile(contentKind.map(Self.systemImage(for:)) ?? "doc.text")
             }
         case .image:
             AsyncThumbnail(url: imageURL, maxPixel: 64) { image in
@@ -235,6 +251,23 @@ struct ClipboardRow: View {
             } placeholder: {
                 glyphTile(fileKind.systemImage)
             }
+        }
+    }
+
+    private var contentKind: PassiveContentKind? {
+        insight.flatMap { PassiveContentKind(rawValue: $0.kind) }
+    }
+
+    private static func systemImage(for kind: PassiveContentKind) -> String {
+        switch kind {
+        case .code: return "chevron.left.forwardslash.chevron.right"
+        case .url: return "link"
+        case .email: return "envelope"
+        case .address: return "mappin.and.ellipse"
+        case .phone: return "phone"
+        case .json: return "curlybraces"
+        case .errorTrace: return "exclamationmark.triangle"
+        case .prose: return "doc.text"
         }
     }
 
@@ -346,7 +379,8 @@ struct ClipboardPreview: View {
             VStack(alignment: .leading, spacing: 0) {
                 content(for: item)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                ClipboardInfoSection(item: item, imageURL: store.imageURL(for: item))
+                ClipboardInfoSection(
+                    item: item, imageURL: store.imageURL(for: item), insight: store.insights[item.id])
             }
             .padding(.horizontal, 12)
         } else {
@@ -396,6 +430,7 @@ private struct ClipboardInfoSection: View {
     @Environment(\.metrics) private var metrics
     let item: ClipboardItem
     let imageURL: URL?
+    let insight: ClipboardInsight?
 
     @State private var details = Details()
 
@@ -468,6 +503,12 @@ private struct ClipboardInfoSection: View {
                 }
                 if let words = details.words {
                     rows.append(InfoRow(label: "Words", value: words.formatted()))
+                }
+                if let kind = insight.flatMap({ PassiveContentKind(rawValue: $0.kind) }) {
+                    rows.append(InfoRow(label: "Kind", value: kind.title))
+                }
+                if let summary = insight?.summary {
+                    rows.append(InfoRow(label: "Summary", value: summary))
                 }
             }
         case .image:

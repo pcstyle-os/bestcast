@@ -167,6 +167,12 @@ enum ClipboardChord: CaseIterable, Sendable {
     }
 }
 
+/// What Passive AI derived from a text clip: its kind's raw name and, later, a summary.
+struct ClipboardInsight: Equatable, Sendable {
+    var kind: String
+    var summary: String?
+}
+
 /// SQLite-backed clipboard history. See docs/features/clipboard.md#store.
 @MainActor
 @Observable
@@ -183,6 +189,11 @@ final class ClipboardStore {
         }
     }
     @ObservationIgnored var onItemsChanged: (() -> Void)?
+    /// A new text row, never a re-copy of the one on top; Passive AI derives its insight from it.
+    @ObservationIgnored var onTextCaptured: ((ClipboardItem) -> Void)?
+    /// Every stored insight, keyed by row; empty while Passive AI's clipboard switch is off.
+    private(set) var insights: [ClipboardItem.ID: ClipboardInsight] = [:]
+    @ObservationIgnored private(set) var insightsEnabled = false
     @ObservationIgnored var onSearchResultsChanged: ((String, [ClipboardItem], [ClipboardItem]) -> Void)?
     /// Rotated whenever the history is replaced, so a helper's late answer lands on nothing.
     @ObservationIgnored private(set) var extractionGeneration = UUID()
@@ -270,6 +281,15 @@ final class ClipboardStore {
           WHERE kind IN ('image', 'file');
         """
 
+    private static let insightSchema = """
+        CREATE TABLE IF NOT EXISTS item_insight(
+          item_id TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, summary TEXT
+        );
+        CREATE TRIGGER IF NOT EXISTS items_insight_ad AFTER DELETE ON items BEGIN
+          DELETE FROM item_insight WHERE item_id = old.id;
+        END;
+        """
+
     /// Internal, not private: a backup names both to stream the table and adopt its blobs.
     let imagesDir: URL
     let dbURL: URL
@@ -310,6 +330,7 @@ final class ClipboardStore {
         extractionGeneration = UUID()
         closeDatabase()
         items = []
+        insights = [:]
     }
 
     /// Application Support, not Caches: a history the OS may reclaim is not a history.
@@ -338,6 +359,7 @@ final class ClipboardStore {
         sqlite3_reset(stmt)
         sqlite3_clear_bindings(stmt)
         items = loaded
+        loadInsights()
         // Age passes while the app isn't running; insert-time pruning alone can't catch that.
         enforceLimits()
     }
@@ -360,7 +382,9 @@ final class ClipboardStore {
 
     func addText(_ text: String, sourceBundleID: String?) {
         if items.first?.kind == .text, items.first?.text == text { return }
-        insert(ClipboardItem(text: text, sourceBundleID: sourceBundleID))
+        let item = ClipboardItem(text: text, sourceBundleID: sourceBundleID)
+        insert(item)
+        onTextCaptured?(item)
     }
 
     /// One row per file. Batched, so a multi-file copy prunes once rather than once per file.
@@ -442,6 +466,7 @@ final class ClipboardStore {
             sqlite3_clear_bindings(stmt)
         }
         items.removeAll { $0.id == item.id }
+        insights[item.id] = nil
         deleteBlob(item)
     }
 
@@ -466,6 +491,73 @@ final class ClipboardStore {
         }
         // Every pinned row is resident however old, so the window stays whole without a reload.
         items = items.filter(\.isPinned)
+        let kept = Set(items.map(\.id))
+        insights = insights.filter { kept.contains($0.key) }
+    }
+
+    /// Off keeps what is stored, as OCR does; clearing the history is what deletes it.
+    @discardableResult
+    func setInsightsEnabled(_ enabled: Bool) -> Bool {
+        guard enabled != insightsEnabled else { return true }
+        insightsEnabled = enabled
+        loadInsights()
+        invalidateSearch(preservingMatches: true)
+        searchRevision += 1
+        return !enabled || db != nil
+    }
+
+    private func loadInsights() {
+        guard insightsEnabled, let db,
+            sqlite3_exec(db, Self.insightSchema, nil, nil, nil) == SQLITE_OK,
+            let stmt = prepare("SELECT item_id, kind, summary FROM item_insight")
+        else {
+            if !insights.isEmpty { insights = [:] }
+            return
+        }
+        defer { sqlite3_finalize(stmt) }
+        var loaded: [ClipboardItem.ID: ClipboardInsight] = [:]
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let id = Self.columnString(stmt, 0).flatMap(UUID.init(uuidString:)),
+                let kind = Self.columnString(stmt, 1)
+            else { continue }
+            loaded[id] = ClipboardInsight(kind: kind, summary: Self.columnString(stmt, 2))
+        }
+        insights = loaded
+    }
+
+    /// Selects the row rather than naming it, so a clip deleted while it was read stays deleted.
+    @discardableResult
+    func setInsight(kind: String, for item: ClipboardItem, generation: UUID) -> Bool {
+        guard insightsEnabled, generation == extractionGeneration,
+            let stmt = prepare(
+                """
+                INSERT OR IGNORE INTO item_insight(item_id, kind)
+                SELECT id, ?2 FROM items WHERE id = ?1 AND kind = 'text'
+                """)
+        else { return false }
+        sqlite3_bind_text(stmt, 1, item.id.uuidString, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, kind, -1, SQLITE_TRANSIENT)
+        let stored = sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db) > 0
+        sqlite3_finalize(stmt)
+        guard stored else { return false }
+        insights[item.id] = ClipboardInsight(kind: kind)
+        return true
+    }
+
+    @discardableResult
+    func setSummary(_ summary: String, for item: ClipboardItem, generation: UUID) -> Bool {
+        guard insightsEnabled, generation == extractionGeneration, insights[item.id] != nil,
+            let stmt = prepare("UPDATE item_insight SET summary = ?2 WHERE item_id = ?1")
+        else { return false }
+        sqlite3_bind_text(stmt, 1, item.id.uuidString, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, summary, -1, SQLITE_TRANSIENT)
+        let stored = sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db) > 0
+        sqlite3_finalize(stmt)
+        guard stored else { return false }
+        insights[item.id]?.summary = summary
+        invalidateSearch(preservingMatches: true)
+        searchRevision += 1
+        return true
     }
 
     @discardableResult
@@ -601,7 +693,10 @@ final class ClipboardStore {
     private func unfiltered(_ q: String, filter: ClipboardFilter) -> [ClipboardItem] {
         guard !q.isEmpty else { return orderedItems }
         // Pins are matched in memory: all resident, and the LIMIT would otherwise drop one.
-        let ordinary = pinnedItems.filter { $0.matches(q) } + runSearch(q).filter { !$0.isPinned }
+        var ordinary =
+            pinnedItems.filter { $0.matches(q) || summaryMatches($0, q) }
+            + runSearch(q).filter { !$0.isPinned }
+        ordinary += summaryOnlyMatches(q, excluding: Set(ordinary.map(\.id)))
         guard !textSearchMatches.isEmpty else { return ordinary }
         let ordinaryIDs = Set(ordinary.map(\.id))
         let additional = textSearchMatches.filter { !ordinaryIDs.contains($0.id) }
@@ -613,6 +708,16 @@ final class ClipboardStore {
         // `Array(…)` spelled out: left open, `prefix` resolves as `Sequence` and the chain fails.
         let extra = Array(filter.apply(to: additional.filter { !$0.isPinned }).prefix(remaining))
         return pins + unpinned + extra
+    }
+
+    private func summaryMatches(_ item: ClipboardItem, _ q: String) -> Bool {
+        insights[item.id]?.summary?.localizedStandardContains(q) == true
+    }
+
+    /// Resident rows only: a summary is a title for a clip, not a reason to page in the file.
+    private func summaryOnlyMatches(_ q: String, excluding: Set<ClipboardItem.ID>) -> [ClipboardItem] {
+        guard insights.values.contains(where: { $0.summary != nil }) else { return [] }
+        return items.filter { !$0.isPinned && !excluding.contains($0.id) && summaryMatches($0, q) }
     }
 
     private func runSearch(_ q: String) -> [ClipboardItem] {

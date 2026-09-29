@@ -219,6 +219,27 @@ overlap, so a line is read once and the text keeps its reading order. A referenc
 when it is indexed; editing it later does not refresh the historical search text. Backups carry the
 original content and references, and a restored entry is recognized again.
 
+## Passive AI insights
+
+With AI and [Passive AI](ai.md#passive-ai)'s **Clipboard intelligence** on, each new text clip
+gets a kind — code, link, email, address, phone, JSON, error or prose — and a clip over 400
+characters also gets a one-line summary from Apple Intelligence. Nothing is sent off the Mac, a
+summary never runs on a network route, and without Apple Intelligence a clip gets only its kind.
+Only clips captured while the switch is on are tagged; older history is left as it is.
+
+`ClipboardStore.addText` hands a new row, never a re-copy of the top one, to `onTextCaptured`,
+which feeds `ClipboardInsightIndexer`: a serial `AsyncStream` that keeps the newest 20 clips of a
+burst, detects the kind in `Task.detached`, then asks `PassiveAICoordinator.summarize` for the
+summary. Like OCR, the result is derived metadata in its own `item_insight` table, removed with its
+row by the `items_insight_ad` trigger, written by selecting the row rather than naming it, and
+guarded by the extraction generation, so Clear History or a reload drops a late answer. It never
+decides the type filter: that still reads the captured content. Turning the switch off keeps the
+table and empties the in-memory map; clearing the history is what deletes it.
+
+The row shows the kind's glyph in place of the text glyph, and the summary as a second line; the
+Information panel lists both. Search matches a summary in memory, so a summary-only match covers
+resident rows and pins but not rows paged out beyond the window.
+
 ## Image blobs
 
 `ClipboardManager.image(on:)` picks one representation by `imageTypes` — PNG, JPEG, HEIC, then

@@ -589,6 +589,22 @@ Activation hands the action to `QuickActionCoordinator.run(_:)` **without** hidi
 the coordinator reads the displaced app and then hides, because after the hide the frontmost app is
 Tinycast. See [quick-actions.md](quick-actions.md).
 
+## Passive AI rows
+
+[Passive AI](ai.md#passive-ai) adds one section above everything else, and never two: **Selected
+Text** — suggestions for the text the previous app had selected, shown only with an empty query on
+the unpinned root — or **AI**, one answer row for a typed question. Neither is an `AppEntry`: both
+are `LauncherScreen.Row` cases (`.selection`, `.answer`) drawn by `LauncherList.LeadingSection`,
+which the list places ahead of the lead card and every entry section. Every index into the rows —
+the lead card's taps, `select(row:)`, `landingSelection` — is offset by `leadingCount`.
+
+The rows arrive after the list has already rendered, so `PassiveAICoordinator` moves
+`palette.selection` down by as many rows when it publishes them; Return keeps running the row that
+was highlighted. `landingSelection` returns the same offset, so a reopen lands on the first result,
+not on a suggestion. An answer row is shown only while its query still equals the search field, so a
+keystroke hides it before the coordinator has even retired it. ⌘K lists every suggestion, or the
+answer's **Open in Quick AI** and **Copy Answer** (⇧⌘C).
+
 ## Notes commands
 
 `CommandID.showNotes`, `.createNote`, and `.searchNotes` publish the three Notes entry points while the

@@ -21,7 +21,18 @@ struct LauncherList: View {
     let onDropped: () -> Void
     /// The `Use "…" with` section, always last; nil when nothing is typed.
     var fallbacks: FallbackSection?
+    /// Rows another feature draws above everything else; the list only places them.
+    var leading: LeadingSection?
     @Environment(RunningAppsMonitor.self) private var runningApps
+
+    /// A section whose rows are opaque here, addressed by position like the fallbacks.
+    struct LeadingSection {
+        let title: String
+        let rowIDs: [String]
+        let row: (Int, Bool) -> AnyView
+        let onActivate: (Int) -> Void
+        let onActions: (Int) -> Void
+    }
 
     /// What the fallback section draws and where its rows go, addressed by position.
     struct FallbackSection {
@@ -63,6 +74,7 @@ struct LauncherList: View {
         /// `slot` is the row's ⌘-digit, carried from the section build rather than searched.
         case app(AppEntry, slot: Character?)
         case fallback(AppEntry, index: Int)
+        case leading(index: Int, id: String)
         var id: String {
             switch self {
             case .header(let title): return "header-" + title
@@ -70,13 +82,15 @@ struct LauncherList: View {
             case .card(let card): return card.rowID
             case .app(let app, _): return app.id
             case .fallback(let app, _): return "fallback-" + app.id
+            case .leading(_, let id): return id
             }
         }
     }
 
     /// Whether the selection sits on flat index 0: the card, else the first result.
     private var firstRowSelected: Bool {
-        card != nil ? cardSelected : selectedRowID != nil && selectedRowID == results.first?.id
+        if selectedRowID != nil, selectedRowID == leading?.rowIDs.first { return true }
+        return card != nil ? cardSelected : selectedRowID != nil && selectedRowID == results.first?.id
     }
 
     /// Every row the fallback section contributes, always after the results.
@@ -86,9 +100,15 @@ struct LauncherList: View {
             + fallbacks.entries.enumerated().map { Row.fallback($1, index: $0) }
     }
 
+    private var leadingRows: [Row] {
+        guard let leading else { return [] }
+        return [.header(leading.title)]
+            + leading.rowIDs.enumerated().map { Row.leading(index: $0, id: $1) }
+    }
+
     private var rows: [Row] {
-        var cardRows: [Row] = []
-        if let card { cardRows = [.header(card.sectionTitle), .card(card)] }
+        var cardRows: [Row] = leadingRows
+        if let card { cardRows += [.header(card.sectionTitle), .card(card)] }
         guard showSections else {
             guard !results.isEmpty else { return cardRows + fallbackRows }
             return cardRows + [.header("Results")] + results.map { .app($0, slot: nil) }
@@ -133,7 +153,7 @@ struct LauncherList: View {
     var body: some View {
         let rows = rows
         return Group {
-            if results.isEmpty && card == nil && fallbacks == nil {
+            if results.isEmpty && card == nil && fallbacks == nil && leading == nil {
                 EmptyResults(text: "No apps found")
             } else {
                 ScrollViewReader { proxy in
@@ -183,6 +203,18 @@ struct LauncherList: View {
                                         fallbacks?.onActions(index)
                                     }
                                     .selectionFrame(row.id == selectedRowID)
+                                case .leading(let index, let id):
+                                    if let leading {
+                                        leading.row(index, id == selectedRowID)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { leading.onActivate(index) }
+                                            .onRightClick { leading.onActions(index) }
+                                            .accessibilityAction { leading.onActivate(index) }
+                                            .accessibilityAction(named: "Show Actions") {
+                                                leading.onActions(index)
+                                            }
+                                            .selectionFrame(id == selectedRowID)
+                                    }
                                 }
                             }
                         }
