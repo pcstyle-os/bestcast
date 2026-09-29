@@ -186,8 +186,7 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
 
     /// The Actions menu's chords work with it closed too, so the window claims them before AppKit.
     private func installKeyMonitor() {
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) {
-            [weak self] event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             guard let self, let window = self.window, event.window === window, window.isKeyWindow
             else { return event }
             if self.handleDictationKey(event, in: window) { return nil }

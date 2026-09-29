@@ -125,19 +125,32 @@ nonisolated enum DictationService {
             let capacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 1
             guard let converted = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity)
             else { return }
-            var handedOver = false
+            let pending = PendingBuffer(buffer)
             var error: NSError?
             converter.convert(to: converted, error: &error) { _, status in
-                if handedOver {
+                guard let next = pending.take() else {
                     status.pointee = .noDataNow
                     return nil
                 }
-                handedOver = true
                 status.pointee = .haveData
-                return buffer
+                return next
             }
             guard error == nil, converted.frameLength > 0 else { return }
             feeder.yield(AnalyzerInput(buffer: converted))
+        }
+    }
+
+    /// The converter's input block is `@Sendable`, yet it only runs inside `convert`'s own call.
+    private final class PendingBuffer: @unchecked Sendable {
+        private var buffer: AVAudioPCMBuffer?
+
+        init(_ buffer: AVAudioPCMBuffer) {
+            self.buffer = buffer
+        }
+
+        func take() -> AVAudioPCMBuffer? {
+            defer { buffer = nil }
+            return buffer
         }
     }
 }
