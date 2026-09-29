@@ -192,8 +192,7 @@ final class ExtensionTriggerEngine {
         func observe(
             _ name: Notification.Name, _ event: ExtensionTriggerEvent, readsApp: Bool
         ) -> NotificationToken {
-            let token = center.addObserver(forName: name, object: nil, queue: .main) {
-                [weak self] notification in
+            let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
                 let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
                     as? NSRunningApplication
                 let bundleId = app?.bundleIdentifier
