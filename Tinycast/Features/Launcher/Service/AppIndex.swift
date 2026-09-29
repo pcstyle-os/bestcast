@@ -171,7 +171,8 @@ struct AppEntry: Identifiable, Hashable, Sendable {
     var hotKeyAction: HotKeyAction? {
         switch kind {
         case .command:
-            return CommandCatalog.command(for: self)?.hotKeyAction
+            if let command = CommandCatalog.command(for: self) { return command.hotKeyAction }
+            return QuickAIPreset.id(fromEntryID: id).map { .aiPreset(id: $0) }
         case .quickAction:
             if let command = CommandCatalog.command(for: self) { return command.hotKeyAction }
             return CustomQuickAction.id(fromEntryID: id).map { .quickAction(id: $0) }
@@ -301,6 +302,14 @@ extension AppEntry {
             bundleID: nil, kind: .quickAction, symbolName: action.iconSymbol)
     }
 
+    /// A Quick AI preset's row; the AI pane lists it, so Configure Command opens there.
+    init(_ preset: QuickAIPreset) {
+        self.init(
+            id: preset.entryID, name: preset.launcherName,
+            url: URL(string: "tinycast://ai-preset/" + preset.id.uuidString)!,
+            bundleID: nil, kind: .command, settingsOwner: .ai, symbolName: "sparkles")
+    }
+
     /// The one row a custom command draws, wherever it is offered from.
     init(_ command: CustomCommand) {
         self.init(
@@ -405,6 +414,7 @@ final class AppIndex {
     private var quicklinkEntries: [AppEntry] = []
     private var appleShortcutEntries: [AppEntry] = []
     private var customQuickActionEntries: [AppEntry] = []
+    private var aiPresetEntries: [AppEntry] = []
     private var extensionEntries: [AppEntry] = []
     private var meetingEntries: [AppEntry] = []
     /// The catalog's commands a disabled feature hides; the Commands slice is recomputed from it.
@@ -478,6 +488,15 @@ final class AppIndex {
         let entries = actions.sorted(by: CustomQuickAction.precedes).map(AppEntry.init)
         guard entries != customQuickActionEntries else { return }
         customQuickActionEntries = entries
+        publishEntries()
+    }
+
+    /// Replaces the Quick AI preset slice, which lists with the built-in commands.
+    func setQuickAIPresets(_ presets: [QuickAIPreset]) {
+        let entries = presets.map(AppEntry.init)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        guard entries != aiPresetEntries else { return }
+        aiPresetEntries = entries
         publishEntries()
     }
 
@@ -681,7 +700,7 @@ final class AppIndex {
                     + Self.systemActionEntries + windowLayoutEntries + windowRoomEntries
                     + windowCommandEntries
                     + customWindowSizeEntries + customCommandEntries + quickActionEntries
-                    + commandEntries)
+                    + commandEntries + aiPresetEntries)
         guard updated != apps else { return }
         apps = updated
         entriesRevision &+= 1

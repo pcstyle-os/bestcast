@@ -272,6 +272,7 @@ final class AppCore {
             fileSearchCoordinator.applyPolicy()
             notesCoordinator.applyEnabled()
             aiChatCoordinator.applyEnabled()
+            quickAICoordinator.applyPresetsPresence()
             mcpCoordinator.applyEnabled()
             customQuickActions.onChange = { [weak self] _ in
                 self?.quickActionCoordinator.applyCustomQuickActionsPresence()
@@ -357,6 +358,7 @@ final class AppCore {
             hotKeys.onRunAppleShortcut = { [weak self] id in
                 self?.appleShortcutCoordinator.run(id: id)
             }
+            hotKeys.onRunAIPreset = { [weak self] id in self?.quickAICoordinator.startPreset(id: id) }
             hotKeys.onRunExtensionCommand = { [weak self] entryID in
                 self?.extensionCoordinator.runExtensionCommand(entryID: entryID)
             }
@@ -387,7 +389,8 @@ final class AppCore {
                 windowLayoutIDs: Set(windowLayouts.layouts.map(\.id)),
                 windowRoomIDs: Set(rooms.rooms.map(\.id)),
                 customWindowSizeIDs: Set(customWindowSizes.sizes.map(\.id)),
-                quickActionIDs: Set(customQuickActions.actions.map(\.id)))
+                quickActionIDs: Set(customQuickActions.actions.map(\.id)),
+                aiPresetIDs: Set(aiSettings.quickAIPresets.map(\.id)))
             // Keeps running while Carbon pauses: the recorder needs its rewritten flags.
             hyperKeyTap.start(settings: settings)
 
@@ -468,6 +471,8 @@ final class AppCore {
             return customWindowSizes.size(id: id)?.name
         case .appleShortcut(let id):
             return appleShortcutCoordinator.name(of: id)
+        case .aiPreset(let id):
+            return aiSettings.preset(id: id)?.launcherName
         case .extensionCommand(let entryID):
             return appIndex.apps.first { $0.kind == .extensionCommand && $0.id == entryID }?.name
         case .togglePalette, .command, .systemAction, .windowCommand:
@@ -604,6 +609,10 @@ final class AppCore {
             })
         track({ _ = $0.notesEnabled }, reproject: { $0.notesCoordinator.applyEnabled() })
         track({ _ = $0.aiEnabled }, reproject: { $0.aiChatCoordinator.applyEnabled() })
+        track({ _ = $0.aiEnabled }, reproject: { $0.quickAICoordinator.applyPresetsPresence() })
+        track(
+            aiSettings, { _ = $0.quickAIPresets },
+            reproject: { $0.quickAICoordinator.applyPresetsPresence() })
         track(
             {
                 _ = $0.aiEnabled

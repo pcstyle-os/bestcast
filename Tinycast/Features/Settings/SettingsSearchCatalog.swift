@@ -282,6 +282,15 @@ enum SettingsSearchCatalog {
         .init(.aiChat, "Web search", keywords: ["browse", "internet"]),
         .init(.aiChat, "Tool call rounds", keywords: ["mcp", "tools", "limit", "loop", "agent", "unlimited"]),
         .init(
+            .aiQuickAI, "Ask AI from root search",
+            keywords: ["question", "launcher", "command return", "fallback"]),
+        .init(
+            .aiQuickAI, "Follow-up suggestions",
+            keywords: ["choices", "chips", "next question", "tab"]),
+        .init(
+            .aiPresets, "Add Preset",
+            keywords: ["prompt", "persona", "template", "role", "hotkey", "shortcut"]),
+        .init(
             .aiConversations, "Quick AI opens to",
             keywords: ["new chat", "last", "summon", "resume"]),
         .init(

@@ -14,6 +14,8 @@ final class AIChatState {
     var draft = ""
     /// This chat's tools menu; a new chat starts with every connected server on.
     var toolScope = ChatToolScope()
+    /// Quick AI's preset for this conversation; it goes with the chat, never into history.
+    var preset: QuickAIPreset?
 
     /// Every path that consumes or drops the staged images moves this on, so a late decode knows
     @ObservationIgnored private(set) var stagingGeneration = 0
@@ -41,11 +43,13 @@ final class AIChatState {
     func send(
         _ input: String, using provider: any AIProvider, model: AIModelSelection? = nil,
         webSearch: Bool = false, instructions: String? = nil,
-        contextBudget: Int = ChatSession.defaultTextBudget, toolScope: String? = nil
+        contextBudget: Int = ChatSession.defaultTextBudget, toolScope: String? = nil,
+        replacingLastExchange: Bool = false
     ) -> Bool {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingAttachments.isEmpty, !isStreaming else { return false }
         notice = nil
+        if replacingLastExchange { _ = session.dropLastExchange() }
         session.append(
             ChatMessage(
                 role: .user, text: text, images: pendingAttachments.compactMap(\.image),
@@ -167,6 +171,7 @@ final class AIChatState {
     func startNewChat() {
         cancel()
         session = ChatSession()
+        preset = nil
         notice = nil
         clearStaging()
     }
@@ -178,6 +183,7 @@ final class AIChatState {
         guard let loaded = history.session(id: id) else { return false }
         cancel()
         session = loaded
+        preset = nil
         notice = nil
         clearStaging()
         return true
@@ -187,6 +193,7 @@ final class AIChatState {
         if session.id == id {
             cancel()
             session = ChatSession()
+            preset = nil
             notice = nil
             clearStaging()
         }

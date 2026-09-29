@@ -64,6 +64,7 @@ struct AIScreen: PaletteScreen {
                     coordinator.clearAttachments()
                 })
         }
+        items += quickAIItems
         items.append(
             PopoverMenuItem(
                 title: "Chat History", systemImage: "clock.arrow.circlepath", startsSection: true,
@@ -92,7 +93,9 @@ struct AIScreen: PaletteScreen {
         }
     }
 
-    func secondary(at selection: Int) -> Bool { false }
+    func secondary(at selection: Int) -> Bool {
+        vm.query.isEmpty && coordinator.pasteLastResponse()
+    }
 
     /// Raycast's chords where it has one; ⌘Y is History, as in Safari, and ⌘. is Stop.
     func perform(_ shortcut: PaletteShortcut, at selection: Int) -> Bool {
@@ -101,6 +104,8 @@ struct AIScreen: PaletteScreen {
         case .newItem: coordinator.startNewChat()
         case .restart where canRegenerate: coordinator.regenerate()
         case .copyFile where chat.lastAssistantText != nil: coordinator.copyLastResponse()
+        case .copyName where coordinator.lastCodeBlock != nil: coordinator.copyCodeBlock()
+        case .attachSelection: coordinator.attachSelection()
         case .quickLook: coordinator.showHistory()
         case .pin where chat.isStreaming: coordinator.stopResponse()
         case .settings: chatCoordinator.showSettings()
@@ -173,6 +178,7 @@ private struct AIChatView: View {
                     status: chat.liveStatus,
                     usage: chat.usage,
                     surface: .palette,
+                    choiceLimit: QuickAIInstructions.maxFollowUps,
                     onChoose: chat.isStreaming ? nil : onChoose)
             }
         }

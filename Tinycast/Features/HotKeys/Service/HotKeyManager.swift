@@ -16,6 +16,7 @@ final class HotKeyManager {
     var onOpenQuicklink: ((UUID) -> Void)?
     var onRunQuickAction: ((UUID) -> Void)?
     var onRunAppleShortcut: ((UUID) -> Void)?
+    var onRunAIPreset: ((UUID) -> Void)?
     var onRunExtensionCommand: ((String) -> Void)?
     /// Names what only the stores know; the fixed catalogs resolve here. Set in `AppCore.start()`.
     var displayName: ((HotKeyAction) -> String?)?
@@ -60,11 +61,13 @@ final class HotKeyManager {
     private let boundWindowRoomKey = "boundWindowRoomIDs"
     private let boundCustomWindowSizeKey = "boundCustomWindowSizeIDs"
     private let boundAppleShortcutKey = "boundAppleShortcutIDs"
+    private let boundAIPresetKey = "boundAIPresetIDs"
     private let boundExtensionCommandKey = "boundExtensionCommandEntryIDs"
 
     func start(
         customCommandIDs: Set<UUID>, quicklinkIDs: Set<UUID>, windowLayoutIDs: Set<UUID>,
-        windowRoomIDs: Set<UUID>, customWindowSizeIDs: Set<UUID>, quickActionIDs: Set<UUID>
+        windowRoomIDs: Set<UUID>, customWindowSizeIDs: Set<UUID>, quickActionIDs: Set<UUID>,
+        aiPresetIDs: Set<UUID>
     ) {
         prune(key: boundCustomCommandKey, live: customCommandIDs) { .customCommand(id: $0) }
         prune(key: boundQuicklinkKey, live: quicklinkIDs) { .quicklink(id: $0) }
@@ -74,6 +77,7 @@ final class HotKeyManager {
             .customWindowSize(id: $0)
         }
         prune(key: boundQuickActionKey, live: quickActionIDs) { .quickAction(id: $0) }
+        prune(key: boundAIPresetKey, live: aiPresetIDs) { .aiPreset(id: $0) }
         // After the prunes, so a dropped record can't survive in memory this session.
         for action in candidateActions { bindings[action] = storedBinding(for: action) }
         revision &+= 1
@@ -118,6 +122,8 @@ final class HotKeyManager {
     var boundCustomWindowSizeIDs: [UUID] { boundIDs(key: boundCustomWindowSizeKey) }
 
     var boundQuickActionIDs: [UUID] { boundIDs(key: boundQuickActionKey) }
+
+    var boundAIPresetIDs: [UUID] { boundIDs(key: boundAIPresetKey) }
 
     /// Pruned by `AppleShortcutCoordinator` after a successful read, never here at launch.
     var boundAppleShortcutIDs: [UUID] { boundIDs(key: boundAppleShortcutKey) }
@@ -194,6 +200,8 @@ final class HotKeyManager {
             index(id, bound: binding != nil, key: boundCustomWindowSizeKey)
         case .appleShortcut(let id):
             index(id, bound: binding != nil, key: boundAppleShortcutKey)
+        case .aiPreset(let id):
+            index(id, bound: binding != nil, key: boundAIPresetKey)
         case .extensionCommand(let entryID):
             var set = Set(boundExtensionCommandEntryIDs)
             if binding == nil { set.remove(entryID) } else { set.insert(entryID) }
@@ -243,6 +251,7 @@ final class HotKeyManager {
         actions += boundWindowRoomIDs.map { .windowRoom(id: $0) }
         actions += boundCustomWindowSizeIDs.map { .customWindowSize(id: $0) }
         actions += boundAppleShortcutIDs.map { .appleShortcut(id: $0) }
+        actions += boundAIPresetIDs.map { .aiPreset(id: $0) }
         actions += boundExtensionCommandEntryIDs.map { .extensionCommand(entryID: $0) }
         actions += SystemAction.ID.allCases.map { .systemAction(id: $0) }
         actions += WindowCommand.ID.allCases.map { .windowCommand(id: $0) }
@@ -277,6 +286,8 @@ final class HotKeyManager {
             return displayName?(action) ?? "Quick Action"
         case .appleShortcut:
             return displayName?(action) ?? "Apple Shortcut"
+        case .aiPreset:
+            return displayName?(action) ?? "Quick AI Preset"
         case .extensionCommand:
             return displayName?(action) ?? "Extension Command"
         }
@@ -317,6 +328,7 @@ final class HotKeyManager {
         case .quicklink(let id): onOpenQuicklink?(id)
         case .quickAction(let id): onRunQuickAction?(id)
         case .appleShortcut(let id): onRunAppleShortcut?(id)
+        case .aiPreset(let id): onRunAIPreset?(id)
         case .extensionCommand(let entryID): onRunExtensionCommand?(entryID)
         }
     }

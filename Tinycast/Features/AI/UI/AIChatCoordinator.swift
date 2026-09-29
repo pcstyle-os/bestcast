@@ -250,15 +250,17 @@ final class AIChatCoordinator {
     // MARK: - Either surface
 
     @discardableResult
-    func send(_ input: String, in chat: AIChatState) -> Bool {
+    func send(
+        _ input: String, in chat: AIChatState, replacingLastExchange: Bool = false
+    ) -> Bool {
         guard settings.aiEnabled else { return false }
         do {
             let address = MCPComposerAddress.parse(input, slugs: core.mcpCoordinator.slugs)
             let sent = chat.send(
                 address.rest, using: try provider(for: chat, scopedTo: address.slug),
                 model: model(for: chat), webSearch: webSearch(for: chat),
-                instructions: instructions, contextBudget: contextBudget(for: chat),
-                toolScope: address.slug)
+                instructions: instructions(for: chat), contextBudget: contextBudget(for: chat),
+                toolScope: address.slug, replacingLastExchange: replacingLastExchange)
             // Named while the answer streams, so the sidebar has a title before the reply ends.
             if sent { nameIfNeeded(chat) }
             return sent
@@ -276,20 +278,22 @@ final class AIChatCoordinator {
             chat.regenerate(
                 using: try provider(for: chat, scopedTo: scope),
                 model: model(for: chat), webSearch: webSearch(for: chat),
-                instructions: instructions, contextBudget: contextBudget(for: chat))
+                instructions: instructions(for: chat), contextBudget: contextBudget(for: chat))
         } catch {
             chat.report(error.localizedDescription)
         }
     }
 
     private func webSearch(for chat: AIChatState) -> Bool {
-        core.aiSettings.webSearchEnabled && capabilities(for: chat).webSearch
+        (chat.preset?.webSearch ?? core.aiSettings.webSearchEnabled)
+            && capabilities(for: chat).webSearch
     }
 
-    private var instructions: String? {
-        AIInstructions.compose(
-            userPrompt: core.aiSettings.systemPrompt,
-            isEnabled: core.aiSettings.systemPromptEnabled)
+    private func instructions(for chat: AIChatState) -> String? {
+        QuickAIInstructions.compose(
+            systemPrompt: core.aiSettings.systemPrompt,
+            systemPromptEnabled: core.aiSettings.systemPromptEnabled, preset: chat.preset,
+            followUps: chat === chats.quickAI && core.aiSettings.quickAIFollowUps)
     }
 
     /// A turn's route and its tools: a CLI with its own client is handed servers, others the loop.
@@ -403,8 +407,8 @@ final class AIChatCoordinator {
             stagedFiles: chat.pendingAttachments.count,
             stagedBytes: chat.pendingAttachments.reduce(0) { $0 + $1.payload.byteCount },
             usage: chat.usage,
-            systemPrompt: core.aiSettings.systemPromptEnabled,
-            webSearch: core.aiSettings.webSearchEnabled && can.webSearch,
+            systemPrompt: core.aiSettings.systemPromptEnabled || chat.preset != nil,
+            webSearch: webSearch(for: chat),
             toolServers: can.tools && scope.isEnabled
                 ? mcpServers.count { scope.allows($0.slug) } : 0)
     }
