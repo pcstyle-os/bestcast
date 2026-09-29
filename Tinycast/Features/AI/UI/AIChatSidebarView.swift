@@ -3,7 +3,10 @@ import SwiftUI
 /// Every saved conversation, pinned first and then by day; selecting one opens it on the right.
 struct AIChatSidebarView: View {
     @Environment(AIChatCoordinator.self) private var coordinator
+    @Environment(ChatFindState.self) private var find
     @State private var query = ""
+    /// Chats found by their messages' text, each with the snippet its row shows.
+    @State private var textMatches: [UUID: String] = [:]
     @State private var renaming: UUID?
     @State private var renameText = ""
     @FocusState private var searchFocused: Bool
@@ -20,7 +23,7 @@ struct AIChatSidebarView: View {
 
     /// Recency order already groups each day together, so a bucket only ever opens once.
     private var sections: [ChatSection] {
-        let results = history.search(query)
+        let results = history.search(query, textMatches: textMatches)
         var sections: [ChatSection] = []
         let pinned = results.filter(\.isPinned)
         if !pinned.isEmpty { sections.append(ChatSection(title: "Pinned", conversations: pinned)) }
@@ -45,6 +48,23 @@ struct AIChatSidebarView: View {
         // The field sits under the toolbar's material, so it needs its own clearance from the top.
         .padding(.top, Theme.Spacing.md)
         .onExitCommand { query = "" }
+        .task(id: TextSearchKey(query: query, revision: history.conversations.map(\.updatedAt).max())) {
+            guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
+                textMatches = [:]
+                return
+            }
+            // Typing restarts the task, so only a settled query reaches the database.
+            try? await Task.sleep(for: Self.textSearchDelay)
+            guard !Task.isCancelled else { return }
+            textMatches = history.textMatches(query)
+        }
+    }
+
+    private static let textSearchDelay = Duration.milliseconds(150)
+
+    private struct TextSearchKey: Hashable {
+        let query: String
+        let revision: Date?
     }
 
     @ViewBuilder private var list: some View {
@@ -109,7 +129,8 @@ struct AIChatSidebarView: View {
                 }
         } else {
             ChatSidebarRow(
-                conversation: conversation, isAnswering: isAnswering, isSelected: isSelected)
+                conversation: conversation, isAnswering: isAnswering, isSelected: isSelected,
+                snippet: query.isEmpty ? nil : textMatches[conversation.id])
         }
     }
 
@@ -122,7 +143,9 @@ struct AIChatSidebarView: View {
         }
         Button("Rename…", systemImage: "pencil") { beginRename(conversation) }
         Divider()
-        Button("Copy Chat", systemImage: "doc.on.doc") { coordinator.copyChat(id: conversation.id) }
+        Button("Copy as Markdown", systemImage: "doc.on.doc") {
+            coordinator.copyChat(id: conversation.id)
+        }
         Button("Export as Markdown…", systemImage: "square.and.arrow.up") {
             coordinator.exportChat(id: conversation.id)
         }
@@ -153,6 +176,7 @@ struct AIChatSidebarView: View {
             get: { chats.window.session.id },
             set: { id in
                 guard let id, id != chats.window.session.id else { return }
+                if textMatches[id] != nil, !query.isEmpty { find.query = query }
                 coordinator.openChat(id: id)
             }
         )
@@ -165,13 +189,23 @@ private struct ChatSidebarRow: View {
     let conversation: ChatConversation
     let isAnswering: Bool
     let isSelected: Bool
+    let snippet: String?
     @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
-            Text(conversation.displayTitle)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                Text(conversation.displayTitle)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if let snippet {
+                    Text(snippet)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .accessibilityLabel("Match: \(snippet)")
+                }
+            }
             Spacer(minLength: 0)
             if isAnswering {
                 ProgressView()

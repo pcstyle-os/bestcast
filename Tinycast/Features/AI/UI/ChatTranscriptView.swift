@@ -26,6 +26,7 @@ struct ChatTranscriptView: View {
     /// Answers with one of the last reply's choices; nil leaves them unshown.
     var onChoose: ((String) -> Void)?
     var find: ChatFindHighlight?
+    var actions: ChatMessageActions?
     /// Cleared when the reader scrolls up, so a streaming reply stops dragging them back down.
     @State private var followsTail = true
 
@@ -43,6 +44,7 @@ struct ChatTranscriptView: View {
             ScrollView {
                 // Not lazy: every anchored jump and the end test measure an estimated height
                 VStack(spacing: metrics.spacing.xl) {
+                    let dimmed = actions?.dimmedIDs(in: messages) ?? []
                     ForEach(messages) { message in
                         let isLast = message.id == messages.last?.id
                         ChatMessageView(
@@ -51,7 +53,9 @@ struct ChatTranscriptView: View {
                             onRegenerate: isLast && message.role == .assistant
                                 ? onRegenerate : nil,
                             // Only the latest reply's choices still answer anything.
-                            onChoose: isLast && message.state == .complete ? onChoose : nil
+                            onChoose: isLast && message.state == .complete ? onChoose : nil,
+                            actions: actions,
+                            actionState: actions?.state(for: message, dimmed: dimmed)
                         )
                         .equatable()
                         .environment(\.chatTextHighlight, highlight(for: message.id))
@@ -97,6 +101,13 @@ struct ChatTranscriptView: View {
                 }
             }
             .onChange(of: messages.count) { follow(proxy, always: true) }
+            // A chat opened from a sidebar text match lands on it, not on its latest line.
+            .task {
+                guard find?.current != nil else { return }
+                followsTail = false
+                await Task.yield()
+                proxy.scrollTo(ChatTextHighlight.currentAnchor, anchor: .center)
+            }
             .onChange(of: find?.current) { _, current in
                 guard current != nil else { return }
                 followsTail = false
@@ -174,6 +185,8 @@ private struct ChatMessageView: View, @MainActor Equatable {
     let status: String?
     let onRegenerate: (() -> Void)?
     let onChoose: ((String) -> Void)?
+    let actions: ChatMessageActions?
+    let actionState: ChatMessageActions.State?
     @Environment(\.chatTextHighlight) private var highlight
 
     @State private var hovered = false
@@ -208,17 +221,25 @@ private struct ChatMessageView: View, @MainActor Equatable {
             }
             if message.role == .assistant { Spacer(minLength: metrics.spacing.xxl) }
         }
+        .opacity(actionState?.isDimmed == true ? Theme.Size.chatSupersededOpacity : 1)
+        .modifier(
+            ChatMessageMenu(message: message, text: parts.text, actions: actions, state: actionState))
     }
 
     /// Laid out at rest and only faded in, so a hover cannot reflow the transcript
     private var footer: some View {
         HStack(spacing: metrics.spacing.sm) {
-            if message.role == .user { timestamp }
-            ChatCopyButton(text: parts.text)
-            if let onRegenerate { RegenerateButton(action: onRegenerate) }
-            if message.role == .assistant { timestamp }
+            if let actions, let actionState {
+                ChatMessageActionRow(
+                    message: message, text: parts.text, actions: actions, state: actionState)
+            } else {
+                if message.role == .user { timestamp }
+                ChatCopyButton(text: parts.text)
+                if let onRegenerate { RegenerateButton(action: onRegenerate) }
+                if message.role == .assistant { timestamp }
+            }
         }
-        .opacity(hovered ? 1 : 0)
+        .opacity(hovered || actionState?.isSpeaking == true ? 1 : 0)
         // A reply's footer hugs the same `sm` edge as its text.
         .padding(.horizontal, message.role == .user ? metrics.spacing.md : metrics.spacing.sm)
     }
@@ -320,6 +341,7 @@ extension ChatMessageView {
         lhs.message == rhs.message && lhs.status == rhs.status
             && (lhs.onRegenerate == nil) == (rhs.onRegenerate == nil)
             && (lhs.onChoose == nil) == (rhs.onChoose == nil)
+            && lhs.actionState == rhs.actionState
     }
 }
 

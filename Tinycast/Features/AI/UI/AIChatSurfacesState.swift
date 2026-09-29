@@ -29,8 +29,8 @@ final class AIChatSurfacesState {
         window = AIChatState(history: history)
     }
 
-    private func makeState() -> AIChatState {
-        let state = AIChatState(history: history)
+    private func makeState(temporary: Bool = false) -> AIChatState {
+        let state = AIChatState(history: history, isTemporary: temporary)
         state.onReplyFinished = onReplyFinished
         return state
     }
@@ -66,10 +66,12 @@ final class AIChatSurfacesState {
         return true
     }
 
-    /// An empty chat is already new; replacing it would only drop what is staged in it.
-    func newWindowChat() {
-        guard !window.session.messages.isEmpty else { return }
-        show(makeState())
+    /// An empty chat of the same kind is already new; replacing it would only drop what is staged.
+    func newWindowChat(temporary: Bool = false) {
+        guard !window.session.messages.isEmpty || window.isTemporary != temporary else { return }
+        let carried = window.session.messages.isEmpty ? window.draft : ""
+        show(makeState(temporary: temporary))
+        window.draft = carried
     }
 
     /// Quick AI's conversation moves over whole, reply and staged files included.
@@ -89,8 +91,13 @@ final class AIChatSurfacesState {
         return true
     }
 
+    /// A temporary chat is never parked: leaving it is what makes it gone.
     private func show(_ next: AIChatState) {
-        if window.isStreaming { answeringElsewhere[window.session.id] = window }
+        if window.isTemporary {
+            window.cancel()
+        } else if window.isStreaming {
+            answeringElsewhere[window.session.id] = window
+        }
         window = next
         answeringElsewhere = answeringElsewhere.filter { $0.value.isStreaming }
     }
@@ -114,7 +121,9 @@ final class AIChatSurfacesState {
 
     /// Every doomed reply is cancelled before the clear: a cancel saves, which would bring it back.
     func deleteAll() {
-        let doomed = live.filter { history.conversation(id: $0.session.id)?.isPinned != true }
+        let doomed = live.filter {
+            !$0.isTemporary && history.conversation(id: $0.session.id)?.isPinned != true
+        }
         for state in doomed { state.cancel() }
         history.clearAll()
         for state in doomed { state.startNewChat() }

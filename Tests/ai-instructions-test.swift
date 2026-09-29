@@ -41,6 +41,20 @@ struct AIInstructionsTest {
             "turned off, the user's own text is withheld as well",
             AIInstructions.compose(userPrompt: "Answer only in haiku.", isEnabled: false) == nil)
 
+        let chatPrompt = AIInstructions.compose(
+            userPrompt: "Answer only in haiku.", isEnabled: true, chatPrompt: "  Reply in French.  ")
+        check(
+            "a chat's own prompt replaces Settings' one after the preamble",
+            chatPrompt == AIPreamble.text + "\n\nReply in French.")
+        check(
+            "a chat's own prompt goes alone when the system prompt is off",
+            AIInstructions.compose(userPrompt: "Haiku.", isEnabled: false, chatPrompt: "French.")
+                == "French.")
+        check(
+            "a blank chat prompt falls back to Settings",
+            AIInstructions.compose(userPrompt: "Haiku.", isEnabled: true, chatPrompt: " \n ")
+                == AIInstructions.compose(userPrompt: "Haiku.", isEnabled: true))
+
         check(
             "the preamble names the app so the model can answer for it",
             AIPreamble.text.contains("Tinycast"))

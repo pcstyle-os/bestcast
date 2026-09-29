@@ -8,6 +8,7 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
     private static let newChat = NSToolbarItem.Identifier("AIChatNewChat")
     private static let search = NSToolbarItem.Identifier("AIChatSearch")
     private static let actions = NSToolbarItem.Identifier("AIChatActions")
+    private static let escapeKeyCode: UInt16 = 53
 
     private let coordinator: AIChatCoordinator
     private let chats: AIChatSurfacesState
@@ -66,6 +67,7 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
 
         installKeyMonitor()
         observeTitle()
+        observeFind()
     }
 
     // MARK: - NSToolbarDelegate
@@ -163,8 +165,21 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
     private func observeTitle() {
         withObservationTracking {
             window?.title = coordinator.title(of: chat)
+            window?.subtitle = chat.isTemporary ? "Temporary · not saved to history" : ""
         } onChange: { [weak self] in
             Task { @MainActor in self?.observeTitle() }
+        }
+    }
+
+    /// A sidebar hit sets the query from outside, so the field has to be told to show it.
+    private func observeFind() {
+        withObservationTracking {
+            let query = find.query
+            if searchItem.searchField.stringValue != query {
+                searchItem.searchField.stringValue = query
+            }
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observeFind() }
         }
     }
 
@@ -182,6 +197,12 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
         let key = (ASCIIKeyboardLayout.character(for: event) ?? event.charactersIgnoringModifiers)?
             .lowercased()
+        if event.keyCode == Self.escapeKeyCode, modifiers.isEmpty, chat.editingMessageID != nil,
+            (window.firstResponder as? NSTextView)?.isFieldEditor != true
+        {
+            coordinator.cancelEdit(in: chat)
+            return true
+        }
         switch (modifiers, key) {
         case ([.command], "f"):
             searchItem.beginSearchInteraction()
@@ -191,6 +212,8 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
             showActions()
         case ([.command], "n"):
             coordinator.newChat()
+        case ([.command, .shift], "n"):
+            coordinator.newTemporaryChat()
         case ([.command], "r") where AIChatActionsMenu.canRegenerate(chat):
             coordinator.regenerate(in: chat)
         case ([.command, .shift], "c") where chat.lastAssistantText != nil:
@@ -215,7 +238,7 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
 @MainActor
 enum AIChatActionsMenu {
     static func canRegenerate(_ chat: AIChatState) -> Bool {
-        !chat.isStreaming && chat.session.messages.last?.role == .assistant
+        !chat.isStreaming && !chat.session.messages.isEmpty
     }
 
     static func build(
@@ -233,12 +256,19 @@ enum AIChatActionsMenu {
             ClosureMenuItem("New Chat", symbol: "square.and.pencil", key: "n") {
                 coordinator.newChat()
             })
+        menu.addItem(
+            ClosureMenuItem(
+                "New Temporary Chat", symbol: "eye.slash", key: "n", modifiers: [.command, .shift]
+            ) {
+                coordinator.newTemporaryChat()
+            })
         if canRegenerate(chat) {
             menu.addItem(
                 ClosureMenuItem("Regenerate Response", symbol: "arrow.clockwise", key: "r") {
                     coordinator.regenerate(in: chat)
                 })
         }
+        addTurnItems(to: menu, chat: chat, coordinator: coordinator)
         menu.addItem(.separator())
         if chat.lastAssistantText != nil {
             menu.addItem(
@@ -248,10 +278,16 @@ enum AIChatActionsMenu {
                     coordinator.copyLastResponse(in: chat)
                 })
         }
+        if !chat.session.messages.isEmpty {
+            menu.addItem(
+                ClosureMenuItem("Copy as Markdown", symbol: "text.bubble") {
+                    coordinator.copyChat(id: chat.session.id)
+                })
+        }
         if saved {
             menu.addItem(
-                ClosureMenuItem("Copy Chat", symbol: "text.bubble") {
-                    coordinator.copyChat(id: chat.session.id)
+                ClosureMenuItem("Export as Markdown…", symbol: "square.and.arrow.up") {
+                    coordinator.exportChat(id: chat.session.id)
                 })
         }
         if !chat.pendingAttachments.isEmpty {
@@ -274,6 +310,10 @@ enum AIChatActionsMenu {
         }
         menu.addItem(.separator())
         menu.addItem(
+            ClosureMenuItem("Chat Instructions…", symbol: "text.quote") {
+                coordinator.showsChatInstructions = true
+            })
+        menu.addItem(
             ClosureMenuItem("Find in Chat", symbol: "magnifyingglass", key: "f", findInChat))
         menu.addItem(
             ClosureMenuItem(
@@ -281,6 +321,56 @@ enum AIChatActionsMenu {
             ) {
                 coordinator.showSettings()
             })
+        return menu
+    }
+
+    /// The hover row's actions for the last turn, so the keyboard reaches them without a pointer.
+    private static func addTurnItems(
+        to menu: NSMenu, chat: AIChatState, coordinator: AIChatCoordinator
+    ) {
+        guard !chat.isStreaming else { return }
+        if let question = coordinator.lastQuestion(in: chat) {
+            menu.addItem(
+                ClosureMenuItem("Edit Last Message", symbol: "pencil") {
+                    coordinator.beginEdit(question, in: chat)
+                })
+        }
+        let messages = chat.session.messages
+        if let reply = messages.last(where: { $0.role == .assistant }) {
+            let retry = NSMenuItem(title: "Retry With", action: nil, keyEquivalent: "")
+            retry.image = NSImage(
+                systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
+            retry.submenu = retryMenu(reply: reply.id, chat: chat, coordinator: coordinator)
+            menu.addItem(retry)
+            menu.addItem(
+                ClosureMenuItem(
+                    coordinator.speaker.speakingID == reply.id ? "Stop Speaking" : "Speak Last Reply",
+                    symbol: "speaker.wave.2"
+                ) {
+                    coordinator.speak(reply)
+                })
+        }
+        if !chat.isTemporary, let last = messages.last {
+            menu.addItem(
+                ClosureMenuItem("Branch Chat", symbol: "arrow.triangle.branch") {
+                    coordinator.branch(from: last.id, in: chat)
+                })
+        }
+    }
+
+    private static func retryMenu(
+        reply: UUID, chat: AIChatState, coordinator: AIChatCoordinator
+    ) -> NSMenu {
+        let menu = NSMenu()
+        for group in coordinator.modelGroups {
+            menu.addItem(.sectionHeader(title: group.title))
+            for option in group.options {
+                menu.addItem(
+                    ClosureMenuItem(option.title, symbol: "") {
+                        coordinator.retry(reply: reply, with: option, in: chat)
+                    })
+            }
+        }
         return menu
     }
 }

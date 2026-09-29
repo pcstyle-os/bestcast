@@ -14,6 +14,11 @@ final class AIChatState {
     var draft = ""
     /// This chat's tools menu; a new chat starts with every connected server on.
     var toolScope = ChatToolScope()
+    /// Never written to history; the next new chat or opened one is an ordinary chat again.
+    private(set) var isTemporary: Bool
+    /// The question the composer is rewriting; sending replaces it and everything after it.
+    private(set) var editingMessageID: UUID?
+    @ObservationIgnored private var draftBeforeEdit = ""
 
     /// Every path that consumes or drops the staged images moves this on, so a late decode knows
     @ObservationIgnored private(set) var stagingGeneration = 0
@@ -33,8 +38,9 @@ final class AIChatState {
 
     private static let flushInterval: Duration = .milliseconds(40)
 
-    init(history: ChatHistoryStore) {
+    init(history: ChatHistoryStore, isTemporary: Bool = false) {
         self.history = history
+        self.isTemporary = isTemporary
     }
 
     @discardableResult
@@ -44,12 +50,20 @@ final class AIChatState {
         contextBudget: Int = ChatSession.defaultTextBudget, toolScope: String? = nil
     ) -> Bool {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !pendingAttachments.isEmpty, !isStreaming else { return false }
+        let edited = editingMessageID.flatMap { id in session.messages.first { $0.id == id } }
+        let carried = (images: edited?.images ?? [], documents: edited?.documents ?? [])
+        guard !text.isEmpty || !pendingAttachments.isEmpty || !carried.images.isEmpty
+            || !carried.documents.isEmpty, !isStreaming
+        else { return false }
         notice = nil
+        if let edited { session.truncate(from: edited.id) }
+        endEditing()
         session.append(
             ChatMessage(
-                role: .user, text: text, images: pendingAttachments.compactMap(\.image),
-                documents: pendingAttachments.compactMap(\.document), toolScope: toolScope))
+                role: .user, text: text,
+                images: carried.images + pendingAttachments.compactMap(\.image),
+                documents: carried.documents + pendingAttachments.compactMap(\.document),
+                toolScope: toolScope))
         clearStaging()
         if let model { session.model = model }
         startReply(
@@ -64,13 +78,19 @@ final class AIChatState {
         history.setModel(model, id: session.id)
     }
 
-    /// Asks again for the last reply; the question and its attachments go out as they first did.
+    /// Asks again for `reply`, or the last one; its question goes out as it first did.
     @discardableResult
     func regenerate(
-        using provider: any AIProvider, model: AIModelSelection? = nil, webSearch: Bool = false,
-        instructions: String? = nil, contextBudget: Int = ChatSession.defaultTextBudget
+        reply: UUID? = nil, using provider: any AIProvider, model: AIModelSelection? = nil,
+        webSearch: Bool = false, instructions: String? = nil,
+        contextBudget: Int = ChatSession.defaultTextBudget
     ) -> Bool {
-        guard !isStreaming, session.dropTrailingReply() else { return false }
+        guard !isStreaming else { return false }
+        // A question whose reply never came is asked as it stands.
+        let unanswered = reply == nil && session.messages.last?.role == .user
+        guard unanswered || (reply.map { session.dropReply($0) } ?? session.dropTrailingReply())
+        else { return false }
+        endEditing()
         notice = nil
         if let model { session.model = model }
         startReply(
@@ -89,7 +109,7 @@ final class AIChatState {
         isStreaming = true
         isThinking = false
         reasoningStartedAt = nil
-        history.save(session)
+        persist()
 
         replyGeneration += 1
         let generation = replyGeneration
@@ -167,8 +187,46 @@ final class AIChatState {
     func startNewChat() {
         cancel()
         session = ChatSession()
+        isTemporary = false
         notice = nil
+        endEditing()
         clearStaging()
+    }
+
+    /// Pre-fills the composer with the question, its `@server` address included.
+    @discardableResult
+    func beginEditing(_ id: UUID) -> Bool {
+        guard !isStreaming,
+            let message = session.messages.first(where: { $0.id == id && $0.role == .user })
+        else { return false }
+        if editingMessageID == nil { draftBeforeEdit = draft }
+        editingMessageID = id
+        draft = message.toolScope.map { "@\($0) \(message.text)" } ?? message.text
+        return true
+    }
+
+    /// Hands back whatever was being typed before the edit began.
+    func cancelEditing() {
+        guard editingMessageID != nil else { return }
+        draft = draftBeforeEdit
+        endEditing()
+    }
+
+    private func endEditing() {
+        editingMessageID = nil
+        draftBeforeEdit = ""
+    }
+
+    /// Blank clears it; a saved chat records it at once, a new one on its first save.
+    func setInstructions(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        session.instructions = trimmed.isEmpty ? nil : trimmed
+        if !isTemporary { history.setInstructions(session.instructions, id: session.id) }
+    }
+
+    private func persist() {
+        guard !isTemporary else { return }
+        history.save(session)
     }
 
     /// Staged images belong to the conversation they were picked in; leaving it drops them.
@@ -178,7 +236,9 @@ final class AIChatState {
         guard let loaded = history.session(id: id) else { return false }
         cancel()
         session = loaded
+        isTemporary = false
         notice = nil
+        endEditing()
         clearStaging()
         return true
     }
@@ -188,6 +248,7 @@ final class AIChatState {
             cancel()
             session = ChatSession()
             notice = nil
+            endEditing()
             clearStaging()
         }
         history.remove(id: id)
@@ -325,7 +386,7 @@ final class AIChatState {
         // A call still running when the turn ends never reported back, whatever ended the turn.
         message.toolUses = message.toolUses.map { Self.settled($0) }
         session.replaceLast(with: message)
-        history.save(session)
+        persist()
         isStreaming = false
         isThinking = false
         replyTask = nil

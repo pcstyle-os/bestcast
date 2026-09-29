@@ -251,8 +251,18 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
   rewrites that summary, so a rename stored there would be undone by the next turn. A blank rename
   hands the title back. The same row holds the harness's title and the chat's model, each column
   upserted on its own so no write clobbers another; `message_details` is its per-message twin, for a
-  question's `@server` scope and a reply's usage. Both tables are `CREATE TABLE IF NOT EXISTS` with
-  `ON DELETE CASCADE`, so they needed no migration and a deleted chat takes its facts with it.
+  question's `@server` scope and a reply's usage. A chat's own instructions live in
+  `conversation_instructions`, one row per chat that has them; a blank prompt deletes the row. All
+  three are `CREATE TABLE IF NOT EXISTS` with `ON DELETE CASCADE`, so they needed no migration and a
+  deleted chat takes its facts with it.
+- **A temporary chat is never written down.** `AIChatState.isTemporary` skips every save, the
+  instructions write included. Switching the window away from one cancels its reply and drops it,
+  never parking it, and Delete All leaves it alone because it was never on disk. Nothing is branched
+  off a temporary chat either, since a branch is saved at once.
+- **An edit or a retry cuts the chat where it points.** Sending an edit replaces the question and
+  every turn after it. A retry of any reply drops that reply and every turn after it.
+  `ChatHistoryStore.save` compares the stored message ids with the ones in memory and rewrites from the
+  first one that differs, so a cut chat never keeps a stale row past the cut.
 - **Pinned chats are the ones asked to be kept.** Retention skips them, and so does Delete All Chats
   — which says so in its confirmation — the way a clipboard clear keeps its pins.
 - **Retention is enforced only while AI is on.** `Keep conversations` prunes on the enable transition
@@ -393,8 +403,10 @@ way Settings is — an `AIChatSplitViewController` with a native sidebar item, h
 unified toolbar whose title is the open chat's — so it takes the system's own sidebar, toolbar and
 menus rather than the palette's scrim. `AIChatWindowChrome` owns the toolbar — the sidebar toggle
 and New Chat as two round buttons at the sidebar's trailing edge, then Find in Chat and Actions
-alone at the window's — the title, and one key monitor for ⌘V, ⌘F, ⌘G / ⇧⌘G, ⌘K and the Actions
-menu's own chords, and dies with the window.
+alone at the window's — the title, and one key monitor for ⌘V, ⌘F, ⌘G / ⇧⌘G, ⌘K, ⇧⌘N, Escape
+while an edit is open, and the Actions menu's own chords, and dies with the window. A temporary
+chat's subtitle reads "Temporary · not saved to history", and its title is "Temporary Chat" until
+its first message.
 
 - **Find in Chat** (⌘F): the system's `NSSearchToolbarItem`, as is. `ChatFindState` is one per
   window and steps match by match, not message by message:
@@ -418,9 +430,43 @@ menu's own chords, and dies with the window.
   Return / ⇧↩ in the field and ⌘G / ⇧⌘G anywhere. The sidebar's own filter is still there, by click.
 - **Actions** (⌘K): Quick AI's ⌘K menu for a window, on the same chords — Stop Response (`⌘.`), New
   Chat (`⌘N`), Regenerate (`⌘R`), Copy Last Response (`⇧⌘C`), Remove Attachments, Find in Chat
-  (`⌘F`) and AI Settings (`⌥⌘,`) — plus what only a saved chat has: Copy Chat, Pin and Delete.
-  `AIChatActionsMenu` builds it per open from the chat's state, as an `NSMenu` hung under the
-  toolbar button whether the click or ⌘K opened it.
+  (`⌘F`) and AI Settings (`⌥⌘,`). The window adds:
+  - New Temporary Chat (`⇧⌘N`).
+  - Actions for the last turn: Edit Last Message, a Retry With submenu of every model, Speak Last
+    Reply and Branch Chat.
+  - Copy as Markdown, which works for any chat with messages, a temporary one included.
+  - Chat Instructions….
+  - For a saved chat only: Export as Markdown…, Pin and Delete.
+
+  Regenerate also asks a question whose reply never came. `AIChatActionsMenu` builds the menu each
+  time it opens, from the chat's state, as an `NSMenu` hung under the toolbar button whether the
+  click or ⌘K opened it.
+- **Per-message actions** (`ChatMessageActions`, `ChatMessageActionRow`): hovering a message in the
+  window shows a row under it. The same actions are in the message's context menu, and VoiceOver
+  offers Copy and Edit (or Regenerate) as named actions. The palette's transcript passes no actions,
+  so it keeps its old footer.
+  - A question offers Edit, Copy and Branch.
+  - A reply offers Copy, Regenerate, a Retry With menu of every model, Branch, Speak and its own
+    token count and cost.
+  - **Edit** loads the question, `@server` included, into the composer. It dims that message and
+    everything after it, and shows a banner saying so. Sending the edit truncates from the question
+    and asks again, carrying over the question's pictures and documents. Escape or the banner's
+    Cancel gives back the draft that was being typed before.
+  - **Retry With** first makes the picked model the chat's own, as the picker does, and then asks
+    again.
+  - **Branch** saves a copy of the chat up to that message as "<title> (branch)" and opens it. The
+    copy gets fresh message ids and keeps the chat's model and instructions.
+  - **Speak** reads the reply on-device with `AVSpeechSynthesizer`, without markup or the choices
+    fence, through `ChatSpeaker` on the coordinator. Pressing it again, or speaking another reply,
+    stops it.
+  - Nothing that would cut the chat is offered while a reply streams.
+- **Chat Instructions** (`ChatInstructionsSheet`): a sheet for this chat's own system prompt. It
+  replaces Settings' prompt for this chat only: `AIInstructions.compose(…chatPrompt:)` sends it after
+  the preamble, or alone when the system prompt is off in Settings. A blank prompt falls back to
+  Settings. A saved chat stores it at once, and a new chat stores it on its first save.
+- **Temporary chat** (`⇧⌘N`): a chat that answers like any other but is never written to history.
+  Leaving it, by New Chat or by opening another chat, drops it. Closing and reopening the window
+  keeps it, as it keeps any chat.
 
 - **Sidebar** (`AIChatSidebarView`): a filter field over a `List` of every saved chat, Pinned
   first and then bucketed by day like Clipboard. The open chat is the selected row. A new chat has
@@ -428,14 +474,19 @@ menu's own chords, and dies with the window.
   drops a row under the pointer. A row shows a spinner while its reply streams, else a pin when
   pinned. Its content fills the whole cell, so hover — a fainter fill in the selection's own
   shape — never blinks off crossing between rows.
+  The filter matches titles and previews in memory. It also searches every message's text through
+  `ChatHistoryStore.textMatches`, one SQLite `LIKE` query with its wildcards escaped
+  (`ChatSearchSnippet.likePattern`), which runs 150 ms after typing stops. A chat found that way
+  shows a snippet around its first match. Opening it sets the window's Find in Chat to the query,
+  so the transcript opens centred on the match.
   The context menu pins, renames in place, copies or exports the chat as Markdown
   (`ChatSession.markdownTranscript`), and deletes one or all through `DialogController`; ⌫ deletes
   the selected chat the same way.
 - **Transcript**: `ChatTranscriptView` with `surface: .window`, which drops the palette's edge
   dissolve and thin scrollbar (both are measured against the palette's bars) and centres the column
-  at `aiChatReadingWidth`. The last finished reply offers Regenerate beside Copy: `AIChatState`
-  drops only a trailing reply and asks again with the question and its attachments, of whichever
-  model is selected now.
+  at `aiChatReadingWidth`. Any finished reply can be regenerated: `AIChatState.regenerate(reply:)`
+  drops that reply and every turn after it, then asks again with the question and its attachments,
+  of whichever model is selected now.
 - **Composer** (`AIChatDetailView`): one pane of untinted Liquid Glass, stacked under the transcript
   rather than floated over it, with glass capsules for its menus, the glass on a background layer.
   The title bar keeps the system's own band, as a native document window's does.
@@ -561,12 +612,31 @@ window, and every chat action either surface sends — is the nineteenth feature
 - Drop a PDF on the pane with a text-only model selected: the HUD refuses it, as a paste would.
 - Collapse the sidebar with the toolbar button; ⌘N and ⌘Q (Close Window) still work, and ⌘Q with
   Settings in front closes Settings instead.
+- In a chat of three turns, hover the first question and press Edit. It and everything after it
+  dim, and the banner shows. Press Escape: the old draft comes back. Edit again, change the text and
+  send: the chat is one turn long, and it is still one turn long after quitting and relaunching.
+- On a middle reply, press the Retry With chevron and pick another model. The picker switches to it,
+  and the turns after that reply are gone.
+- Branch from the second reply: a chat named "<title> (branch)" opens with two turns, and the
+  original still has all three.
+- Speak a reply: it is read aloud and its row stays visible. Pressing the stop button, or Speak on
+  another reply, stops it.
+- ⌘K → Chat Instructions…, type "Answer in French", then save and ask: the reply is in French. Other
+  chats are not affected, and clearing the prompt goes back to Settings' prompt.
+- Type a word that appears only deep inside a reply into the sidebar filter: the chat is listed with
+  a snippet. Opening it centres the transcript on the word, with Find in Chat filled in.
+- Press ⇧⌘N: the subtitle says the chat is temporary. Ask something, and the sidebar gains no row.
+  Press ⌘N: the temporary chat is gone, and `ai-chats.sqlite3` has no trace of it.
+- ⌘K → Copy as Markdown puts the whole chat on the pasteboard as Markdown, a temporary chat
+  included.
 - Harnesses: `ai-provider-test` (endpoints, request bodies — web search on and off per route —
   stream decoding, Anthropic's search rows, failed and paused searches, citations with escaped
   titles and search offered only on Anthropic's own URL, persistence repair, Codex framing,
   on-device routing, the two MCP launch encodings and the two consent channels),
-  `ai-chat-test` (`ChatSession`, `MarkdownBlock`, `ChatHistoryStore` with renames and pins,
-  `AIToolLoopProvider`, regenerate, and `AIChatSurfacesState`'s one-live-place rule),
+  `ai-chat-test` (`ChatSession`, `MarkdownBlock`, `ChatHistoryStore` with renames, pins and chat
+  instructions, `AIToolLoopProvider`, regenerate, edit and retry truncation, branching, full-text
+  search with its snippets and escaped wildcards, temporary chats, and `AIChatSurfacesState`'s
+  one-live-place rule), `ai-instructions-test` (the preamble and a chat's own prompt),
   `codex-turn-test` (the Stop path, driven against a stub app-server stalled where Stop races the
   turn ID, plus the MCP launch boundary, one launch for concurrent starts, the elicitation, the
   rows and the call cap),
