@@ -294,6 +294,7 @@ final class AppCore {
                         selection: selection, settings: self.aiSettings,
                         subscription: self.chatGPTSubscription, installedAI: self.installedAI)
                 })
+            extensions.configureBestcast(services: AppExtensionServices(core: self))
             extensions.start(appIndex: appIndex, coordinator: extensionCoordinator)
             extensionCoordinator.applyEnabled()
             fileSearchCoordinator.applyEnabled()

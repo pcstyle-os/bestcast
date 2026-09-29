@@ -568,6 +568,26 @@ run slow ext-test          -parse-as-library \
                            Bestcast/Platform/Compression/Zlib.swift \
                            Bestcast/Features/Clipboard/Model/ColorValue.swift \
                            Bestcast/Features/Clipboard/Model/ColorSpaces.swift
+run slow ext-bestcast-api-test -parse-as-library \
+                           $E/Model/ExtensionCapability.swift \
+                           $E/Model/ExtensionGrant.swift \
+                           $E/Model/ExtensionManifest.swift \
+                           $E/Model/ExtensionRefreshPolicy.swift \
+                           $E/Model/ExtensionRefreshState.swift \
+                           $E/Service/ExtensionGrantStore.swift \
+                           $E/Service/ExtensionBestcastBridge.swift \
+                           $E/Model/ExtensionBootConfig.swift \
+                           $E/Model/ExtensionLaunchType.swift \
+                           $E/Model/RenderNode.swift \
+                           $E/Service/ExtensionRuntime.swift \
+                           $E/Service/ExtensionNodeShims.swift \
+                           $E/Service/ExtensionFetcher.swift \
+                           $E/Service/ExtensionNameResolver.swift \
+                           $E/Service/ExtensionWebSocketBridge.swift \
+                           Bestcast/Platform/AppPaths.swift \
+                           Bestcast/Platform/AppDisplayName.swift \
+                           Bestcast/Platform/ProcessExit.swift \
+                           Bestcast/Platform/Compression/Zlib.swift
 run settings-history-test  Bestcast/Features/Settings/SettingsTab.swift \
                            Bestcast/Features/Settings/SettingsHistory.swift \
                            Bestcast/Features/Settings/SettingsAnchor.swift \

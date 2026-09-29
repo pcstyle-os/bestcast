@@ -35,6 +35,7 @@ struct ExtensionsSettingsView: View {
             Group {
                 install
                 library
+                ExtensionPermissionsSection()
                 compatibility
             }
             .settingsEnabled(settings.extensionsEnabled)
@@ -93,7 +94,7 @@ struct ExtensionsSettingsView: View {
             }
             SettingsRow(
                 title: "What doesn't, yet",
-                subtitle: "Raycast's OAuth proxy, and its AI, browser and window services.",
+                subtitle: "Raycast's OAuth proxy, and its AI and browser services.",
                 subtitleLineLimit: 2
             ) {
                 ExtensionSettingsIcon(systemName: "xmark.circle")
@@ -325,7 +326,7 @@ struct ExtensionsSettingsView: View {
     }
 }
 
-private struct ExtensionSettingsIcon: View {
+struct ExtensionSettingsIcon: View {
     let systemName: String
     private let iconSize = Theme.Size.settingsRowIcon + Theme.Spacing.xs
 

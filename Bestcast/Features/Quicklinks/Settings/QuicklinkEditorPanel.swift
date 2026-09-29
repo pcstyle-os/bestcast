@@ -5,6 +5,8 @@ import SwiftUI
 struct QuicklinkEditRequest: Identifiable {
     let id = UUID()
     var quicklink: Quicklink?
+    /// A new quicklink's starting fields, as an extension's Create Quicklink action drafts them.
+    var prefill: Quicklink?
 }
 
 /// Add / edit panel for a single quicklink, presented from the Quicklinks pane.
@@ -24,14 +26,15 @@ struct QuicklinkEditorPanel: View {
     @State private var showingAppPicker = false
     @State private var showingIconPicker = false
 
-    init(quicklink: Quicklink?) {
+    init(quicklink: Quicklink?, prefill: Quicklink? = nil) {
         self.quicklink = quicklink
-        _name = State(initialValue: quicklink?.name ?? "")
-        _link = State(initialValue: quicklink?.link ?? "")
-        _iconSymbol = State(initialValue: quicklink?.iconSymbol)
-        _openWithBundleID = State(initialValue: quicklink?.openWithBundleID)
-        _showsInRootSearch = State(initialValue: quicklink?.showsInRootSearch ?? true)
-        _isPinned = State(initialValue: quicklink?.isPinned ?? false)
+        let seed = quicklink ?? prefill
+        _name = State(initialValue: seed?.name ?? "")
+        _link = State(initialValue: seed?.link ?? "")
+        _iconSymbol = State(initialValue: seed?.iconSymbol)
+        _openWithBundleID = State(initialValue: seed?.openWithBundleID)
+        _showsInRootSearch = State(initialValue: seed?.showsInRootSearch ?? true)
+        _isPinned = State(initialValue: seed?.isPinned ?? false)
     }
 
     var body: some View {

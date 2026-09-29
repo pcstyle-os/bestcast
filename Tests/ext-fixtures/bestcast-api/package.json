@@ -1,0 +1,13 @@
+{
+  "name": "bestcast-api-fixture",
+  "title": "API Fixture",
+  "description": "Calls @bestcast/api and Raycast's WindowManagement for ext-bestcast-api-test.",
+  "author": "bestcast",
+  "commands": [
+    { "name": "probe", "title": "Probe", "mode": "no-view" },
+    { "name": "windows", "title": "Windows", "mode": "no-view" }
+  ],
+  "bestcast": {
+    "capabilities": ["calculator", "clipboardHistory.read", "teleport.write"]
+  }
+}

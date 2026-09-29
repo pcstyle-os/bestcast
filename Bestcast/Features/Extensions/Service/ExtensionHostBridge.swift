@@ -129,6 +129,7 @@ final class ExtensionHostBridge: ExtensionHostAPI {
     private let clipboardStore: ClipboardStore
     private let fetcher: ExtensionFetcher
     let ai = ExtensionAIBridge()
+    var bestcast = ExtensionBestcastBridge()
     private let sockets = ExtensionWebSocketBridge()
 
     init(clipboardStore: ClipboardStore, fetcher: ExtensionFetcher = ExtensionFetcher()) {
@@ -141,6 +142,7 @@ final class ExtensionHostBridge: ExtensionHostAPI {
         bridge.context = context
         bridge.ai.makeProvider = ai.makeProvider
         bridge.ai.canAccess = ai.canAccess
+        bridge.bestcast = bestcast
         return bridge
     }
 
@@ -165,6 +167,11 @@ final class ExtensionHostBridge: ExtensionHostAPI {
         case "proc" where method == "read": return try await ExtensionAsyncProcess.read(arguments)
         case "proc": return try await ExtensionAsyncProcess.wait(arguments.first)
         case "oauth": return try await oauth(method: method, arguments: arguments)
+        case "bestcast":
+            let (context, name) = try requireContext()
+            return try await bestcast.perform(
+                method: method, arguments: arguments, extension: name,
+                context: ExtensionBestcastCallContext(canPrompt: context.activeLaunchType != .background))
         default: throw ExtensionHostError.unknown("\(api).\(method)")
         }
     }

@@ -621,6 +621,9 @@ enum SettingsSearchCatalog {
             group: .extensionsInstalled, "Installed extensions",
             keywords: ["library", "uninstall", "preferences", "appearance", "alias", "shortcut"]),
         .init(
+            group: .extensionsPermissions, "Extension permissions",
+            keywords: ["revoke", "capabilities", "grant", "bestcast api", "privacy"]),
+        .init(
             group: .extensionsCompatibility, "Compatibility",
             keywords: ["supported", "unsupported", "raycast api"]),
         .init(

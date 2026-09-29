@@ -5,6 +5,7 @@ import * as enums from "./enums.generated.js";
 import { AI } from "./ai.js";
 import * as system from "./system.js";
 import { PKCEClient, TokenSet } from "./oauth.js";
+import { hostCall } from "../host.js";
 
 const { nestedEnums, ...flatEnums } = enums;
 
@@ -40,8 +41,8 @@ setActionEffects({
   trash: async ({ paths }) => {
     await system.trash(paths);
   },
-  createSnippet: () => system.unsupported("Action.CreateSnippet"),
-  createQuicklink: () => system.unsupported("Action.CreateQuicklink"),
+  createSnippet: (snippet) => hostCall("bestcast", "snippets.openEditor", [snippet ?? {}]),
+  createQuicklink: (quicklink) => hostCall("bestcast", "quicklinks.openEditor", [quicklink ?? {}]),
   quickLook: () => system.unsupported("Action.ToggleQuickLook"),
   unsupported: (what) => system.unsupported(what),
 });
@@ -91,9 +92,13 @@ const OAuth = {
 
 const BrowserExtension = rejectingNamespace("BrowserExtension", ["getContent", "getTabs"]);
 
+/// Raycast's window API over Bestcast's own window services; one display stands in for a desktop.
 const WindowManagement = {
   DesktopType: nestedEnums.WindowManagement.DesktopType,
-  ...rejectingNamespace("WindowManagement", ["getWindowsOnActiveDesktop", "getActiveWindow", "setWindowBounds", "getDesktops"]),
+  getActiveWindow: () => hostCall("bestcast", "windows.active", []),
+  getWindowsOnActiveDesktop: () => hostCall("bestcast", "windows.onActiveDesktop", []),
+  getDesktops: () => hostCall("bestcast", "windows.desktops", []),
+  setWindowBounds: (options) => hostCall("bestcast", "windows.setWindowBounds", [options ?? {}]),
 };
 
 export const raycastApi = {

@@ -37,6 +37,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
     let storage: ExtensionStorage
     /// Extension-scoped state the launcher and Settings read through here, like `storage`.
     let appearances = ExtensionAppearanceStore()
+    let grants = ExtensionGrantStore()
     private let commandMetadata = ExtensionCommandMetadataStore(
         fileURL: ExtensionCatalog.commandMetadataFile())
     @ObservationIgnored private let runtime: ExtensionRuntime
@@ -72,6 +73,11 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         bridge.ai.makeProvider = makeProvider
     }
 
+    func configureBestcast(services: ExtensionBestcastServices) {
+        bridge.bestcast.services = services
+        bridge.bestcast.grants = grants
+    }
+
     /// Wires collaborators only; the coordinator decides whether anything scans.
     func start(appIndex: AppIndex, coordinator: ExtensionCoordinator) {
         self.appIndex = appIndex
@@ -91,6 +97,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         guard enabled else {
             menuBars?.stop()
             menuBars = nil
+            bridge.bestcast.stopAll()
             await stop()
             backgroundTask?.cancel()
             backgroundTask = nil
@@ -290,6 +297,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         storage.removeAll(extension: installedExtension.manifest.name)
         commandMetadata.removeAll(extension: installedExtension.manifest.name)
         appearances.set(nil, for: installedExtension.manifest.name)
+        grants.forget(extension: installedExtension.manifest.name)
         onDidUninstall?(entryIDs)
         await refresh()
     }

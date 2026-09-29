@@ -1231,6 +1231,9 @@ Calculator and System — is switched on in Settings → AI → Integrations, al
 | Calculator | evaluate with `CalcEngine` | — |
 | System | frontmost app, selected text | — |
 
+An extension reaches the same tools through `@bestcast/api`'s `ai.tools.call`, under the same
+per-call write confirmation; see [Bestcast API](extensions.md#bestcast-api).
+
 ### Invariants
 
 - **One mechanism, not two.** A built-in tool is an `AITool` in the same catalog MCP tools join,

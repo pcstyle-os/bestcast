@@ -96,7 +96,8 @@ export function createHarness({ onRender, onFail, verbose = false, stubs = {} } 
 
   function settle(callId, ok, value) {
     runInContext(
-      `__bestcast.settle(${JSON.stringify(String(callId))}, ${ok}, ${JSON.stringify(value === undefined ? "" : JSON.stringify(value))})`,
+      // A failure's payload is the bare message, as Swift sends it; only a value is JSON.
+      `__bestcast.settle(${JSON.stringify(String(callId))}, ${ok}, ${JSON.stringify(value === undefined ? "" : ok ? JSON.stringify(value) : String(value))})`,
       context,
     );
   }

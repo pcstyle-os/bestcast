@@ -53,7 +53,7 @@ struct SnippetsSettingsView: View {
         .formStyle(.grouped)
         .settingsScrollTarget(.snippets)
         .settingsEditorPanel(item: $editor) { request in
-            SnippetEditorPanel(record: request.record)
+            SnippetEditorPanel(record: request.record, prefill: request.prefill)
         }
         .onChange(of: core.pendingSnippetEdit?.id, initial: true) { _, _ in
             guard let request = core.pendingSnippetEdit else { return }
@@ -193,6 +193,8 @@ struct SnippetEditRequest: Identifiable {
     let id = UUID()
     /// nil for a snippet that has no file yet.
     let record: StoredSnippet?
+    /// A new snippet's starting fields, as an extension's Create Snippet action drafts them.
+    var prefill: Snippet?
 }
 
 private struct SnippetSettingsRow: View {
@@ -256,9 +258,9 @@ private struct SnippetEditorPanel: View {
     @State private var errorMessage: String?
     @State private var isSaving = false
 
-    init(record: StoredSnippet?) {
+    init(record: StoredSnippet?, prefill: Snippet? = nil) {
         self.record = record
-        let snippet = record?.snippet
+        let snippet = record?.snippet ?? prefill
         _name = State(initialValue: snippet?.name ?? "")
         _keyword = State(initialValue: snippet?.keyword ?? "")
         _text = State(initialValue: snippet?.text ?? "")

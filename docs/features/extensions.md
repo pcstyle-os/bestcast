@@ -42,6 +42,13 @@ produces, rendered natively into the palette. No Electron, no browser, no Node.j
 - **`SymbolCatalog` reads a system bundle, not API.** The list comes from `CoreGlyphs.bundle` at
   runtime; every read stays optional and falls back to `SymbolCatalog.suggested`, and Apple's restricted
   marks are never offered.
+- **A capability is declared, granted per extension, and never rides a backup.** `@bestcast/api`
+  refuses anything missing from `package.json`'s `bestcast.capabilities`; a grant is one extension's,
+  lives only in `extension-grants.json`, and uninstall or Revoke deletes it. See
+  [Bestcast API](#bestcast-api).
+- **Extensions reach other features only through `ExtensionBestcastServices`.** The bridge sees that
+  protocol and nothing else; `AppExtensionServices` in `App/` is the one conformance that touches
+  clipboard, snippets, notes, quicklinks, windows, calendar and AI.
 
 ## How it works
 
@@ -101,6 +108,7 @@ same arrangement as `EmojiData.generated.swift`: building Bestcast never needs N
 | `src/api/components.js` | every `@raycast/api` component |
 | `src/api/system.js` | Clipboard, LocalStorage, Cache, Toast, preferences, environment |
 | `src/api/oauth.js` | `OAuth.PKCEClient`, `OAuth.TokenSet`, redirect url builders |
+| `src/api/bestcast.js` | `@bestcast/api`, whose every member is one `bestcast` host call |
 | `src/api/enums.generated.js` | Icon / Color / Toast.Style / … extracted from the real `@raycast/api` types |
 | `src/node-shims.js` | `path`, `fs`, `os`, `child_process`, `crypto`, `zlib`, `util`, `events`, `buffer`, `punycode`, … |
 | `src/websocket.js` | the `WebSocket` global, and the raw socket a bundled `ws` attaches to |
@@ -130,6 +138,10 @@ Two host-call flavours:
 | `Service/ExtensionNameResolver.swift` | `getaddrinfo`, which is how a `.local` name resolves |
 | `Service/ExtensionOAuthKeychain.swift` | secure OAuth token storage backed by macOS Keychain |
 | `Service/ExtensionOAuthSession.swift` | PKCE state tracking, browser launch, and callback redirect resolution |
+| `Service/ExtensionBestcastBridge.swift` | `@bestcast/api`'s host side: route, authorize, ask, serve |
+| `Service/ExtensionGrantStore.swift` | each extension's grants, in `extension-grants.json` |
+| `Model/ExtensionCapability.swift` | the capability names, which are writes, which prompt, which Raycast APIs imply |
+| `Model/ExtensionGrant.swift` | a grant, and `ExtensionGrantPolicy`, the pure consent table |
 | `Service/ExtensionStorage.swift` | per-extension `LocalStorage`, `Cache` and preference values (one JSON file each) |
 | `Service/ExtensionCommandMetadataStore.swift` | every command's subtitle override, refresh bookkeeping and menu-bar state, in one small file |
 | `Service/ExtensionCatalog.swift` | discovery on disk, install, uninstall, import-from-Raycast |
@@ -636,7 +648,7 @@ interval floor instead of sixty.
 `showHUD`, `confirmAlert`, `closeMainWindow`, `popToRoot`, `clearSearchBar`, `open`, `trash`,
 `showInFinder`, `getApplications`, `getDefaultApplication`, `getFrontmostApplication`,
 `getSelectedText`, `getSelectedFinderItems`, `launchCommand`, `updateCommandMetadata`,
-`openExtensionPreferences`,
+`openExtensionPreferences`, `WindowManagement`, `Action.CreateSnippet`, `Action.CreateQuicklink`,
 `useNavigation`, `OAuth`, `Icon`, `Color`, `Image.Mask`, `Keyboard.Shortcut.Common`, `LaunchType`.
 
 **OAuth 2.0 PKCE** — `OAuth.PKCEClient`, `OAuth.TokenSet`, `OAuth.RedirectMethod`, with S256 challenges and
@@ -812,12 +824,70 @@ The tool's module code runs before the question is asked, as in Raycast, because
 in it. Every question queues behind `BuiltInToolCoordinator.confirm`, the one dialog every tool
 consent goes through. The call and its result appear as ordinary tool rows in the transcript.
 
+## Bestcast API
+
+`require("@bestcast/api")` reaches Bestcast's own features. Types are in
+`Scripts/raycast-runtime/types/bestcast-api.d.ts`. An extension declares what it needs in
+`package.json`:
+
+```json
+"bestcast": { "capabilities": ["clipboardHistory.read", "snippets.write"] }
+```
+
+A name Bestcast does not know is ignored, logged once in Debug builds. Every member is one
+`hostCall("bestcast", …)`; `ExtensionBestcastBridge` routes it to a capability, authorizes it and
+serves it through `ExtensionBestcastServices`.
+
+| Member | Capability |
+| --- | --- |
+| `version`, `capabilities()`, `requestCapability(name)` | none; `requestCapability` asks now rather than on first use |
+| `clipboardHistory.search(query, { limit, kind })`, `.read(id)` | `clipboardHistory.read` |
+| `snippets.list()`, `.search(query)`, `.expand(idOrKeyword, args)` | `snippets.read` |
+| `snippets.create({ name, text, keyword })` | `snippets.write` |
+| `notes.read()` / `notes.append(text)` | `notes.read` / `notes.write` |
+| `quicklinks.list()` | `quicklinks.read` |
+| `quicklinks.open(id, query)`, `.create({ name, link, application })` | `quicklinks.write` |
+| `windows.list()` | `windows.read` |
+| `windows.setBounds(id, bounds)`, `.applyLayout(name)`, `.runCommand(command)` | `windows.write` |
+| `calendar.events({ from, to })` | `calendar.read` |
+| `calculator.evaluate(expression)` | `calculator` |
+| `ai.openQuickAI(prompt)`, `ai.openChat({ prompt, mention })` | `ai.handoff` |
+| `ai.tools.list()`, `ai.tools.call(name, input)` | `ai.tools` |
+| `BestcastPermissionError` | thrown on a refusal; `.capability` names what was refused |
+
+Raycast's own APIs ride the same bridge without a declaration: `WindowManagement` needs
+`windows.read` / `windows.write`, and `Action.CreateSnippet` / `Action.CreateQuicklink` open
+Bestcast's editor prefilled, where saving is the consent, so they never prompt. Desktops are displays,
+because Spaces have no public API.
+
+| Capability | Asks | Refused when |
+| --- | --- | --- |
+| `clipboardHistory.read`, `snippets.read`, `notes.read`, `quicklinks.read`, `windows.read`, `calendar.read` | once; Allow is remembered | its feature is off |
+| `snippets.write`, `notes.write`, `quicklinks.write`, `windows.write` | on every call, naming the subject, unless Always Allow | its feature is off |
+| `calculator` | never | never, once declared |
+| `ai.handoff` / `ai.tools` | never / once | AI is off |
+
+**Consent.** The first call to a read shows *"<Extension> wants to read your clipboard history"* with
+Don't Allow and Allow, through `DialogController`. A write asks every time and names what it will
+do — *"Create snippet 'Sig' with keyword ;s"* — and adds Always Allow, which upgrades the grant.
+Dialogs queue one at a time. A background launch never prompts, so it is refused. An undeclared
+capability throws `BestcastPermissionError("undeclared capability <name>")`; a refusal, a revoke or
+a switched-off feature throws `"denied"`. A refused read is remembered until quit, so a loop cannot
+turn one question into a nag. `ai.tools.call` runs through `BuiltInToolCoordinator`, so a tool that
+writes still asks as it does in AI Chat. `ExtensionGrantPolicy.decide` is the whole table, and
+`ext-bestcast-api-test` pins it.
+
+**Settings › Extensions › Permissions** lists every extension that declares or holds a capability.
+Each capability shows when it was allowed and last used, or "Asks on first use" when it is declared
+but not yet granted. It has its own Revoke, and each extension has Revoke All. Uninstall forgets
+every grant, and switching extensions off cancels any call still waiting on a dialog.
+
 ## What isn't supported yet
 
 | Gap | Why |
 | --- | --- |
 | **Raycast's PKCE proxy (`oauth.raycast.com`)** | Extensions whose provider has no PKCE support exchange tokens through Raycast's proxy. `OAuth.PKCEClient` works; a provider that needs that proxy still fails. |
-| **`BrowserExtension`, `WindowManagement`** | Raycast services with no local equivalent. Importing them works; calling one throws with a clear reason. |
+| **`BrowserExtension`, `Action.ToggleQuickLook`** | No local equivalent. Importing them works; calling one throws with a clear reason. |
 | **A WebSocket to a host with a certificate macOS distrusts** | `ws`'s `rejectUnauthorized: false` is ignored — URLSession validates the chain either way. |
 | **Aborting a `fetch` already in flight** | `AbortSignal` is complete — `timeout`, `abort` and `any` included — and `fetch` checks it on both sides of the host call, so a caller gets its `AbortError`. The request itself still runs to completion: the signal isn't carried across the bridge, so nothing cancels the `URLSessionTask`. A timeout bounds the caller, not the network. |
 | **Interactive `spawn` stdin** | stdout and stderr stream, but stdin is sent once as the child starts: whatever was written in the same tick. A later `stdin.write` is dropped. |
@@ -840,12 +910,14 @@ Then the tests, fastest first:
 ```sh
 # 1. JS-only fixtures, in a bare `vm` context (the closest thing Node has to JavaScriptCore)
 node fixtures.mjs
+node fixtures-bestcast.mjs   # @bestcast/api and WindowManagement
 
 # 2. any prebuilt extension, printing the render tree it produces
 node test.mjs ~/.config/raycast/extensions/<uuid> [command]
 
 # 3. the real Swift engine, against JavaScriptCore
 Scripts/run-tests.sh ext-test
+Scripts/run-tests.sh ext-bestcast-api-test   # consent table, bridge, and a JS round trip
 "${TMPDIR:-/tmp}"/bestcast-harness/ext-test ~/Library/Application\ Support/com.bestcast.app.dev/extensions/<name> [command]
 ```
 
@@ -894,6 +966,7 @@ never shares with an installed copy.
 | Favorites, hidden items | `UserDefaults` → `favoriteApps`, `hiddenItemKeys` | yes |
 | User alias | `UserDefaults` → `launcherAliases` | yes |
 | Launch ranking | `launcher-ranking.json` | yes |
+| `@bestcast/api` grants | `extension-grants.json`, never in a backup | yes |
 
 `ExtensionCatalog.safeName` maps an npm-style name onto one path segment, and is the **only** copy of
 that mapping — a second one that drifts orphans every file the first one wrote.

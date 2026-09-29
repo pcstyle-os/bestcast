@@ -32,7 +32,7 @@ struct QuicklinksSettingsView: View {
         .formStyle(.grouped)
         .settingsScrollTarget(.quicklinks)
         .settingsEditorPanel(item: $editor) { request in
-            QuicklinkEditorPanel(quicklink: request.quicklink)
+            QuicklinkEditorPanel(quicklink: request.quicklink, prefill: request.prefill)
         }
         .onChange(of: core.pendingQuicklinkEdit?.id, initial: true) { _, _ in
             guard let request = core.pendingQuicklinkEdit else { return }

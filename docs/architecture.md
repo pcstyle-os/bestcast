@@ -111,6 +111,9 @@ fine too; deciding something with one is what the rule forbids. `showNotice`, `c
 
 New long-lived state belongs on `AppCore`, wired in `start()`. Do not create a competing singleton: this is a singleton, not a container.
 
+Extensions reach other features through one narrow seam: `App/AppCore+ExtensionServices.swift`
+conforms to `ExtensionBestcastServices`, and the `@bestcast/api` bridge sees that protocol, never `AppCore`.
+
 Clipboard text recognition is the one feature that leaves the process. `AppCore` owns the indexer;
 the stateless `ClipboardTextWorker` runs one bundled `ClipboardTextHelper` per item, from
 `Contents/Helpers`, and reaps it before returning. Vision's and PDFKit's allocations therefore belong

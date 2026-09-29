@@ -158,8 +158,8 @@ final class SnippetCoordinator {
     }
 
     /// Opens the Snippets pane with the editor showing `record`; nil is a new snippet.
-    func editSnippet(_ record: StoredSnippet?) {
-        core.pendingSnippetEdit = SnippetEditRequest(record: record)
+    func editSnippet(_ record: StoredSnippet?, prefill: Snippet? = nil) {
+        core.pendingSnippetEdit = SnippetEditRequest(record: record, prefill: prefill)
         settingsCoordinator.showSettings(tab: .snippets)
     }
 
