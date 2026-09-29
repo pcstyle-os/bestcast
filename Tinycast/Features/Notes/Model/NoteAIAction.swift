@@ -192,9 +192,9 @@ enum NoteAIMenu {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         switch level {
         case .root:
-            let matches = rootItems.filter { matches($0.title, query) }
-            guard !query.isEmpty else { return matches }
-            return matches + [
+            let listed = rootItems.filter { matches($0.title, query) }
+            guard !query.isEmpty else { return listed }
+            return listed + [
                 Item(
                     title: "Edit with Prompt: \(query)", symbol: NoteAIAction.custom(prompt: "").symbol,
                     command: .run(.custom(prompt: query))),
