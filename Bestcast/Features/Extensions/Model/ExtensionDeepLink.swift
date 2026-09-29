@@ -13,6 +13,8 @@ struct ExtensionDeepLink: Sendable, Equatable {
     var triggerName: String?
     /// Every query item as written; a deeplink trigger's event carries it as `payload.query`.
     var query: [String: String] = [:]
+    /// `bestcast://extensions/<owner>/<ext>/console`, which a command of that name still outranks.
+    var opensConsole = false
 
     /// `owner/ext` first so a scoped manifest wins over a bare slug collision.
     var extensionCandidates: [String] {
@@ -89,7 +91,8 @@ struct ExtensionDeepLink: Sendable, Equatable {
         }
         return ExtensionDeepLink(
             ownerOrAuthor: ownerOrAuthor, extensionName: extensionName, commandName: commandName,
-            arguments: arguments, fallbackText: fallbackText, launchType: launchType)
+            arguments: arguments, fallbackText: fallbackText, launchType: launchType,
+            opensConsole: url.scheme?.lowercased() == "bestcast" && commandName == "console")
     }
 
     private static func parseTrigger(url: URL, body: [String]) -> ExtensionDeepLink? {

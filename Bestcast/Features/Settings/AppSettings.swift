@@ -394,6 +394,11 @@ final class AppSettings {
         }
     }
 
+    /// Hidden: offers Open Console on every extension, not only a linked one.
+    var extensionsShowConsole: Bool {
+        didSet { defaults.set(extensionsShowConsole, forKey: Key.extensionsShowConsole.rawValue) }
+    }
+
     /// Only a source registry needs one — the store serves extensions already built.
     var extensionPackageManager: ExtensionPackageManager {
         didSet {
@@ -697,6 +702,7 @@ final class AppSettings {
         extensionsShowInLauncher =
             defaults.object(forKey: Key.extensionsShowInLauncher.rawValue) == nil
             || defaults.bool(forKey: Key.extensionsShowInLauncher.rawValue)
+        extensionsShowConsole = defaults.bool(forKey: Key.extensionsShowConsole.rawValue)
         extensionPackageManager =
             defaults.string(forKey: Key.extensionPackageManager.rawValue)
             .flatMap(ExtensionPackageManager.init(rawValue:)) ?? .automatic

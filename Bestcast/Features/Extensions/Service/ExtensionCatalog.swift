@@ -1,11 +1,21 @@
 import Foundation
 
+/// Where an install came from; declared here so every harness compiling the catalog still builds.
+enum ExtensionSourceKind: String, Codable, Sendable {
+    case store, folder, linked, git, raycastImport
+}
+
 /// An installed extension: its manifest plus where it lives on disk.
 struct InstalledExtension: Sendable, Hashable, Identifiable {
     let manifest: ExtensionManifest
     let directory: URL
     /// Read by `scan`, off the main actor, so publishing launcher rows never touches the disk.
     var installedAt: Date?
+    /// Nil for an install no record describes.
+    var source: ExtensionSourceKind?
+
+    /// A linked folder is read in place, so it is the one source a developer edits live.
+    var isDevelopment: Bool { source == .linked }
 
     var id: String { manifest.name }
     var title: String { manifest.title }
@@ -87,6 +97,11 @@ enum ExtensionCatalog {
         supportDirectory().appendingPathComponent("extension-triggers.json", isDirectory: false)
     }
 
+    /// Where each install came from, and the script folders; channel-local, never in a backup.
+    static func sourcesFile() -> URL {
+        supportDirectory().appendingPathComponent("extension-sources.json", isDirectory: false)
+    }
+
     /// Per-extension `environment.supportPath` — an extension's own scratch directory.
     static func supportPath(for name: String) -> URL {
         supportRoot().appendingPathComponent(safeName(name), isDirectory: true)
@@ -127,23 +142,30 @@ enum ExtensionCatalog {
     }
 
     /// An unreadable or half-written directory is skipped rather than failing the whole scan.
-    nonisolated static func scan() -> [InstalledExtension] {
+    nonisolated static func scan(linked: [URL] = []) -> [InstalledExtension] {
         let root = extensionsDirectory()
         let entries =
             (try? FileManager.default.contentsOfDirectory(
                 at: root, includingPropertiesForKeys: [.isDirectoryKey, .addedToDirectoryDateKey],
                 options: [.skipsHiddenFiles])) ?? []
-        return
-            entries
-            .compactMap { directory -> InstalledExtension? in
-                try? restoreExecutablePermissions(in: directory)
-                guard let manifest = try? ExtensionManifest.load(directory: directory),
-                    manifest.supportsMacOS
-                else { return nil }
-                let added = try? directory.resourceValues(forKeys: [.addedToDirectoryDateKey])
-                return InstalledExtension(
-                    manifest: manifest, directory: directory, installedAt: added?.addedToDirectoryDate)
-            }
+        let linkedFound = linked.compactMap { directory -> InstalledExtension? in
+            guard let manifest = try? ExtensionManifest.load(directory: directory),
+                manifest.supportsMacOS
+            else { return nil }
+            return InstalledExtension(manifest: manifest, directory: directory, source: .linked)
+        }
+        // A linked copy shadows an installed one of the same name, so the folder being edited runs.
+        let linkedNames = Set(linkedFound.map(\.manifest.name))
+        let copied = entries.compactMap { directory -> InstalledExtension? in
+            try? restoreExecutablePermissions(in: directory)
+            guard let manifest = try? ExtensionManifest.load(directory: directory),
+                manifest.supportsMacOS, !linkedNames.contains(manifest.name)
+            else { return nil }
+            let added = try? directory.resourceValues(forKeys: [.addedToDirectoryDateKey])
+            return InstalledExtension(
+                manifest: manifest, directory: directory, installedAt: added?.addedToDirectoryDate)
+        }
+        return (copied + linkedFound)
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
@@ -197,7 +219,7 @@ enum ExtensionCatalog {
             switch self {
             case .notAnExtension(let url):
                 return
-                    "\(url.lastPathComponent) doesn't contain a Raycast extension (no package.json with commands)."
+                    "\(url.lastPathComponent) doesn't contain a Raycast extension (no package.json with commands or tools)."
             case .noBuiltCommands(let name):
                 return
                     "\(name) has no built command bundles. Bestcast installs prebuilt extensions — run `ray build` in the extension folder first, or import one from an installed Raycast."
@@ -221,7 +243,9 @@ enum ExtensionCatalog {
         let built = manifest.commands.filter {
             fm.fileExists(atPath: source.appendingPathComponent("\($0.name).js").path)
         }
-        guard !built.isEmpty else { throw InstallError.noBuiltCommands(manifest.title) }
+        guard !built.isEmpty || manifest.commands.isEmpty else {
+            throw InstallError.noBuiltCommands(manifest.title)
+        }
 
         let destination = extensionsDirectory().appendingPathComponent(
             manifest.name.replacingOccurrences(of: "/", with: "-"), isDirectory: true)

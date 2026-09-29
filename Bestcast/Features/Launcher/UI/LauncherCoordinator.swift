@@ -135,6 +135,10 @@ final class LauncherCoordinator {
             extensionCoordinator.runExtensionCommand(app, arguments: arguments)
             return
         }
+        if app.kind == .scriptCommand {
+            core.extensionDevelopment.runScript(app, values: arguments)
+            return
+        }
         if app.kind == .meeting {
             guard let id = MeetingEvent.id(fromEntryID: app.id) else { return }
             calendarCoordinator.activateMeeting(id: id)
@@ -163,7 +167,7 @@ final class LauncherCoordinator {
             let snippetID = String(app.id.dropFirst("snippet:".count))
             snippetCoordinator.expandSnippet(id: snippetID, target: previous)
         case .command, .quickAction, .customCommand, .systemAction, .windowCommand, .windowLayout,
-            .windowRoom, .quicklink, .appleShortcut, .extensionCommand, .meeting:
+            .windowRoom, .quicklink, .appleShortcut, .extensionCommand, .scriptCommand, .meeting:
             break  // handled above
         }
     }

@@ -24,6 +24,8 @@ struct ExtensionCommandScreen: PaletteScreen {
     let extensions: ExtensionManager
     let vm: PaletteState
     let openActions: () -> Void
+    /// The host's own last row, after the extension's actions; nil when no console is offered.
+    var openConsole: (() -> Void)?
 
     /// `assets/` of the running extension, so the icons it names resolve.
     var assetsPath: String? {
@@ -98,7 +100,8 @@ struct ExtensionCommandScreen: PaletteScreen {
         onActivate: @escaping (Int) -> Void
     ) -> PaletteMenuContent? {
         let actions = ExtensionScreen.actions(in: screen.actionPanel(forItemAt: selection))
-        guard !actions.isEmpty else { return nil }
+        let console = searchQuery.score("Open Console") == nil ? nil : openConsole
+        guard !actions.isEmpty || console != nil else { return nil }
         var pendingSection = false
         var filteredActions: [ExtensionAction] = []
         var filteredSectionStarts: [Bool] = []
@@ -118,8 +121,14 @@ struct ExtensionCommandScreen: PaletteScreen {
         let extensions = extensions
         var items = ExtensionActionsMenu.rows(filteredActions, assetsPath: assetsPath)
         for index in items.indices { items[index].startsSection = filteredSectionStarts[index] }
+        if console != nil {
+            items.append(
+                ExtensionActionItem(
+                    title: "Open Console", icon: ExtensionImage.Resolved(source: .symbol("terminal")),
+                    startsSection: !items.isEmpty))
+        }
         return PaletteMenuContent(
-            rowCount: filteredActions.count, preferredSelection: bestMatch?.index,
+            rowCount: items.count, preferredSelection: bestMatch?.index,
             view: { _ in
                 AnyView(
                     ExtensionActionsPanel(
@@ -127,6 +136,10 @@ struct ExtensionCommandScreen: PaletteScreen {
                         items: items, selection: menuSelection, onActivate: onActivate))
             },
             activate: { index in
+                guard filteredActions.indices.contains(index) else {
+                    console?()
+                    return
+                }
                 guard let handler = filteredActions[index].handler else { return }
                 extensions.dispatch(handler: handler)
             },

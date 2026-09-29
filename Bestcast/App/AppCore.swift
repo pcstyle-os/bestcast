@@ -113,6 +113,9 @@ final class AppCore {
     @ObservationIgnored private(set) lazy var extensionCoordinator = ExtensionCoordinator(
         extensions: extensions, palette: palette, paletteCoordinator: paletteCoordinator,
         settingsCoordinator: settingsCoordinator, settings: settings, core: self)
+    @ObservationIgnored private(set) lazy var extensionDevelopment = ExtensionDevelopmentCoordinator(
+        extensions: extensions, appIndex: appIndex, paletteCoordinator: paletteCoordinator,
+        settingsCoordinator: settingsCoordinator, settings: settings, core: self)
     @ObservationIgnored private(set) lazy var windowCommandCoordinator = WindowCommandCoordinator(
         settings: settings, paletteCoordinator: paletteCoordinator, windowMover: windowMover,
         spaceSwitcher: spaceSwitcher, customSizes: customWindowSizes)
@@ -302,6 +305,7 @@ final class AppCore {
             }
             extensions.triggers.start(
                 clipboardStore: clipboardStore, hotKeys: hotKeys, injector: textInjector)
+            extensionDevelopment.start()
             extensionCoordinator.applyEnabled()
             fileSearchCoordinator.applyEnabled()
             windowSwitchCoordinator.applyEnabled()

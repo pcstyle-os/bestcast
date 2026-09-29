@@ -60,6 +60,9 @@ produces, rendered natively into the palette. No Electron, no browser, no Node.j
   a toast becomes a HUD at most once per trigger every ten seconds, and an error lands in Settings,
   never in a dialog. The one exception is the approval a person's own foreground command asks for
   when it first calls another extension's export.
+- **Uninstalling a linked extension never deletes the linked folder.** A folder linked for
+  development is the developer's own source tree: uninstall forgets the record and everything the
+  extension stored, and `ExtensionCatalog.uninstall` is skipped for it. See [Development](#development).
 - **`SymbolCatalog` reads a system bundle, not API.** The list comes from `CoreGlyphs.bundle` at
   runtime; every read stays optional and falls back to `SymbolCatalog.suggested`, and Apple's restricted
   marks are never offered.
@@ -515,7 +518,7 @@ like everything else, so a Debug build never shares installs with a release chan
 `package.json`, `assets/` and one `<command>.js` per command — byte-for-byte the layout Raycast's own
 build produces.
 
-Settings → Extensions offers three routes, under **Install New**:
+Settings → Extensions offers five routes, under **Install New**:
 
 1. **Search Registries…** — searches every enabled registry and installs from any of them. See below.
 2. **Import from Raycast** — copies the already-built bundles out of a local Raycast. Nothing is
@@ -526,9 +529,76 @@ Settings → Extensions offers three routes, under **Install New**:
    whose stable directory is present but empty. The same extension in both is offered once.
 3. **Add Folder…** — pick any directory with a manifest and built command files, e.g. an extension you
    just ran `ray build` in.
+4. **Link…** — links a folder in place for development; see [Development](#development).
+5. **Install from Git** — a GitHub URL, cloned and built on this Mac; see
+   [Development](#development).
 
 Only `package.json`, the built commands and `assets/` are copied — never `node_modules` or the
 multi-megabyte `.js.map` Raycast writes beside each bundle.
+
+## Development
+
+Everything here is reached from Settings → Extensions, and every source record lives in
+`extension-sources.json` beside `extension-commands.json`: its own file, so neither a settings backup
+nor `settings.json` can carry a folder that runs code. `ExtensionSourceStore` owns it,
+`ExtensionDevelopmentCoordinator` drives the UI, and `Tests/ext-devkit-test.swift` covers the models
+and boots a linked fixture under JavaScriptCore.
+
+**Linked folders.** **Link…** asks first, then records the folder as `linked`; the scan reads it
+where it is — `dist/` when `ray build -e dist` has written a manifest there, the folder itself otherwise. A linked
+copy shadows an installed one of the same name. An `ExtensionFolderWatcher` (FSEvents, 300 ms
+latency as the debounce) watches every linked folder while extensions are on; a batch rescans, and
+when the running command's folder changed, the command is run again in place and a **Reloaded** HUD
+says so. `environment.isDevelopment` is true only for a linked extension. The library row and its
+launcher subtitle carry **Dev**, and the **Development** section lists each link with Reveal,
+Console and Unlink. Unlink is the ordinary uninstall, which leaves the folder alone. A link whose
+folder no longer reads as an extension is listed too, with **Forget**, so a folder later restored at
+that path never runs unasked.
+
+**Console.** `ExtensionConsole` keeps a 500-line ring per extension, in memory only: never persisted,
+never backed up. It records `console.log` / `warn` / `error` with an `Error`'s stack apart from its
+headline, uncaught errors with their stack, every failed host call, and boot, render and host-call
+timings. The window filters by level, searches message and stack, and has Clear and Copy. It opens from
+⌘K **Open Console** on a running command (a linked extension always; any extension once the hidden
+`extensionsShowConsole` preference is on), from the library row, and from
+`bestcast://extensions/<owner>/<ext>/console` — a command actually named `console` still wins that
+link.
+
+**Install from Git.** `ExtensionGitURL` accepts `https://github.com/<owner>/<repo>` and
+`…/tree/<ref>/<subdir>`; every segment is checked so none can become a `git` option or a `..`
+escape, and a ref with a slash in it reads as ref plus folder. A confirm dialog comes first, every
+time, because build scripts run on this Mac. The clone is `git clone --depth 1` with
+`GIT_TERMINAL_PROMPT=0` in a `bestcast-install-<UUID>` workspace; committed `ray build` bundles install
+as they are, anything else goes through the same build as the store, with each step capped at three
+minutes under a progress HUD whose Cancel terminates the running step. A manifest or command name
+that could leave its folder on disk (`..`, a `/` in a command) is not an extension. The record keeps
+url, ref and commit: the row reads `from git · <sha7>` and offers **Update**, which is the same
+confirm and install again.
+
+**Tools-only extensions.** A manifest is an extension when it has commands, tools, or a `bestcast`
+section. One with tools and no commands shows in Settings and in AI Chat, but has no launcher row.
+
+### Script Command folders
+
+**Add Folder…** under **Script Commands** adds a folder of
+[Raycast script commands](https://github.com/raycast/script-commands) behind a consent dialog —
+scripts in it become runnable from the launcher, and inline ones run on a timer. Unlike the one-shot
+import in [custom-commands.md](custom-commands.md#importing-raycast-scripts), the folder stays live:
+it is watched, and every `@raycast.schemaVersion 1` script in it is an `AppEntry.Kind.scriptCommand`
+row, rescanned when a file changes. `ScriptCommandHeader` reads the header through the same
+`RaycastScriptImport` parser, so arguments, confirmation and the interpreter mean the same thing in
+both.
+
+| Directive | Effect |
+| --- | --- |
+| `title`, `packageName` | the row's name and subtitle |
+| `icon` | an emoji, or an image path beside the script; a URL is skipped rather than fetched |
+| `argument1…3` | the launcher's inline argument fields |
+| `needsConfirmation` | a Bestcast confirm before it runs |
+| `mode` | `fullOutput` streams into the host-owned command output window; `compact` and `silent` show the last line as a HUD; `inline` makes the last line the row's subtitle |
+| `refreshTime` | how often an inline script reruns, never under 10 s; a run stops after 30 s |
+
+Turning extensions off stops every inline timer and any inline script still running.
 
 ## Registries
 
@@ -1020,12 +1090,12 @@ extension's own commands. A placeholder has 3 seconds; a failure, a disabled one
 expands to nothing. Search and placeholder code runs because of a keystroke, not a choice, so it gets
 the `background` launch type: no toasts, HUDs, dialogs or window changes, and no AI.
 
-**Consent.** After an install from a folder or the store, a dialog lists every contribution with a
-toggle, all off; the search group repeats that a provider sees everything typed in the launcher, and
-runs as you type. The
-same toggles stay in Settings › Extensions › <extension> under **Contributions**. Switching one off
-stops its warm context, and a context still loading when that happens never runs. The choices live in `extension-contributions.json`, which no backup carries,
-and uninstall forgets them.
+**Consent.** After an install from a folder, the store or Git, or a development link, a dialog lists
+every contribution with a toggle, all off; the search group repeats that a provider sees everything
+typed in the launcher, and runs as you type. The same toggles stay in Settings › Extensions ›
+<extension> under **Contributions**. Switching one off stops its warm context, and a context still
+loading when that happens never runs. The choices live in `extension-contributions.json`, which no
+backup carries, and uninstall forgets them.
 
 ## What isn't supported yet
 
@@ -1039,7 +1109,6 @@ and uninstall forgets them.
 | **`net` / `tls`** | Resolve but throw on use. Nothing bridges a raw socket; a bundled `ws` reaches the network through the WebSocket bridge instead. `tls.TLSSocket` is the one exception: `http2-wrapper`, inside `got`, derives a class from one at import time, so it constructs as an inert duplex. |
 | **Streaming HTTP** | The bridge answers a request with the whole body at once, so `http.request` delivers one chunk and `Response.body` replays bytes that already arrived. Server-sent events, network-level progress and backpressure onto the socket are all out of reach; `stream` itself is real enough to carry them the day the bridge is. |
 | **`file` and `clipboard.*` action targets** | The manifest accepts them, but only app, snippet and quicklink rows offer contributed ⌘K actions so far. |
-| **An extension with tools but no commands** | The manifest still needs one command, so a tools-only extension is not recognised as one. |
 
 ## Working on the runtime
 
@@ -1116,6 +1185,7 @@ never shares with an installed copy.
 | User alias | `UserDefaults` → `launcherAliases` | yes |
 | Launch ranking | `launcher-ranking.json` | yes |
 | `@bestcast/api` grants | `extension-grants.json`, never in a backup | yes |
+| Where it came from (link, Git, store) | `extension-sources.json` | yes — a linked folder itself stays |
 
 `ExtensionCatalog.safeName` maps an npm-style name onto one path segment, and is the **only** copy of
 that mapping — a second one that drifts orphans every file the first one wrote.

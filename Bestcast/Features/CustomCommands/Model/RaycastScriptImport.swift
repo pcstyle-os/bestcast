@@ -50,7 +50,7 @@ enum RaycastScriptImport {
     }
 
     /// The block ends where the code starts; past that, `@raycast.` is the script's own text.
-    private static func directives(in source: String) -> [String: String] {
+    static func directives(in source: String) -> [String: String] {
         var values: [String: String] = [:]
         for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -101,7 +101,7 @@ enum RaycastScriptImport {
     }
 
     /// The shebang and the directives are at the top, and a body running to megabytes is not.
-    private static func head(of url: URL) -> String? {
+    nonisolated static func head(of url: URL) -> String? {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
         guard var data = try? handle.read(upToCount: headSize), !data.isEmpty else { return nil }

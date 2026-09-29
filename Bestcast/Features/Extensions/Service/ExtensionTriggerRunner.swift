@@ -111,7 +111,8 @@ final class ExtensionTriggerRunner {
             caches: storage.caches(extension: owner.manifest.name), arguments: [:],
             fallbackText: nil, launchType: launchType,
             isDarkAppearance: NSApp.effectiveAppearance.isDark,
-            canAccessAI: bridge.ai.canAccess(), launchContext: launchContext)
+            canAccessAI: bridge.ai.canAccess(), launchContext: launchContext,
+            isDevelopment: owner.isDevelopment)
         do {
             try await session.load(code: code, file: file, context: context, support: support)
         } catch {

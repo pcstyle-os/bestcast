@@ -49,19 +49,23 @@ export function settle(callId, ok, payload) {
   }
 }
 
+/// The stack travels apart from the message, so the console can fold it under its headline.
 export function log(level, parts) {
-  let text;
+  let message;
+  let stack = "";
   try {
-    text = parts.map(formatLogArg).join(" ");
+    message = parts.map(formatLogArg).join(" ");
+    const error = parts.find((part) => part instanceof Error);
+    if (error) stack = String(error.stack || "");
   } catch {
-    text = "[unserializable log argument]";
+    message = "[unserializable log argument]";
   }
-  raw.log(level, text);
+  raw.log(level, message, stack);
 }
 
 function formatLogArg(value) {
   if (typeof value === "string") return value;
-  if (value instanceof Error) return describeError(value);
+  if (value instanceof Error) return `${value.name || "Error"}: ${value.message}`;
   if (value === undefined) return "undefined";
   try {
     return JSON.stringify(value);

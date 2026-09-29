@@ -68,25 +68,30 @@ enum ShellCommandRunner {
     private static let queue = DispatchQueue(
         label: "com.bestcast.shell-command", qos: .userInitiated, attributes: .concurrent)
 
-    /// Fire-and-forget, keeping only the error tail; shown output goes through `stream`.
+    /// Fire-and-forget, keeping only the error tail; cancelling the caller or `timeout` stops it.
     nonisolated static func run(
         _ command: String, arguments: [String] = [], loadingShellEnvironment: Bool = false,
-        workingDirectory: String? = nil
+        workingDirectory: String? = nil, timeout: Duration? = nil
     ) async -> ShellCommandResult {
-        await withCheckedContinuation { continuation in
-            queue.async {
-                continuation.resume(
-                    returning: execute(
-                        command, arguments: arguments,
-                        loadingShellEnvironment: loadingShellEnvironment,
-                        workingDirectory: workingDirectory))
+        let handle = RunHandle()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                queue.async {
+                    continuation.resume(
+                        returning: execute(
+                            command, arguments: arguments,
+                            loadingShellEnvironment: loadingShellEnvironment,
+                            workingDirectory: workingDirectory, handle: handle, timeout: timeout))
+                }
             }
+        } onCancel: {
+            handle.stop()
         }
     }
 
     nonisolated private static func execute(
         _ command: String, arguments: [String], loadingShellEnvironment: Bool,
-        workingDirectory: String?
+        workingDirectory: String?, handle: RunHandle, timeout: Duration?
     ) -> ShellCommandResult {
         guard let directory = resolvedWorkingDirectory(workingDirectory) else {
             return ShellCommandResult(termination: .launchFailed(missingDirectory(workingDirectory)))
@@ -113,14 +118,24 @@ enum ShellCommandRunner {
             errors?.remove()
         }
 
+        let exit: ProcessExit
         do {
-            try process.runObservingExit().wait()
+            exit = try process.runObservingExit()
         } catch {
             return ShellCommandResult(termination: .launchFailed(error.localizedDescription))
         }
+        handle.attach(process)
+        if let timeout {
+            let (seconds, attoseconds) = timeout.components
+            queue.asyncAfter(deadline: .now() + Double(seconds) + Double(attoseconds) / 1e18) {
+                handle.stop()
+            }
+        }
+        exit.wait()
+        handle.detach()
 
         return ShellCommandResult(
-            termination: .exited(status: process.terminationStatus),
+            termination: handle.isStopped ? .stopped : .exited(status: process.terminationStatus),
             standardOutput: output?.readSuffix(limit: standardOutputLimit),
             standardError: errors?.readSuffix(limit: standardErrorLimit))
     }
@@ -207,6 +222,44 @@ enum ShellCommandRunner {
                 ShellCommandResult(
                     termination: stopped.isSet ? .stopped : .exited(status: status))))
         continuation.finish()
+    }
+
+    /// One `run`'s process, signalled only between launch and exit so a reused pid is never hit.
+    private final class RunHandle: @unchecked Sendable {
+        private let lock = NSLock()
+        private var process: Process?
+        private var stopped = false
+
+        var isStopped: Bool { lock.withLock { stopped } }
+
+        /// A stop that landed before the launch still ends the process at once.
+        func attach(_ process: Process) {
+            let stopNow = lock.withLock {
+                self.process = process
+                return stopped
+            }
+            if stopNow { signal(SIGTERM) }
+        }
+
+        func detach() {
+            lock.withLock { process = nil }
+        }
+
+        func stop() {
+            lock.withLock { stopped = true }
+            signal(SIGTERM)
+            // The backstop, for a command that ignores a polite ask.
+            ShellCommandRunner.queue.asyncAfter(deadline: .now() + ShellCommandRunner.stopGrace) {
+                self.signal(SIGKILL)
+            }
+        }
+
+        private func signal(_ value: Int32) {
+            lock.withLock {
+                guard let process else { return }
+                Darwin.kill(process.processIdentifier, value)
+            }
+        }
     }
 
     /// Set from the main actor and read on the drain queue, so the flag carries its own lock.

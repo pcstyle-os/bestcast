@@ -173,7 +173,7 @@ struct ExtensionCommand: Sendable, Hashable, Identifiable {
 
     init?(json: Any) {
         guard let dict = json as? [String: Any], let name = dict["name"] as? String,
-            let title = dict["title"] as? String
+            ExtensionManifest.isFileNameSafe(name), let title = dict["title"] as? String
         else { return nil }
         self.name = name
         self.title = title
@@ -266,10 +266,22 @@ struct ExtensionManifest: Sendable, Hashable {
         return manifest
     }
 
+    /// A name becomes a file or folder on disk, so it may not climb out of the one it lands in.
+    static func isFileNameSafe(_ name: String) -> Bool {
+        !name.isEmpty && name != "." && name != ".." && !name.contains("/") && !name.contains("\0")
+    }
+
     init?(json: [String: Any]) {
-        guard let name = json["name"] as? String else { return nil }
+        guard let name = json["name"] as? String,
+            Self.isFileNameSafe(name.replacingOccurrences(of: "/", with: "-")),
+            Self.isFileNameSafe(
+                name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: "@", with: ""))
+        else { return nil }
         let commands = (json["commands"] as? [Any] ?? []).compactMap(ExtensionCommand.init(json:))
-        guard !commands.isEmpty else { return nil }
+        let tools = (json["tools"] as? [Any] ?? []).compactMap(ExtensionTool.init(json:))
+        guard !commands.isEmpty || !tools.isEmpty || json["bestcast"] is [String: Any] else {
+            return nil
+        }
         self.name = name
         title = json["title"] as? String ?? name
         description = json["description"] as? String ?? ""
@@ -279,7 +291,7 @@ struct ExtensionManifest: Sendable, Hashable {
         platforms = json["platforms"] as? [String]
         self.commands = commands
         preferences = (json["preferences"] as? [Any] ?? []).compactMap(ExtensionPreferenceSchema.init(json:))
-        tools = (json["tools"] as? [Any] ?? []).compactMap(ExtensionTool.init(json:))
+        self.tools = tools
         aiInstructions = ((json["ai"] as? [String: Any])?["instructions"] as? String)
             .flatMap { $0.isEmpty ? nil : $0 }
         bestcastJSON = (json["bestcast"] as? [String: Any]).flatMap {

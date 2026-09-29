@@ -618,6 +618,18 @@ enum SettingsSearchCatalog {
             .extensionsInstall, "Add from folder",
             keywords: ["local", "develop", "sideload"]),
         .init(
+            .extensionsInstall, "Link development folder",
+            keywords: ["develop", "dev mode", "live reload", "ray develop"]),
+        .init(
+            .extensionsInstall, "Install from Git",
+            keywords: ["github", "clone", "repository", "url"]),
+        .init(
+            group: .extensionsDevelopment, "Development",
+            keywords: ["linked", "console", "logs", "debug", "unlink"]),
+        .init(
+            .extensionsScriptCommands, "Add script folder",
+            keywords: ["script commands", "raycast scripts", "bash", "shell", "inline"]),
+        .init(
             group: .extensionsInstalled, "Installed extensions",
             keywords: ["library", "uninstall", "preferences", "appearance", "alias", "shortcut"]),
         .init(

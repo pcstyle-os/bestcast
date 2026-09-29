@@ -115,7 +115,8 @@ struct RootPaletteView: View {
                 openActions: openActions)
         case .extensionCommand:
             return ExtensionCommandScreen(
-                screen: extensionScreen, extensions: extensions, vm: vm, openActions: openActions)
+                screen: extensionScreen, extensions: extensions, vm: vm, openActions: openActions,
+                openConsole: core.extensionDevelopment.consoleOpener(for: extensions.running))
         }
     }
 

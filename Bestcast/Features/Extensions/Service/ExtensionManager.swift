@@ -42,6 +42,8 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
     @ObservationIgnored private(set) lazy var contributions = ExtensionContributionRunner { [unowned self] in
         try await self.openExportSession(owner: $0, bundle: $1, launchType: $2)
     }
+    let sources = ExtensionSourceStore()
+    let console = ExtensionConsole()
     private let commandMetadata = ExtensionCommandMetadataStore(
         fileURL: ExtensionCatalog.commandMetadataFile())
     /// Automations and composed calls: consent, event sources and the one-shot runs they start.
@@ -55,6 +57,11 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
 
     /// The entry ids an uninstall invalidated, so another feature can drop what it keyed to them.
     @ObservationIgnored var onDidUninstall: (([String]) -> Void)?
+    /// After each switch, so the development watchers start and stop with the feature.
+    @ObservationIgnored var onEnabledChange: ((Bool) -> Void)?
+    /// What the running command was launched with, so a development reload repeats it.
+    @ObservationIgnored private(set) var runningArguments: [String: String] = [:]
+    @ObservationIgnored private var launchStarted: ContinuousClock.Instant?
 
     @ObservationIgnored private var sessionID: String?
     @ObservationIgnored private var backgroundSessionID: String?
@@ -114,6 +121,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             backgroundTask = nil
             installed = []
             appIndex?.setExtensionCommands([])
+            onEnabledChange?(false)
             return
         }
         if let coordinator {
@@ -144,6 +152,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         }
         await refresh()
         ensureBackgroundLoop()
+        onEnabledChange?(true)
     }
 
     func setShowsInLauncher(_ shows: Bool) {
@@ -156,7 +165,16 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
 
     func refresh() async {
         guard isEnabled else { return }
-        let found = await Task.detached(priority: .utility) { ExtensionCatalog.scan() }.value
+        let linked = sources.linkedDirectories
+        let found = await Task.detached(priority: .utility) {
+            ExtensionCatalog.scan(linked: linked.map(ExtensionSourceStore.manifestRoot(of:)))
+        }.value.map { found in
+            var found = found
+            // Only the scan may say linked: a copy wearing that record would survive its uninstall.
+            let recorded = sources.record(for: found.manifest.name)?.kind
+            if found.source == nil, recorded != .linked { found.source = recorded }
+            return found
+        }
         guard isEnabled else { return }
         if found != installed {
             installed = found
@@ -202,14 +220,15 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         // A dropped `interval` retires the dot with it, however stale the stored flag is.
         let schedulable = ExtensionRefreshPolicy.isSchedulable(
             mode: command.mode, interval: command.interval)
+        let subtitle = ExtensionRefreshPolicy.displaySubtitle(
+            manifest: command.subtitle, override: metadata.subtitle, ownerTitle: owner.title)
         return AppEntry(
             id: reference.entryID,
             name: command.title,
             url: owner.directory,
             bundleID: nil,
             kind: .extensionCommand,
-            subtitle: ExtensionRefreshPolicy.displaySubtitle(
-                manifest: command.subtitle, override: metadata.subtitle, ownerTitle: owner.title),
+            subtitle: owner.isDevelopment ? "Dev · \(subtitle ?? owner.title)" : subtitle,
             backgroundRefresh: ExtensionRefreshPolicy.indicator(
                 schedulable: schedulable, backgroundEnabled: metadata.backgroundEnabled,
                 lastError: metadata.lastError),
@@ -250,6 +269,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
     @discardableResult
     func install(from source: URL) async throws -> String {
         let installed = try ExtensionCatalog.install(from: source)
+        recordSource(.folder, path: source, for: installed)
         await refresh()
         return installed.manifest.name
     }
@@ -273,7 +293,8 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
     ) async throws {
         let installer = ExtensionInstaller(
             packageManager: packageManager, additionalSearchPaths: additionalSearchPaths)
-        try await installer.install(listing, onProgress: onProgress)
+        let installed = try await installer.install(listing, onProgress: onProgress)
+        recordSource(.store, path: installed.directory, for: installed)
         await refresh()
     }
 
@@ -285,7 +306,8 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         var failed: [String] = []
         for (index, candidate) in candidates.enumerated() {
             do {
-                _ = try ExtensionCatalog.install(from: candidate.directory)
+                let installed = try ExtensionCatalog.install(from: candidate.directory)
+                recordSource(.raycastImport, path: candidate.directory, for: installed)
             } catch {
                 failed.append(candidate.title)
             }
@@ -308,7 +330,10 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             ).entryID
         }
         ExtensionOAuthKeychain.removeAllTokens(extensionName: installedExtension.manifest.name)
-        try? ExtensionCatalog.uninstall(installedExtension)
+        // A linked folder is the developer's own source tree: forgetting it is all uninstall does.
+        if !installedExtension.isDevelopment { try? ExtensionCatalog.uninstall(installedExtension) }
+        sources.set(nil, for: installedExtension.manifest.name)
+        console.remove(installedExtension.manifest.name)
         storage.removeAll(extension: installedExtension.manifest.name)
         commandMetadata.removeAll(extension: installedExtension.manifest.name)
         appearances.set(nil, for: installedExtension.manifest.name)
@@ -383,6 +408,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         }
 
         running = ExtensionCommandRef(extensionName: owner.manifest.name, commandName: command.name)
+        runningArguments = arguments
         navigationDepth = 1
         state = .launching
 
@@ -399,6 +425,8 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         let supportPath = ExtensionCatalog.supportPath(for: owner.manifest.name)
         try? FileManager.default.createDirectory(at: supportPath, withIntermediateDirectories: true)
 
+        let bootStarted = ContinuousClock.now
+        launchStarted = bootStarted
         do {
             // No-op while a context is already up; after `stop()` this builds a fresh one.
             try await runtime.boot(config: .current(supportDirectory: supportPath))
@@ -406,6 +434,9 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             state = .failed(error.localizedDescription)
             return
         }
+        console.record(
+            level: "timing", message: "boot \(ExtensionRuntime.milliseconds(since: bootStarted))",
+            stack: nil, extension: owner.manifest.name)
 
         // Reading a few hundred KB of bundle is IO; keep it off the main actor.
         let code = await Task.detached(priority: .userInitiated) {
@@ -449,7 +480,8 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             launchType: launchType,
             isDarkAppearance: NSApp.effectiveAppearance.isDark,
             canAccessAI: bridge.ai.canAccess(),
-            launchContext: launchContext)
+            launchContext: launchContext,
+            isDevelopment: owner.isDevelopment)
     }
 
     func stop() async {
@@ -508,7 +540,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             preferences: storage.resolvedPreferences(extension: owner.manifest.name, schemas: schemas),
             caches: storage.caches(extension: owner.manifest.name), arguments: [:],
             fallbackText: nil, isDarkAppearance: NSApp.effectiveAppearance.isDark,
-            canAccessAI: bridge.ai.canAccess())
+            canAccessAI: bridge.ai.canAccess(), isDevelopment: owner.isDevelopment)
         do {
             try await session.load(code: code, file: bundle, context: context, support: support)
         } catch {
@@ -558,7 +590,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             preferences: storage.resolvedPreferences(extension: owner.manifest.name, schemas: schemas),
             caches: storage.caches(extension: owner.manifest.name), arguments: [:],
             fallbackText: nil, launchType: launchType, isDarkAppearance: NSApp.effectiveAppearance.isDark,
-            canAccessAI: bridge.ai.canAccess())
+            canAccessAI: bridge.ai.canAccess(), isDevelopment: owner.isDevelopment)
         do {
             try await session.load(code: code, file: bundle, context: context, support: support)
         } catch {
@@ -881,6 +913,13 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
 
     func runtime(_ runtime: ExtensionRuntime, session: String, didRender tree: RenderTree) {
         guard session == sessionID else { return }
+        if let launchStarted, let name = running?.extensionName {
+            self.launchStarted = nil
+            console.record(
+                level: "timing",
+                message: "first render \(ExtensionRuntime.milliseconds(since: launchStarted))",
+                stack: nil, extension: name)
+        }
         state = .rendered(tree)
         navigationDepth = tree.depth
         seedSearchBarAccessory(in: tree)
@@ -913,9 +952,17 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
     }
 
     func runtime(_ runtime: ExtensionRuntime, log level: String, message: String) {
+        self.runtime(runtime, log: level, message: message, stack: nil)
+    }
+
+    func runtime(_ runtime: ExtensionRuntime, log level: String, message: String, stack: String?) {
         #if DEBUG
-            print("[extension \(level)] \(message)")
+            if level != "timing" {
+                print("[extension \(level)] \(message)" + (stack.map { "\n\($0)" } ?? ""))
+            }
         #endif
+        guard let name = activeExtensionName else { return }
+        console.record(level: level, message: message, stack: stack, extension: name)
     }
 
     // MARK: - ExtensionHostContext

@@ -17,12 +17,19 @@ protocol ExtensionRuntimeDelegate: AnyObject {
     func runtime(_ runtime: ExtensionRuntime, session: String, navigationDepth: Int)
     func runtime(_ runtime: ExtensionRuntime, session: String, didFinish: Void)
     func runtime(_ runtime: ExtensionRuntime, log level: String, message: String)
+    /// A log line with its stack apart; the default folds the stack back into the message.
+    func runtime(_ runtime: ExtensionRuntime, log level: String, message: String, stack: String?)
     /// An AI tool's export settled; `json` is `{"exported": Bool, "value": …}`.
     func runtime(_ runtime: ExtensionRuntime, session: String, didReturn json: String)
 }
 
 extension ExtensionRuntimeDelegate {
     func runtime(_ runtime: ExtensionRuntime, session: String, didReturn json: String) {}
+
+    func runtime(_ runtime: ExtensionRuntime, log level: String, message: String, stack: String?) {
+        guard level != "timing" else { return }
+        self.runtime(runtime, log: level, message: stack.map { "\(message)\n\($0)" } ?? message)
+    }
 }
 
 /// The one `JSContext` a command runs in; every touch is on `queue`, only values cross.
@@ -105,7 +112,8 @@ final class ExtensionRuntime: @unchecked Sendable {
 
         // From here on an exception is a bug in a command: report it and keep going.
         context.exceptionHandler = { [weak self] _, exception in
-            self?.report(level: "error", message: ExtensionRuntime.describe(exception))
+            let (message, stack) = ExtensionRuntime.split(exception)
+            self?.report(level: "error", message: message, stack: stack)
         }
 
         let payload = config.jsonString()
@@ -202,8 +210,9 @@ final class ExtensionRuntime: @unchecked Sendable {
     private func installHost(in context: JSContext) {
         let host = JSValue(newObjectIn: context)
 
-        let log: @convention(block) (String, String) -> Void = { [weak self] level, message in
-            self?.report(level: level, message: message)
+        let log: @convention(block) (String, String, String) -> Void = { [weak self] level, message, stack in
+            let stack = stack.isEmpty || stack == "undefined" ? nil : stack
+            self?.report(level: level, message: message, stack: stack)
         }
         let render: @convention(block) (String, String) -> Void = { [weak self] session, json in
             self?.deliverRender(session: session, json: json)
@@ -280,14 +289,18 @@ final class ExtensionRuntime: @unchecked Sendable {
         let generation = self.generation
         hostTasks[callId] = Task { @MainActor [weak self] in
             guard !Task.isCancelled else { return }
+            let started = ContinuousClock.now
             do {
                 let json = try await hostAPI.perform(
                     api: api, method: method, arguments: arguments)
+                self?.report(
+                    level: "timing",
+                    message: "hostCall \(api).\(method) \(Self.milliseconds(since: started))")
                 await self?.settle(callId: callId, generation: generation, ok: true, payload: json)
             } catch {
-                await self?.settle(
-                    callId: callId, generation: generation, ok: false,
-                    payload: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                let text = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                self?.report(level: "error", message: "hostCall \(api).\(method) failed: \(text)")
+                await self?.settle(callId: callId, generation: generation, ok: false, payload: text)
             }
         }
     }
@@ -333,9 +346,16 @@ final class ExtensionRuntime: @unchecked Sendable {
         Task { @MainActor in delegate.runtime(self, session: session, didRender: tree) }
     }
 
-    private func report(level: String, message: String) {
+    private func report(level: String, message: String, stack: String? = nil) {
         guard let delegate else { return }
-        Task { @MainActor in delegate.runtime(self, log: level, message: message) }
+        Task { @MainActor in delegate.runtime(self, log: level, message: message, stack: stack) }
+    }
+
+    nonisolated static func milliseconds(since start: ContinuousClock.Instant) -> String {
+        let elapsed = ContinuousClock.now - start
+        let value = Double(elapsed.components.seconds) * 1000
+            + Double(elapsed.components.attoseconds) / 1e15
+        return String(format: "%.1f ms", value)
     }
 
     // MARK: - Timers
@@ -383,11 +403,16 @@ final class ExtensionRuntime: @unchecked Sendable {
     // MARK: - JSON helpers
 
     private static func describe(_ exception: JSValue?) -> String {
-        guard let exception else { return "unknown JavaScript error" }
+        let (message, stack) = split(exception)
+        return stack.map { "\(message)\n\($0)" } ?? message
+    }
+
+    private static func split(_ exception: JSValue?) -> (message: String, stack: String?) {
+        guard let exception else { return ("unknown JavaScript error", nil) }
         let stack = exception.objectForKeyedSubscript("stack")?.toString()
         let message = exception.toString() ?? "JavaScript error"
-        if let stack, !stack.isEmpty, stack != "undefined" { return "\(message)\n\(stack)" }
-        return message
+        guard let stack, !stack.isEmpty, stack != "undefined" else { return (message, nil) }
+        return (message, stack)
     }
 
     static func jsonArray(from json: String) -> [Any] {

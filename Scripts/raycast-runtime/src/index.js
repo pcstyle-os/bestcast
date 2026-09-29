@@ -99,8 +99,7 @@ const hostCalls = {
 };
 
 setUncaughtHandler((error) => {
-  const message = describeError(error);
-  log("error", [message]);
+  log("error", ["Uncaught:", error]);
   // Attribute an unhandled rejection to the only running session when there is exactly one, so the
   // palette can show it instead of failing silently.
   if (sessions.size === 1) {
