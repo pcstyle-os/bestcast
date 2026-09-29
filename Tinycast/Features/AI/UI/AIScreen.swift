@@ -32,7 +32,7 @@ struct AIScreen: PaletteScreen {
         items.append(
             PopoverMenuItem(
                 title: dictating ? "Stop Dictation" : "Start Dictation",
-                systemImage: dictating ? "mic.slash" : "mic", shortcut: "⌥Space"
+                systemImage: dictating ? "mic.slash" : "mic", shortcut: "⌥␣"
             ) {
                 dictation.toggle(in: .quickAI)
             })

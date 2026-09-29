@@ -62,7 +62,7 @@ struct KeyCapChip: View {
 
     private static let spokenNames: [String: String] = [
         "🌐︎": "Globe", "🌐": "Globe", "⌃": "Control", "⌥": "Option", "⇧": "Shift", "⌘": "Command",
-        "✦": "Hyper", "↵": "Return", "⌤": "Enter", "⇥": "Tab", "⌫": "Delete",
+        "✦": "Hyper", "↵": "Return", "⌤": "Enter", "⇥": "Tab", "⌫": "Delete", "␣": "Space",
         "⌦": "Forward Delete", "⎋": "Escape", "←": "Left Arrow", "→": "Right Arrow",
         "↑": "Up Arrow", "↓": "Down Arrow", "↖": "Home", "↘": "End", "⇞": "Page Up",
         "⇟": "Page Down", ",": "Comma", ".": "Period", "+": "Plus", "-": "Minus", "/": "Slash",
