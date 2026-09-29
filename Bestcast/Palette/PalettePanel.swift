@@ -212,7 +212,9 @@ final class PalettePanel: NSPanel {
 
     /// The release counts whatever is still held, since ⌥ often lifts before Space does.
     private static func isDictationKey(_ event: NSEvent) -> Bool {
-        guard Int(event.keyCode) == kVK_Space else { return false }
+        guard event.type == .keyDown || event.type == .keyUp,
+            Int(event.keyCode) == kVK_Space
+        else { return false }
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
         return event.type == .keyUp || (event.type == .keyDown && modifiers == .option)
     }
