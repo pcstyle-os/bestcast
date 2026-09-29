@@ -64,7 +64,7 @@
 	<key>NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Tinycast uses automation to perform system actions you explicitly run.</string>
+	<string>Tinycast uses automation to perform system actions you explicitly run, and to read the frontmost browser tab when an AI Command asks for it.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Tinycast shows a camera preview so you can check yourself, and take a photo to the clipboard.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

@@ -50,6 +50,25 @@ final class QuickActionRunner {
                     text: QuickActionPrompt.message(for: action, selection: selection))
             ],
             maxOutputTokens: maxOutputTokens(for: action, selection: selection))
+        return try await stream(request, using: provider, onDelta: onDelta)
+    }
+
+    /// An AI Command's prompt, already expanded; creativity arrives as a temperature to honour.
+    static func run(
+        _ rendered: AICommandTemplate.Rendered, temperature: Double?, using provider: any AIProvider,
+        onDelta: @MainActor (String) -> Void = { _ in }
+    ) async throws -> String {
+        let request = AIRequest(
+            instructions: rendered.instructions,
+            messages: [AIMessage(role: .user, text: rendered.message)],
+            maxOutputTokens: rendered.maxOutputTokens, temperature: temperature)
+        return try await stream(request, using: provider, onDelta: onDelta)
+    }
+
+    private static func stream(
+        _ request: AIRequest, using provider: any AIProvider,
+        onDelta: @MainActor (String) -> Void
+    ) async throws -> String {
         var text = ""
         for try await event in provider.stream(request) {
             guard case .text(let delta) = event else { continue }

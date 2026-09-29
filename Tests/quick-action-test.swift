@@ -389,7 +389,7 @@ struct QuickActionTests {
             QuickActionSettings().previewsResult(.custom(record)),
             "a custom action previews until the reader says otherwise")
         var replacing = record
-        replacing.previewsResult = false
+        replacing.output = .replace
         expect(
             !QuickActionSettings().previewsResult(.custom(replacing)),
             "the choice travels on the record, so deleting it takes the choice too")
@@ -449,13 +449,13 @@ struct QuickActionTests {
             "a custom action may take a name the shipped four already use")
 
         guard let saved = first else { return }
-        try? store.setPreviewsResult(false, id: saved.id)
+        try? store.setOutput(.replace, id: saved.id)
         let reopened = CustomQuickActionStore(directory: directory)
         reopened.load()
         expect(
             reopened.actions.count == 3, "every action survives a relaunch")
         expect(
-            reopened.action(id: saved.id)?.previewsResult == false,
+            reopened.action(id: saved.id)?.output == .replace,
             "a Replace choice survives a relaunch")
         expect(
             reopened.action(entryID: saved.entryID)?.id == saved.id,

@@ -270,6 +270,7 @@ run fallback-test          Tinycast/Features/Launcher/Model/Fallback.swift \
                            Tinycast/Features/QuickActions/Model/QuickAction.swift \
                            Tinycast/Features/QuickActions/Model/BuiltInQuickAction.swift \
                            Tinycast/Features/QuickActions/Model/CustomQuickAction.swift \
+                           Tinycast/Features/QuickActions/Model/AICommandOptions.swift \
                            Tinycast/Features/Quicklinks/Model/Quicklink.swift \
                            Tinycast/Features/Quicklinks/Model/QuicklinkDestination.swift \
                            Tinycast/Features/SystemActions/Model/SystemAction.swift \
@@ -281,6 +282,7 @@ run command-owner-test     Tinycast/Features/Launcher/Model/CommandID.swift \
                            Tinycast/Features/QuickActions/Model/QuickAction.swift \
                            Tinycast/Features/QuickActions/Model/BuiltInQuickAction.swift \
                            Tinycast/Features/QuickActions/Model/CustomQuickAction.swift \
+                           Tinycast/Features/QuickActions/Model/AICommandOptions.swift \
                            Tinycast/Features/Quicklinks/Model/Quicklink.swift \
                            Tinycast/Features/Quicklinks/Model/QuicklinkDestination.swift \
                            Tinycast/Features/SystemActions/Model/SystemAction.swift \
@@ -301,6 +303,7 @@ run hotkey-test            Tinycast/Features/HotKeys/Model/DoubleTapModifier.swi
                            Tinycast/Features/QuickActions/Model/QuickAction.swift \
                            Tinycast/Features/QuickActions/Model/BuiltInQuickAction.swift \
                            Tinycast/Features/QuickActions/Model/CustomQuickAction.swift \
+                           Tinycast/Features/QuickActions/Model/AICommandOptions.swift \
                            Tinycast/Features/Launcher/Model/CommandID.swift \
                            Tinycast/Features/Quicklinks/Model/Quicklink.swift \
                            Tinycast/Features/Quicklinks/Model/QuicklinkDestination.swift \
@@ -627,6 +630,18 @@ run quick-action-test      Tinycast/Features/Settings/AppSettingsKey.swift \
                            Tinycast/Features/AI/Model/AppleIntelligence.swift \
                            Tinycast/Features/AI/Model/ChatGPTSubscription.swift \
                            Tinycast/Features/AI/Model/InstalledAI.swift \
+                           Tinycast/Features/Snippets/Model/Snippet.swift \
+                           Tinycast/Features/Snippets/Model/SnippetTemplateEngine.swift \
+                           Tinycast/Features/QuickActions/Model/*.swift \
+                           Tinycast/Features/QuickActions/Settings/QuickActionSettingsStore.swift
+run ai-command-test        Tinycast/Features/Settings/AppSettingsKey.swift \
+                           Tinycast/Features/AI/Model/AIConnection.swift \
+                           Tinycast/Features/AI/Model/AppleIntelligence.swift \
+                           Tinycast/Features/AI/Model/ChatGPTSubscription.swift \
+                           Tinycast/Features/AI/Model/InstalledAI.swift \
+                           Tinycast/Features/AI/Model/AITemperaturePolicy.swift \
+                           Tinycast/Features/Snippets/Model/Snippet.swift \
+                           Tinycast/Features/Snippets/Model/SnippetTemplateEngine.swift \
                            Tinycast/Features/QuickActions/Model/*.swift \
                            Tinycast/Features/QuickActions/Settings/QuickActionSettingsStore.swift
 run apple-intelligence-test Tinycast/Features/Settings/AppSettingsKey.swift \

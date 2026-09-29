@@ -36,6 +36,7 @@ struct AppleIntelligenceProvider: AIProvider {
                         model: SystemLanguageModel(guardrails: guardrails),
                         transcript: turn.transcript)
                     let options = GenerationOptions(
+                        temperature: request.temperature,
                         maximumResponseTokens: min(
                             request.maxOutputTokens, AppleIntelligence.maxOutputTokens))
                     var delta = AppleIntelligenceDelta()

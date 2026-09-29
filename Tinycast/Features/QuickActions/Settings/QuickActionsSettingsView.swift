@@ -14,6 +14,7 @@ struct QuickActionsSettingsView: View {
     @State private var isTrusted = Permissions.isAccessibilityTrusted()
     @State private var editingAction: BuiltInQuickAction?
     @State private var customEditing: CustomQuickActionEditRequest?
+    @State private var showingLibrary = false
     private let refreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -47,6 +48,7 @@ struct QuickActionsSettingsView: View {
 
             Group {
                 actionsSection
+                aiCommandsSection
                 modelSection
                 languageSection
             }
@@ -70,6 +72,12 @@ struct QuickActionsSettingsView: View {
                 request: request,
                 model: request.action.flatMap { store.modelOverride(for: .custom($0)) })
         }
+        .settingsEditorPanel(isPresented: $showingLibrary) { AICommandLibraryPanel() }
+        .onChange(of: core.quickActionCoordinator.libraryRequested, initial: true) {
+            guard core.quickActionCoordinator.libraryRequested else { return }
+            core.quickActionCoordinator.libraryRequested = false
+            showingLibrary = true
+        }
         .onAppear {
             core.quickActionCoordinator.loadLanguages()
             store.repairModel(against: aiSettings.connections, fallback: aiSettings.defaultModel)
@@ -91,6 +99,17 @@ struct QuickActionsSettingsView: View {
     private var actionsSection: some View {
         Section {
             ForEach(BuiltInQuickAction.allCases, content: builtInRow)
+        } header: {
+            SettingsSectionHeader(.quickActionsActions)
+        } footer: {
+            Text("Replace writes into your document, and undo restores it. Preview shows a panel first.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var aiCommandsSection: some View {
+        Section {
             ForEach(customActions.actions) { action in
                 SettingsRow(title: action.name, subtitle: subtitle(for: .custom(action))) {
                     SymbolImage(name: action.symbol, size: Theme.Size.quickActionHeaderIcon)
@@ -101,22 +120,56 @@ struct QuickActionsSettingsView: View {
                     }
                     AliasField(key: action.entryID, name: action.name)
                     ShortcutRecorder(action: .quickAction(id: action.id), isQuiet: true)
-                    resultPicker(title: action.name, selection: previewBinding(action))
+                    outputPicker(action)
                     launcherToggle(title: action.name, entry: AppEntry(action))
                 }
             }
             Button {
                 customEditing = CustomQuickActionEditRequest(action: nil)
             } label: {
-                SettingsRowTitle(.quickActionsActions, "Add Quick Action")
+                SettingsRowTitle(.quickActionsAICommands, "Add AI Command")
+            }
+            Button {
+                showingLibrary = true
+            } label: {
+                SettingsRowTitle(.quickActionsAICommands, "Add from Library…")
+            }
+            LabeledContent {
+                HStack(spacing: Theme.Spacing.md) {
+                    Button("Import…") {
+                        Task { await core.quickActionCoordinator.importCommands() }
+                    }
+                    Button("Export…") {
+                        Task { await core.quickActionCoordinator.exportCommands() }
+                    }
+                    .disabled(customActions.actions.isEmpty)
+                }
+            } label: {
+                SettingsRowTitle(.quickActionsAICommands, "Import or export")
+                Text("A JSON file, in the shape Raycast exports its AI Commands.")
+            }
+            if let entry = CommandCatalog.entry(for: .browseAICommands) {
+                FeatureCommandRow(entry: entry)
             }
         } header: {
-            SettingsSectionHeader(.quickActionsActions)
+            SettingsSectionHeader(.quickActionsAICommands)
         } footer: {
-            Text("Replace writes into your document, and undo restores it. Preview shows a panel first.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text(
+                "Write {selection}, {clipboard}, {browser-tab}, {frontmost-app}, {date} or "
+                    + "{argument name=\"topic\"} into a prompt. One with none acts on the selection."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
+    }
+
+    private func outputPicker(_ action: CustomQuickAction) -> some View {
+        Picker("", selection: outputBinding(action)) {
+            ForEach(AICommandOutput.allCases) { Text($0.shortTitle).tag($0) }
+        }
+        .labelsHidden()
+        .fixedSize()
+        .accessibilityLabel("Where \(action.name) puts its result")
     }
 
     private func builtInRow(_ action: BuiltInQuickAction) -> some View {
@@ -231,10 +284,10 @@ struct QuickActionsSettingsView: View {
             set: { store.settings.setPreviewsResult($0, for: action) })
     }
 
-    private func previewBinding(_ action: CustomQuickAction) -> Binding<Bool> {
+    private func outputBinding(_ action: CustomQuickAction) -> Binding<AICommandOutput> {
         Binding(
-            get: { action.previewsResult },
-            set: { core.quickActionCoordinator.setPreviewsResult($0, id: action.id) })
+            get: { action.output },
+            set: { core.quickActionCoordinator.setOutput($0, id: action.id) })
     }
 
     private func launcherBinding(_ entry: AppEntry) -> Binding<Bool> {

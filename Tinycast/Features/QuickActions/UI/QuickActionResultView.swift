@@ -7,6 +7,7 @@ struct QuickActionResultView: View {
     let languages: [Locale.Language]
     let onReplace: () -> Void
     let onCopy: () -> Void
+    let onContinue: (() -> Void)?
     let onCancel: () -> Void
     let onRetranslate: (Locale.Language) -> Void
     let onOpenLanguageSettings: () -> Void
@@ -131,7 +132,7 @@ struct QuickActionResultView: View {
         if !chunks.isEmpty {
             // One `Text` per chunk would break the wrap, so the runs are styled inside one string.
             prose(Text(attributed(chunks)))
-        } else if state.action == .summarize {
+        } else if state.action == .summarize || state.rendered != nil {
             ChatMarkdownText(blocks: MarkdownBlock.parse(state.output))
         } else {
             prose(Text(state.output))
@@ -197,10 +198,17 @@ struct QuickActionResultView: View {
             Spacer(minLength: metrics.spacing.md)
             Button("Dismiss", action: onCancel)
                 .buttonStyle(.modalAction(.cancel, fillsWidth: false))
+            if let onContinue {
+                Button("Continue in Chat", action: onContinue)
+                    .buttonStyle(.modalAction(.standard, fillsWidth: false))
+                    .disabled(!state.canReplace)
+                    .accessibilityLabel("Continue in AI Chat")
+                    .help("Continue in AI Chat (⌘J)")
+            }
             Button("Copy", action: onCopy)
                 .buttonStyle(.modalAction(.standard, fillsWidth: false))
                 .disabled(!state.canReplace)
-            Button("Replace", action: onReplace)
+            Button(state.deliveryTitle, action: onReplace)
                 .buttonStyle(.modalAction(.primary, fillsWidth: false))
                 .disabled(!state.canReplace)
         }

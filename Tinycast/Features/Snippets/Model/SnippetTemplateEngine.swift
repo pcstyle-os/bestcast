@@ -11,14 +11,20 @@ enum SnippetTemplateEngine {
         let timeZone: TimeZone
         /// Injected so `{uuid}` is reproducible under test.
         let makeUUID: @Sendable () -> String
+        /// Read only by AI Commands; nil leaves the placeholder as written, so a snippet never asks.
+        var frontmostApp: String?
+        var browserTab: String?
 
         var clipboard: String { clipboardHistory.first ?? "" }
 
         /// A copy reading a different selection, for a caller that learns it after capture.
         func replacingSelection(with selection: String) -> Self {
-            Self(
+            var copy = Self(
                 clipboardHistory: clipboardHistory, selection: selection, now: now,
                 calendar: calendar, locale: locale, timeZone: timeZone, makeUUID: makeUUID)
+            copy.frontmostApp = frontmostApp
+            copy.browserTab = browserTab
+            return copy
         }
 
         init(
@@ -72,6 +78,26 @@ enum SnippetTemplateEngine {
         let text: String
         let cursorOffsetFromEnd: Int?
         let missingArguments: [MissingArgument]
+    }
+
+    /// An `{argument}` as written, default included — what a field strip has to draw.
+    struct DeclaredArgument: Sendable, Equatable {
+        let name: String
+        let options: [String]
+        let defaultValue: String?
+    }
+
+    /// The kinds of fact a template reads, so a caller gathers only what it will use.
+    enum Placeholder: Sendable, Hashable {
+        case clipboard
+        case selection
+        case dateTime
+        case uuid
+        case argument
+        case cursor
+        case snippet
+        case frontmostApp
+        case browserTab
     }
 
     /// Formatting the result asks for: none for a snippet, percent-encoding for a quicklink URL.
@@ -132,6 +158,38 @@ enum SnippetTemplateEngine {
             declared.append(MissingArgument(name: token.name, options: token.options))
         }
         return declared
+    }
+
+    /// Every `{argument}` once, in written order, including those a `default=` answers.
+    static func arguments(in text: String) -> [DeclaredArgument] {
+        var declared: [DeclaredArgument] = []
+        var seen = Set<String>()
+        for segment in parseSegments(text) {
+            guard case .argument(let token, _, _) = segment, seen.insert(token.name).inserted
+            else { continue }
+            declared.append(
+                DeclaredArgument(
+                    name: token.name, options: token.options, defaultValue: token.defaultValue))
+        }
+        return declared
+    }
+
+    static func placeholders(in text: String) -> Set<Placeholder> {
+        var found = Set<Placeholder>()
+        for segment in parseSegments(text) {
+            switch segment {
+            case .literal: continue
+            case .clipboard: found.insert(.clipboard)
+            case .selection: found.insert(.selection)
+            case .dateTime: found.insert(.dateTime)
+            case .uuid: found.insert(.uuid)
+            case .argument: found.insert(.argument)
+            case .cursor: found.insert(.cursor)
+            case .snippetReference: found.insert(.snippet)
+            case .fact(let fact, _, _): found.insert(fact.placeholder)
+            }
+        }
+        return found
     }
 
     /// Whether the template reads the selection. Parsed, so a literal brace run doesn't count.
@@ -195,6 +253,26 @@ enum SnippetTemplateEngine {
         case argument(ArgumentToken, source: String, modifiers: [Modifier])
         case cursor
         case snippetReference(key: String, source: String)
+        case fact(ContextFact, source: String, modifiers: [Modifier])
+    }
+
+    private enum ContextFact {
+        case frontmostApp
+        case browserTab
+
+        var placeholder: Placeholder {
+            switch self {
+            case .frontmostApp: return .frontmostApp
+            case .browserTab: return .browserTab
+            }
+        }
+
+        func value(in context: ExpansionContext) -> String? {
+            switch self {
+            case .frontmostApp: return context.frontmostApp
+            case .browserTab: return context.browserTab
+            }
+        }
     }
 
     private struct DateTimeToken {
@@ -272,6 +350,12 @@ enum SnippetTemplateEngine {
                 }
             case .cursor:
                 result.markCursor()
+            case .fact(let fact, let source, let modifiers):
+                guard let value = fact.value(in: context) else {
+                    result.append(source)
+                    continue
+                }
+                result.append(apply(modifiers, to: value, encoding: encoding))
             case .snippetReference(let key, let source):
                 guard depth < maximumReferenceDepth,
                     let target = resolveReference(key, snippets: snippets),
@@ -419,6 +503,13 @@ enum SnippetTemplateEngine {
         case "argument", "query":
             guard let argument = parseArgument(token) else { return nil }
             return .argument(argument, source: source, modifiers: modifiers)
+        case "frontmost-app":
+            guard token.parameters.isEmpty else { return nil }
+            return .fact(.frontmostApp, source: source, modifiers: modifiers)
+        // Raycast's `format=` picks page content its browser extension reads; only the tab is here.
+        case "browser-tab":
+            guard token.hasOnly(["format"]) else { return nil }
+            return .fact(.browserTab, source: source, modifiers: modifiers)
         case "snippet":
             guard let name = token.parameters["name"]?.trimmingCharacters(in: .whitespaces),
                 !name.isEmpty, token.hasOnly(["name"]), modifiers.isEmpty

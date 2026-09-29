@@ -152,8 +152,10 @@ quicklink expanding into a URL percent-encodes every value, and `raw` is how a t
 
 A token Tinycast cannot parse — an unknown name, an unknown modifier, a duplicated or unsupported
 parameter, an unterminated quote — is left in the text exactly as written rather than silently
-dropped. `{browser-tab}` and `{calculator}` are not supported: the first needs a browser extension,
-and the second has no defined input inside a snippet.
+dropped. `{calculator}` is not supported, because it has no defined input inside a snippet.
+`{browser-tab}` and `{frontmost-app}` are parsed, but only an AI Command fills them (see
+[quick-actions.md](quick-actions.md#placeholders)). A snippet or quicklink leaves them as written,
+so expanding a snippet never sends an Apple Event to a browser.
 
 Arguments are unique and requested in first-appearance order, including arguments inside referenced
 snippets. Inserted clipboard, selection, and argument values are literal: token-shaped text inside a

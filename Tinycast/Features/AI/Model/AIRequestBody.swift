@@ -35,6 +35,9 @@ enum AIRequestBody {
         if configuration.disablesThinking {
             body["thinking"] = ["type": "disabled"]
         }
+        if let temperature = AITemperaturePolicy.value(input.temperature, for: configuration) {
+            body["temperature"] = temperature
+        }
         if !input.tools.isEmpty {
             body["tools"] = input.tools.map {
                 [
@@ -67,6 +70,9 @@ enum AIRequestBody {
             "stream": true
         ]
         if !systemParts.isEmpty { body["system"] = systemParts.joined(separator: "\n\n") }
+        if let temperature = AITemperaturePolicy.value(input.temperature, for: configuration) {
+            body["temperature"] = temperature
+        }
         var tools: [[String: Any]] = input.tools.map {
             [
                 "name": $0.name, "description": $0.description,
