@@ -82,6 +82,11 @@ enum ExtensionCatalog {
         supportDirectory().appendingPathComponent("extension-contributions.json", isDirectory: false)
     }
 
+    /// Consent lives apart from `settings.json` and every backup, so neither can carry a grant.
+    static func triggersFile() -> URL {
+        supportDirectory().appendingPathComponent("extension-triggers.json", isDirectory: false)
+    }
+
     /// Per-extension `environment.supportPath` — an extension's own scratch directory.
     static func supportPath(for name: String) -> URL {
         supportRoot().appendingPathComponent(safeName(name), isDirectory: true)
@@ -204,7 +209,7 @@ enum ExtensionCatalog {
         }
     }
 
-    /// Manifest, built commands and `assets/` only — never `node_modules` or `.js.map`s.
+    /// Manifest, built commands, `assets/` and `bestcast` files, never `node_modules` or maps.
     @discardableResult
     static func install(from source: URL) throws -> InstalledExtension {
         guard let manifest = try? ExtensionManifest.load(directory: source) else {
@@ -238,7 +243,7 @@ enum ExtensionCatalog {
                     try fm.copyItem(at: item, to: destination.appendingPathComponent(folder))
                 }
             }
-            try copyContributionExports(of: manifest, from: source, to: destination)
+            try copyBestcastFiles(of: manifest, from: source, to: destination)
             try restoreExecutablePermissions(in: destination)
         } catch {
             throw InstallError.copyFailed(error.localizedDescription)
@@ -249,12 +254,13 @@ enum ExtensionCatalog {
         return InstalledExtension(manifest: installedManifest, directory: destination)
     }
 
-    /// A contributed export may live anywhere under the source; one already copied is left alone.
-    private static func copyContributionExports(
+    /// Contribution and trigger files may sit anywhere in the source; one already copied stays.
+    private static func copyBestcastFiles(
         of manifest: ExtensionManifest, from source: URL, to destination: URL
     ) throws {
         let fm = FileManager.default
-        for path in ExtensionContributions(manifest: manifest).exportPaths.sorted() {
+        let paths = ExtensionContributions(manifest: manifest).exportPaths.union(manifest.bestcastFiles)
+        for path in paths.sorted() {
             let item = source.appendingPathComponent(path)
             let target = destination.appendingPathComponent(path)
             guard fm.fileExists(atPath: item.path), !fm.fileExists(atPath: target.path) else { continue }

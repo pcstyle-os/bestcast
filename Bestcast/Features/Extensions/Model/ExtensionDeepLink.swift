@@ -9,6 +9,10 @@ struct ExtensionDeepLink: Sendable, Equatable {
     let arguments: [String: String]
     let fallbackText: String?
     let launchType: ExtensionLaunchType
+    /// `bestcast://extensions/<extension>/trigger/<name>` fires a deeplink trigger, not a command.
+    var triggerName: String?
+    /// Every query item as written; a deeplink trigger's event carries it as `payload.query`.
+    var query: [String: String] = [:]
 
     /// `owner/ext` first so a scoped manifest wins over a bare slug collision.
     var extensionCandidates: [String] {
@@ -48,6 +52,7 @@ struct ExtensionDeepLink: Sendable, Equatable {
         guard segments.count >= 3, segments[0].lowercased() == "extensions" else { return nil }
         let body = Array(segments.dropFirst())
         guard body.count >= 2 else { return nil }
+        if let trigger = parseTrigger(url: url, body: body) { return trigger }
         let ownerOrAuthor: String?
         let extensionName: String
         let commandName: String
@@ -85,6 +90,22 @@ struct ExtensionDeepLink: Sendable, Equatable {
         return ExtensionDeepLink(
             ownerOrAuthor: ownerOrAuthor, extensionName: extensionName, commandName: commandName,
             arguments: arguments, fallbackText: fallbackText, launchType: launchType)
+    }
+
+    private static func parseTrigger(url: URL, body: [String]) -> ExtensionDeepLink? {
+        guard url.scheme?.lowercased() == "bestcast", body.count >= 3,
+            body[body.count - 2].lowercased() == "trigger", !body[body.count - 1].isEmpty,
+            !body[body.count - 3].isEmpty
+        else { return nil }
+        let owner = body.dropLast(3).joined(separator: "/")
+        var query: [String: String] = [:]
+        for item in URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [] {
+            query[item.name] = item.value ?? ""
+        }
+        return ExtensionDeepLink(
+            ownerOrAuthor: owner.isEmpty ? nil : owner, extensionName: body[body.count - 3],
+            commandName: "", arguments: [:], fallbackText: nil, launchType: .background,
+            triggerName: body[body.count - 1], query: query)
     }
 
     /// Raycast sends one URL-encoded JSON object; anything else means no arguments, not a failure.

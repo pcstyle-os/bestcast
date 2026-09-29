@@ -87,6 +87,10 @@ final class ExtensionCoordinator {
             core.showMessage("Extensions are disabled — enable them in Settings", tone: .danger)
             return
         }
+        if link.triggerName != nil {
+            extensions.triggers.runDeepLink(link)
+            return
+        }
         guard let (owner, command) = extensions.resolve(link) else {
             core.showMessage("No installed extension provides '\(link.commandName)'", tone: .danger)
             return
@@ -295,6 +299,27 @@ final class ExtensionCoordinator {
                 + [DialogAction(title: "Cancel", role: .cancel)],
             defaultIndex: 0)
         return titles.indices.contains(index) ? index : nil
+    }
+
+    /// Asked once per caller and export; the answer lives in `extension-triggers.json`.
+    func confirmCompose(
+        caller: String, target: String, export: String, description: String
+    ) async -> Bool {
+        NSApp.activate(ignoringOtherApps: true)
+        return await core.confirm(
+            title: "\(caller) wants to use \(target)’s \(export)",
+            message: description.isEmpty ? "Revoke it any time under Automations." : description,
+            symbol: "puzzlepiece.extension", confirmTitle: "Allow", tone: .neutral,
+            confirmRole: .standard, dismissTitle: "Don’t Allow")
+    }
+
+    /// A trigger's opt-in: what it will hear and when it runs, said before it ever does.
+    func confirmTrigger(_ trigger: ExtensionTrigger, of extensionTitle: String) async -> Bool {
+        await core.confirm(
+            title: "Let \(extensionTitle) run “\(trigger.title)”?",
+            message: ExtensionTriggerConsent.explanation(for: trigger),
+            symbol: "puzzlepiece.extension", confirmTitle: "Turn On", tone: .neutral,
+            confirmRole: .standard)
     }
 
     /// The dialog outranks the palette, so a view command keeps its screen behind it.

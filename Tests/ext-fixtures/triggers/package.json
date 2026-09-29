@@ -1,0 +1,35 @@
+{
+  "name": "triggers-fixture",
+  "title": "Triggers Fixture",
+  "description": "Drives Tests/ext-triggers-test.swift.",
+  "author": "bestcast",
+  "commands": [
+    { "name": "echo", "title": "Echo", "mode": "no-view" }
+  ],
+  "bestcast": {
+    "triggers": [
+      {
+        "name": "shout",
+        "title": "Shout Copied Text",
+        "on": "clipboard.changed",
+        "filter": { "kind": "text", "match": "^h" },
+        "export": "src/upper.js",
+        "then": [{ "export": "src/wrap.js" }],
+        "throttle": "5s",
+        "replacesSelection": true
+      },
+      {
+        "name": "weekday-morning",
+        "on": "schedule",
+        "schedule": { "at": "09:30", "weekdays": [1, 2, 3, 4, 5] },
+        "command": "echo"
+      },
+      { "name": "broken", "on": "clipboard.changed", "export": "../escape.js" },
+      { "name": "no-schedule", "on": "schedule", "command": "echo" }
+    ],
+    "exports": [
+      { "name": "shout", "export": "src/upper.js", "public": true, "description": "Upper-cases text." },
+      { "name": "wrap", "export": "src/wrap.js" }
+    ]
+  }
+}

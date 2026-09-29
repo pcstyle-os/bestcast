@@ -282,7 +282,8 @@ struct ExtensionManifest: Sendable, Hashable {
         tools = (json["tools"] as? [Any] ?? []).compactMap(ExtensionTool.init(json:))
         aiInstructions = ((json["ai"] as? [String: Any])?["instructions"] as? String)
             .flatMap { $0.isEmpty ? nil : $0 }
-        bestcastJSON = (json["bestcast"] as? [String: Any])
-            .flatMap { try? JSONSerialization.data(withJSONObject: $0, options: .sortedKeys) }
+        bestcastJSON = (json["bestcast"] as? [String: Any]).flatMap {
+            try? JSONSerialization.data(withJSONObject: $0, options: .sortedKeys)
+        }
     }
 }
