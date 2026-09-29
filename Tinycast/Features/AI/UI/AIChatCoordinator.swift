@@ -14,6 +14,10 @@ final class AIChatCoordinator {
     private let window: AppWindowController
     /// Chats with a title request in flight, so a quick second reply never asks twice.
     @ObservationIgnored private var naming: [UUID: Task<Void, Never>] = [:]
+    /// Read aloud on the reader's press only; nothing it says leaves the Mac.
+    let speaker = ChatSpeaker()
+    /// The window's Chat Instructions sheet; ⌘K opens it for whichever chat is showing.
+    var showsChatInstructions = false
 
     init(
         chats: AIChatSurfacesState, settings: AppSettings, appIndex: AppIndex,
@@ -38,6 +42,7 @@ final class AIChatCoordinator {
         guard settings.aiEnabled else {
             for request in naming.values { request.cancel() }
             naming = [:]
+            speaker.stop()
             // Before the handle closes: cancelling an open reply saves the conversation it ends.
             chats.reset()
             window.close()
@@ -73,7 +78,7 @@ final class AIChatCoordinator {
         let find = ChatFindState()
         window.show(chrome: AIChatWindowChrome(coordinator: self, chats: chats, find: find)) {
             AIChatSplitViewController(
-                sidebar: AIChatSidebarView().environment(self),
+                sidebar: AIChatSidebarView().environment(self).environment(find),
                 detail: AIChatDetailView().environment(self).environment(find))
         }
     }
@@ -132,7 +137,8 @@ final class AIChatCoordinator {
 
     /// The title the window and the sidebar show, a rename included.
     func title(of chat: AIChatState) -> String {
-        core.chatHistory.conversation(id: chat.session.id)?.displayTitle ?? chat.session.title
+        if chat.isTemporary, chat.session.messages.isEmpty { return "Temporary Chat" }
+        return core.chatHistory.conversation(id: chat.session.id)?.displayTitle ?? chat.session.title
     }
 
     func copyChat(id: UUID) {
@@ -141,7 +147,7 @@ final class AIChatCoordinator {
         core.showMessage("Chat copied")
     }
 
-    /// The same Markdown Copy Chat makes, written where the reader chooses.
+    /// The same Markdown Copy as Markdown makes, written where the reader chooses.
     func exportChat(id: UUID) {
         guard let markdown = markdownTranscript(of: id) else { return }
         let panel = NSSavePanel()
@@ -250,9 +256,7 @@ final class AIChatCoordinator {
     // MARK: - Either surface
 
     @discardableResult
-    func send(
-        _ input: String, in chat: AIChatState, replacingLastExchange: Bool = false
-    ) -> Bool {
+    func send(_ input: String, in chat: AIChatState) -> Bool {
         guard settings.aiEnabled else { return false }
         do {
             let address = MCPComposerAddress.parse(input, slugs: core.mcpCoordinator.slugs)
@@ -260,7 +264,7 @@ final class AIChatCoordinator {
                 address.rest, using: try provider(for: chat, scopedTo: address.slug),
                 model: model(for: chat), webSearch: webSearch(for: chat),
                 instructions: instructions(for: chat), contextBudget: contextBudget(for: chat),
-                toolScope: address.slug, replacingLastExchange: replacingLastExchange)
+                toolScope: address.slug)
             // Named while the answer streams, so the sidebar has a title before the reply ends.
             if sent { nameIfNeeded(chat) }
             return sent
@@ -271,12 +275,14 @@ final class AIChatCoordinator {
     }
 
     /// The same question, asked of whichever model is selected now, of the server it named.
-    func regenerate(in chat: AIChatState) {
+    func regenerate(in chat: AIChatState, reply: UUID? = nil) {
         guard settings.aiEnabled else { return }
-        let scope = chat.session.messages.last { $0.role == .user }?.toolScope
+        let messages = chat.session.messages
+        let end = reply.flatMap { id in messages.firstIndex { $0.id == id } } ?? messages.endIndex
+        let scope = messages[..<end].last { $0.role == .user }?.toolScope
         do {
             chat.regenerate(
-                using: try provider(for: chat, scopedTo: scope),
+                reply: reply, using: try provider(for: chat, scopedTo: scope),
                 model: model(for: chat), webSearch: webSearch(for: chat),
                 instructions: instructions(for: chat), contextBudget: contextBudget(for: chat))
         } catch {
@@ -290,10 +296,12 @@ final class AIChatCoordinator {
     }
 
     private func instructions(for chat: AIChatState) -> String? {
-        QuickAIInstructions.compose(
-            systemPrompt: core.aiSettings.systemPrompt,
-            systemPromptEnabled: core.aiSettings.systemPromptEnabled, preset: chat.preset,
-            followUps: chat === chats.quickAI && core.aiSettings.quickAIFollowUps)
+        AIInstructions.compose(
+            userPrompt: core.aiSettings.systemPrompt,
+            isEnabled: core.aiSettings.systemPromptEnabled, chatPrompt: chat.session.instructions,
+            presetPrompt: chat.preset?.systemPrompt,
+            followUpRequest: chat === chats.quickAI && core.aiSettings.quickAIFollowUps
+                ? QuickAIInstructions.followUpRequest : nil)
     }
 
     /// A turn's route and its tools: a CLI with its own client is handed servers, others the loop.
@@ -407,7 +415,8 @@ final class AIChatCoordinator {
             stagedFiles: chat.pendingAttachments.count,
             stagedBytes: chat.pendingAttachments.reduce(0) { $0 + $1.payload.byteCount },
             usage: chat.usage,
-            systemPrompt: core.aiSettings.systemPromptEnabled || chat.preset != nil,
+            systemPrompt: core.aiSettings.systemPromptEnabled || chat.preset != nil
+                || chat.session.instructions != nil,
             webSearch: webSearch(for: chat),
             toolServers: can.tools && scope.isEnabled
                 ? mcpServers.count { scope.allows($0.slug) } : 0)

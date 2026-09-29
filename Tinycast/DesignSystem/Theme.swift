@@ -224,6 +224,10 @@ enum Theme {
         static let chatSourceTitle: CGFloat = 200
         /// The context card's width: a label column and a value one, with room for a model name.
         static let chatContextCard: CGFloat = 300
+        /// What an edit is about to replace fades to this, so the cut point reads at a glance.
+        static let chatSupersededOpacity: CGFloat = 0.4
+        /// The Chat Instructions sheet: wide enough for a paragraph-long prompt per line.
+        static let chatInstructionsSheet: CGFloat = 480
         /// A grouped `Form` row's control height.
         static let settingsControlHeight: CGFloat = 28
         static let emojiSkinToneGlyph: CGFloat = 13

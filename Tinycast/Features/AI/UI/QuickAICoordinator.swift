@@ -8,8 +8,6 @@ final class QuickAICoordinator {
     private let palette: PaletteState
     private let paletteCoordinator: PaletteCoordinator
     private unowned let core: AppCore
-    /// The question ↑ took back into the composer; sending it replaces that exchange.
-    private var editingMessageID: UUID?
 
     init(
         chats: AIChatSurfacesState, settings: AppSettings, palette: PaletteState,
@@ -45,7 +43,6 @@ final class QuickAICoordinator {
             return
         }
         chat.startNewChat()
-        editingMessageID = nil
         paletteCoordinator.showPalette(mode: .ai)
         send(prompt)
     }
@@ -54,7 +51,6 @@ final class QuickAICoordinator {
     func startPreset(id: UUID) {
         guard settings.aiEnabled, core.aiSettings.preset(id: id) != nil else { return }
         chat.startNewChat()
-        editingMessageID = nil
         applyPreset(id: id)
         paletteCoordinator.showPalette(mode: .ai)
     }
@@ -148,16 +144,11 @@ final class QuickAICoordinator {
 
     @discardableResult
     func send(_ input: String) -> Bool {
-        let lastQuestion = chat.session.messages.last { $0.role == .user }?.id
-        let replacing = editingMessageID != nil && editingMessageID == lastQuestion
-        let sent = chatCoordinator.send(input, in: chat, replacingLastExchange: replacing)
-        if sent { editingMessageID = nil }
-        return sent
+        chatCoordinator.send(input, in: chat)
     }
 
     func startNewChat() {
         chat.startNewChat()
-        editingMessageID = nil
         // A fresh conversation, not a fresh root: whatever opened chat is still behind it.
         palette.replace(mode: .ai)
     }
@@ -168,7 +159,7 @@ final class QuickAICoordinator {
 
     /// A chat the window holds opens there, since two writers would each save over the other.
     func openChat(id: UUID) {
-        editingMessageID = nil
+        chat.cancelEditing()
         guard chats.openInQuickAI(id: id) else {
             continueInChat(id: id)
             return
@@ -228,22 +219,13 @@ final class QuickAICoordinator {
 
     // MARK: - Replies and context
 
-    /// ↑ on an empty composer: the last question comes back, with what it carried, to be re-sent.
+    /// ↑ on an empty composer: the window's Edit, on the last question; what it carried goes again.
     func editLastMessage() -> Bool {
-        guard !chat.isStreaming, chat.pendingAttachments.isEmpty,
-            let question = chat.session.messages.last(where: { $0.role == .user })
+        guard chat.pendingAttachments.isEmpty,
+            let question = chatCoordinator.lastQuestion(in: chat),
+            chat.beginEditing(question)
         else { return false }
-        chat.clearAttachments()
-        // No preview: the chip would decode the full-size image on every header render.
-        for image in question.images {
-            chat.attach(ChatAttachment(payload: .image(image), name: "Image", preview: nil))
-        }
-        for document in question.documents {
-            chat.attach(
-                ChatAttachment(payload: .document(document), name: document.name, preview: nil))
-        }
-        palette.query = question.text
-        editingMessageID = question.id
+        palette.query = chat.draft
         return true
     }
 

@@ -600,6 +600,7 @@ run ai-chat-test           Tinycast/Features/AI/Model/AIRequest.swift \
                            Tinycast/Features/AI/Model/ChatReferences.swift \
                            Tinycast/Features/AI/Model/ChatTitle.swift \
                            Tinycast/Features/AI/Model/ChatFind.swift \
+                           Tinycast/Features/AI/Model/ChatSearchSnippet.swift \
                            Tinycast/Features/AI/Model/ChatCitations.swift \
                            Tinycast/Features/AI/Model/ChatToolScope.swift \
                            Tinycast/Features/AI/Model/MarkdownBlock.swift \

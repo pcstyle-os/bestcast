@@ -47,31 +47,40 @@ struct QuickAITests {
     }
 
     static func instructions() {
-        let off = QuickAIInstructions.compose(
-            systemPrompt: "Be terse.", systemPromptEnabled: false, preset: nil, followUps: false)
+        let follow = QuickAIInstructions.followUpRequest
+        let off = AIInstructions.compose(userPrompt: "Be terse.", isEnabled: false)
         expect(off == nil, "a disabled prompt and no follow-ups send no instructions")
 
-        let global = QuickAIInstructions.compose(
-            systemPrompt: "Be terse.", systemPromptEnabled: true, preset: nil, followUps: false)
+        let global = AIInstructions.compose(userPrompt: "Be terse.", isEnabled: true)
         expect(global?.hasSuffix("Be terse.") == true, "the global prompt goes last")
 
-        let onlyFollowUps = QuickAIInstructions.compose(
-            systemPrompt: "Be terse.", systemPromptEnabled: false, preset: nil, followUps: true)
-        expect(
-            onlyFollowUps == QuickAIInstructions.followUpRequest,
-            "follow-ups alone still ask for the fence")
+        let onlyFollowUps = AIInstructions.compose(
+            userPrompt: "Be terse.", isEnabled: false, followUpRequest: follow)
+        expect(onlyFollowUps == follow, "follow-ups alone still ask for the fence")
 
         let preset = QuickAIPreset(name: "Reviewer", systemPrompt: "Review code.")
-        let presetPrompt = QuickAIInstructions.compose(
-            systemPrompt: "Be terse.", systemPromptEnabled: false, preset: preset, followUps: true)
+        let presetPrompt = AIInstructions.compose(
+            userPrompt: "Be terse.", isEnabled: false, presetPrompt: preset.systemPrompt,
+            followUpRequest: follow)
         expect(presetPrompt?.contains("Review code.") == true, "a preset's prompt is sent")
         expect(presetPrompt?.contains("Be terse.") == false, "a preset replaces the global prompt")
         expect(
-            presetPrompt?.hasSuffix(QuickAIInstructions.followUpRequest) == true,
-            "the follow-up request comes after the preset")
+            presetPrompt?.hasPrefix(AIPreamble.text) == true,
+            "a preset keeps the preamble with the global prompt off")
         expect(
-            QuickAIInstructions.followUpRequest.contains("```choices"),
-            "the request names the fence ChatChoices parses")
+            presetPrompt?.hasSuffix(follow) == true, "the follow-up request comes after the preset")
+        expect(
+            AIInstructions.compose(userPrompt: "Be terse.", isEnabled: false, presetPrompt: "")
+                == AIPreamble.text,
+            "a preset with no prompt still sends the preamble")
+
+        let both = AIInstructions.compose(
+            userPrompt: "Be terse.", isEnabled: true, chatPrompt: "Reply in French.",
+            presetPrompt: "Review code.")
+        expect(
+            both == AIPreamble.text + "\n\nReview code.\n\nReply in French.",
+            "a preset and a chat's own prompt both go, the chat's last")
+        expect(follow.contains("```choices"), "the request names the fence ChatChoices parses")
     }
 
     static func followUps() {
@@ -127,22 +136,15 @@ struct QuickAITests {
     }
 
     static func editing() {
-        var session = ChatSession()
-        session.append(ChatMessage(role: .user, text: "first"))
-        session.append(ChatMessage(role: .assistant, text: "one"))
-        session.append(ChatMessage(role: .user, text: "second"))
-        session.append(ChatMessage(role: .assistant, text: "two"))
-        let taken = session.dropLastExchange()
-        expect(taken?.text == "second", "the last question comes back")
-        expect(session.messages.map(\.text) == ["first", "one"], "its answer goes with it")
-
         var unanswered = ChatSession()
+        unanswered.append(ChatMessage(role: .user, text: "first"))
+        unanswered.append(ChatMessage(role: .assistant, text: "one"))
         unanswered.append(ChatMessage(role: .user, text: "only"))
-        expect(unanswered.dropLastExchange()?.text == "only", "an unanswered question comes back")
-        expect(unanswered.messages.isEmpty, "leaving nothing behind")
-
-        var empty = ChatSession()
-        expect(empty.dropLastExchange() == nil, "an empty chat has nothing to edit")
+        let last = unanswered.messages.last { $0.role == .user }
+        expect(
+            last.flatMap { unanswered.truncate(from: $0.id) }?.text == "only",
+            "↑ takes back a question its reply never came to")
+        expect(unanswered.messages.map(\.text) == ["first", "one"], "earlier turns stay")
     }
 
     static func presets() {

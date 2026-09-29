@@ -88,6 +88,11 @@ final class ChatHistoryStore {
           duration REAL,
           PRIMARY KEY(message_id, position)
         );
+        CREATE TABLE IF NOT EXISTS conversation_instructions(
+          conversation_id TEXT PRIMARY KEY NOT NULL
+            REFERENCES conversations(id) ON DELETE CASCADE,
+          text TEXT NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS messages_by_conversation
           ON messages(conversation_id, position);
         CREATE INDEX IF NOT EXISTS conversations_by_recency
@@ -139,13 +144,33 @@ final class ChatHistoryStore {
         conversations = []
     }
 
-    func search(_ query: String) -> [ChatConversation] {
+    func search(_ query: String, textMatches: [UUID: String] = [:]) -> [ChatConversation] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return conversations }
         return conversations.filter {
             $0.displayTitle.localizedCaseInsensitiveContains(query)
-                || $0.preview.localizedCaseInsensitiveContains(query)
+                || $0.preview.localizedCaseInsensitiveContains(query) || textMatches[$0.id] != nil
         }
+    }
+
+    /// Each chat whose messages hold `query`, with a snippet around its first match.
+    func textMatches(_ query: String) -> [UUID: String] {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, ensureDatabase(), let database else { return [:] }
+        let sql = """
+            SELECT conversation_id, text, MIN(position) FROM messages
+            WHERE text LIKE ? ESCAPE '\\' GROUP BY conversation_id;
+            """
+        guard let statement = prepare(sql, in: database) else { return [:] }
+        defer { sqlite3_finalize(statement) }
+        bind(ChatSearchSnippet.likePattern(query), to: statement, at: 1)
+        var matches: [UUID: String] = [:]
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let id = UUID(uuidString: text(statement, 0)) else { continue }
+            let body = text(statement, 1)
+            matches[id] = ChatSearchSnippet.make(body, matching: query) ?? String(body.prefix(90))
+        }
+        return matches
     }
 
     func conversation(id: UUID) -> ChatConversation? {
@@ -234,14 +259,15 @@ final class ChatHistoryStore {
         }
         return ChatSession(
             id: id, createdAt: createdAt, updatedAt: updatedAt, messages: messages,
-            model: model(forConversation: id, in: database))
+            model: model(forConversation: id, in: database),
+            instructions: instructions(forConversation: id, in: database))
     }
 
     func save(_ session: ChatSession) {
         guard !session.messages.isEmpty, ensureDatabase(), let database else { return }
         guard sqlite3_exec(database, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return }
         guard saveConversation(session, in: database), rewriteTail(of: session, database: database),
-            saveModel(of: session)
+            saveModel(of: session), writeInstructions(session.instructions, of: session.id)
         else {
             sqlite3_exec(database, "ROLLBACK", nil, nil, nil)
             return
@@ -304,6 +330,41 @@ final class ChatHistoryStore {
             bind(encoded, to: statement, at: 2)
         }
         return sqlite3_step(statement) == SQLITE_DONE
+    }
+
+    /// A chat not saved yet takes its prompt on its first save, so only a stored one writes here.
+    func setInstructions(_ instructions: String?, id: UUID) {
+        guard conversation(id: id) != nil else { return }
+        _ = writeInstructions(instructions, of: id)
+    }
+
+    /// A blank prompt deletes the row, so the chat falls back to Settings' prompt.
+    private func writeInstructions(_ instructions: String?, of id: UUID) -> Bool {
+        guard ensureDatabase(), let database else { return false }
+        let trimmed = instructions?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let sql =
+            trimmed.isEmpty
+            ? "DELETE FROM conversation_instructions WHERE conversation_id = ?;"
+            : """
+            INSERT INTO conversation_instructions(conversation_id, text) VALUES(?, ?)
+            ON CONFLICT(conversation_id) DO UPDATE SET text = excluded.text;
+            """
+        guard let statement = prepare(sql, in: database) else { return false }
+        defer { sqlite3_finalize(statement) }
+        bind(id.uuidString, to: statement, at: 1)
+        if !trimmed.isEmpty { bind(trimmed, to: statement, at: 2) }
+        return sqlite3_step(statement) == SQLITE_DONE
+    }
+
+    private func instructions(forConversation id: UUID, in database: OpaquePointer) -> String? {
+        guard
+            let statement = prepare(
+                "SELECT text FROM conversation_instructions WHERE conversation_id = ?;",
+                in: database)
+        else { return nil }
+        defer { sqlite3_finalize(statement) }
+        bind(id.uuidString, to: statement, at: 1)
+        return sqlite3_step(statement) == SQLITE_ROW ? text(statement, 0) : nil
     }
 
     func remove(id: UUID) {
@@ -398,11 +459,19 @@ final class ChatHistoryStore {
         return sqlite3_step(statement) == SQLITE_DONE
     }
 
-    /// A session only appends or replaces its last, so a save rewrites the stored tail alone.
+    /// A save rewrites from the stored tail, or from where an edit or retry cut the chat short.
     private func rewriteTail(of session: ChatSession, database: OpaquePointer) -> Bool {
-        let stored = storedMessageCount(of: session.id, in: database)
-        // A store holding more rows than memory is foreign state; rewrite it whole, never splice.
-        let rewriteFrom = stored > session.messages.count ? 0 : max(stored - 1, 0)
+        let stored = storedMessageIDs(of: session.id, in: database)
+        let shared = min(stored.count, session.messages.count)
+        var agreed = 0
+        while agreed < shared, stored[agreed] == session.messages[agreed].id { agreed += 1 }
+        let rewriteFrom: Int
+        if agreed < shared {
+            rewriteFrom = min(agreed, max(stored.count - 1, 0))
+        } else {
+            // A store holding more rows than memory is foreign state; rewrite it whole, never splice.
+            rewriteFrom = stored.count > session.messages.count ? 0 : max(stored.count - 1, 0)
+        }
         guard
             let deletion = prepare(
                 "DELETE FROM messages WHERE conversation_id = ? AND position >= ?;", in: database)
@@ -440,15 +509,19 @@ final class ChatHistoryStore {
         }
     }
 
-    private func storedMessageCount(of id: UUID, in database: OpaquePointer) -> Int {
+    private func storedMessageIDs(of id: UUID, in database: OpaquePointer) -> [UUID?] {
         guard
             let statement = prepare(
-                "SELECT COUNT(*) FROM messages WHERE conversation_id = ?;", in: database)
-        else { return 0 }
+                "SELECT id FROM messages WHERE conversation_id = ? ORDER BY position;",
+                in: database)
+        else { return [] }
         defer { sqlite3_finalize(statement) }
         bind(id.uuidString, to: statement, at: 1)
-        guard sqlite3_step(statement) == SQLITE_ROW else { return 0 }
-        return Int(sqlite3_column_int64(statement, 0))
+        var ids: [UUID?] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            ids.append(UUID(uuidString: text(statement, 0)))
+        }
+        return ids
     }
 
     private func saveSearches(of message: ChatMessage, in database: OpaquePointer) -> Bool {

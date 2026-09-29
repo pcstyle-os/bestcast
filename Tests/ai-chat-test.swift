@@ -62,6 +62,12 @@ struct AIChatTests {
         citationsCloseTheSentenceThatCitedThem()
         toolScopeSwitchesServersPerChat()
         await usageIsKeptWithTheReplyThatReportedIt()
+        await anEditReplacesTheQuestionAndWhatFollows()
+        await retryingAnEarlierReplyCutsWhatFollows()
+        aBranchCopiesTheChatUpToAMessage()
+        searchFindsChatsByTheirMessages()
+        await temporaryChatsAreNeverSaved()
+        await chatInstructionsPersistAndCascade()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -1488,6 +1494,252 @@ extension AIChatTests {
         for _ in 0..<50 where chat.isStreaming {
             try? await Task.sleep(for: .milliseconds(10))
         }
+    }
+}
+
+extension AIChatTests {
+    /// Sending an edit replaces the question and every turn after it, in memory and on disk.
+    static func anEditReplacesTheQuestionAndWhatFollows() async {
+        let (store, directory) = temporaryStore("edit")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let chat = AIChatState(history: store)
+        let provider = ScriptedProvider(rounds: [
+            [.text("A1"), .finished], [.text("A2"), .finished], [.text("A3"), .finished]
+        ])
+        _ = chat.attach(
+            ChatAttachment(
+                payload: .image(AIImage(data: Data([0x89, 0x01]), mimeType: "image/png")),
+                name: "shot.png", preview: nil))
+        chat.send("First", using: provider)
+        await settle(chat)
+        chat.send("Second", using: provider)
+        await settle(chat)
+        guard let first = chat.session.messages.first else {
+            expect(false, "the chat holds its first question")
+            return
+        }
+
+        chat.draft = "half-typed"
+        expect(chat.beginEditing(first.id), "a question can be edited")
+        expect(chat.draft == "First", "editing loads the question into the composer")
+        expect(!chat.beginEditing(chat.session.messages[1].id), "a reply is not edited")
+        chat.cancelEditing()
+        expect(
+            chat.editingMessageID == nil && chat.draft == "half-typed",
+            "cancelling hands back what was being typed")
+        expect(chat.session.messages.count == 4, "cancelling leaves the transcript alone")
+
+        chat.beginEditing(first.id)
+        expect(chat.send("First, edited", using: provider), "an edit sends")
+        await settle(chat)
+        expect(
+            chat.session.messages.map(\.text) == ["First, edited", "A3"],
+            "the edit replaces the question and every turn after it")
+        expect(
+            chat.session.messages.first?.images.count == 1,
+            "the edited question keeps the pictures it was sent with")
+        expect(chat.editingMessageID == nil, "sending ends the edit")
+        expect(
+            provider.requests.last?.messages.map(\.text) == ["First, edited"],
+            "the model is asked only the edited question")
+        let database = directory.appendingPathComponent("ai-chats.sqlite3")
+        expect(
+            store.session(id: chat.session.id)?.messages.map(\.text) == ["First, edited", "A3"],
+            "the stored transcript is cut where the edit cut it")
+        expect(
+            count(database, "SELECT COUNT(*) FROM messages;") == 2,
+            "no row of the replaced turns is left behind")
+
+        let stalled = StalledProvider()
+        chat.send("Third", using: stalled)
+        expect(!chat.beginEditing(first.id), "nothing is edited while a reply is arriving")
+        stalled.finishAll()
+        await settle(chat)
+    }
+
+    /// Retry works on any reply, and takes every later turn with it.
+    static func retryingAnEarlierReplyCutsWhatFollows() async {
+        let (store, directory) = temporaryStore("retry")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let chat = AIChatState(history: store)
+        let provider = ScriptedProvider(rounds: [
+            [.text("A1"), .finished], [.text("A2"), .finished], [.text("R1"), .finished]
+        ])
+        chat.send("Q1", using: provider)
+        await settle(chat)
+        chat.send("Q2", using: provider)
+        await settle(chat)
+        let messages = chat.session.messages
+        expect(!chat.regenerate(reply: messages[0].id, using: provider), "a question is no reply")
+        expect(chat.regenerate(reply: messages[1].id, using: provider), "an earlier reply retries")
+        await settle(chat)
+        expect(chat.session.messages.map(\.text) == ["Q1", "R1"], "the later turn goes with it")
+        expect(
+            provider.requests.last?.messages.map(\.text) == ["Q1"],
+            "the retry asks only what that reply answered")
+        expect(
+            store.session(id: chat.session.id)?.messages.map(\.text) == ["Q1", "R1"],
+            "the stored transcript is cut at the retried reply")
+    }
+
+    /// A branch is its own chat: fresh ids, so its rows never collide with the original's.
+    static func aBranchCopiesTheChatUpToAMessage() {
+        let (store, directory) = temporaryStore("branch")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let moment = Date(timeIntervalSince1970: 5_000)
+        let model = AIModelSelection.claude(model: "opus", effort: "high")
+        var session = ChatSession(createdAt: moment, model: model, instructions: "Be brief.")
+        let turns: [(ChatMessage.Role, String)] = [
+            (.user, "Q1"), (.assistant, "A1"), (.user, "Q2"), (.assistant, "A2")
+        ]
+        for (role, text) in turns {
+            session.append(ChatMessage(role: role, text: text, sentAt: moment))
+        }
+        store.save(session)
+        let now = moment.addingTimeInterval(60)
+        guard let branch = session.branch(through: session.messages[1].id, now: now) else {
+            expect(false, "a chat branches from a finished message")
+            return
+        }
+        expect(branch.messages.map(\.text) == ["Q1", "A1"], "a branch keeps the turns up to the message")
+        expect(
+            Set(branch.messages.map(\.id)).isDisjoint(with: session.messages.map(\.id))
+                && branch.id != session.id,
+            "a branch re-issues every id")
+        expect(
+            branch.model == model && branch.instructions == "Be brief.",
+            "a branch keeps the chat's model and instructions")
+        expect(branch.createdAt == now && branch.updatedAt == now, "a branch is new as of now")
+        expect(session.branch(through: UUID()) == nil, "an unknown message branches nothing")
+        var answering = session
+        answering.append(ChatMessage(role: .assistant, text: "", state: .streaming, sentAt: moment))
+        expect(
+            answering.branch(through: answering.messages[4].id) == nil,
+            "a reply still arriving is not branched")
+
+        store.save(branch)
+        store.rename(id: branch.id, to: "Trip (branch)")
+        expect(
+            store.session(id: branch.id)?.messages.map(\.text) == ["Q1", "A1"]
+                && store.session(id: session.id)?.messages.count == 4,
+            "the branch and the original are stored apart")
+        expect(
+            store.conversation(id: branch.id)?.displayTitle == "Trip (branch)",
+            "the branch is saved under its own title")
+        expect(
+            store.session(id: branch.id)?.instructions == "Be brief.",
+            "the branch's instructions are stored with it")
+    }
+
+    /// The sidebar finds a chat by any message's text, and a wildcard is only ever a character.
+    static func searchFindsChatsByTheirMessages() {
+        let (store, directory) = temporaryStore("search")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let moment = Date(timeIntervalSince1970: 6_000)
+        var trip = ChatSession(createdAt: moment)
+        trip.append(ChatMessage(role: .user, text: "Plan a trip", sentAt: moment))
+        trip.append(
+            ChatMessage(
+                role: .assistant, text: "Stay near the station when you visit Kyoto in spring.",
+                sentAt: moment))
+        trip.append(ChatMessage(role: .user, text: "Thanks", sentAt: moment))
+        trip.append(ChatMessage(role: .assistant, text: "Enjoy.", sentAt: moment))
+        store.save(trip)
+        let sale = saved(store, "Everything is 50% off today", at: moment.addingTimeInterval(1))
+        let count = saved(store, "There are 500 items", at: moment.addingTimeInterval(2))
+        let under = saved(store, "snake_case names", at: moment.addingTimeInterval(3))
+        let other = saved(store, "snakeXcase names", at: moment.addingTimeInterval(4))
+
+        let kyoto = store.textMatches("kyoto")
+        expect(Set(kyoto.keys) == [trip.id], "a chat is found by a message that is not its preview")
+        expect(kyoto[trip.id]?.contains("Kyoto") == true, "the snippet shows the match as written")
+        expect(
+            store.search("kyoto").isEmpty
+                && store.search("kyoto", textMatches: kyoto).map(\.id) == [trip.id],
+            "the sidebar's filter takes the text matches in")
+        expect(Set(store.textMatches("50%").keys) == [sale], "a percent sign is only a percent sign")
+        expect(store.textMatches("50%")[count] == nil, "so 500 does not match 50%")
+        let snake = store.textMatches("snake_case")
+        expect(snake[under] != nil && snake[other] == nil, "an underscore is only an underscore")
+        expect(store.textMatches("   ").isEmpty, "a blank query matches nothing")
+
+        let long = String(repeating: "filler ", count: 30) + "the needle sits here " + "tail"
+        let snippet = ChatSearchSnippet.make(long, matching: "NEEDLE")
+        expect(
+            snippet?.hasPrefix("…") == true && snippet?.contains("needle") == true,
+            "a snippet opens just before the match and says it was cut")
+        expect(
+            ChatSearchSnippet.likePattern("a%b_c\\") == "%a\\%b\\_c\\\\%",
+            "every LIKE wildcard is escaped")
+    }
+
+    /// A temporary chat answers like any other but never reaches the history file.
+    static func temporaryChatsAreNeverSaved() async {
+        let (store, directory) = temporaryStore("temporary")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let database = directory.appendingPathComponent("ai-chats.sqlite3")
+        let chats = AIChatSurfacesState(history: store)
+        chats.window.draft = "Secret plan"
+        chats.newWindowChat(temporary: true)
+        let temporary = chats.window
+        expect(temporary.isTemporary, "the window switches to a temporary chat while it is empty")
+        expect(temporary.draft == "Secret plan", "the draft moves over with it")
+        temporary.setInstructions("Whisper.")
+        temporary.send("Secret plan", using: ScriptedProvider(rounds: [[.text("Hidden"), .finished]]))
+        await settle(temporary)
+        expect(temporary.session.messages.count == 2, "a temporary chat still answers")
+        expect(store.conversations.isEmpty, "a temporary chat never reaches the history")
+        expect(
+            store.session(id: temporary.session.id) == nil
+                && count(database, "SELECT COUNT(*) FROM messages;") == 0
+                && count(database, "SELECT COUNT(*) FROM conversation_instructions;") == 0,
+            "nothing of it is written to disk")
+
+        chats.deleteAll()
+        expect(chats.window === temporary && temporary.session.messages.count == 2, "Delete All spares it")
+
+        chats.newWindowChat()
+        expect(!chats.window.isTemporary, "a new chat is an ordinary one again")
+        expect(chats.holder(of: temporary.session.id) == nil, "switching away drops the temporary chat")
+
+        let stalled = StalledProvider()
+        chats.newWindowChat(temporary: true)
+        let answering = chats.window
+        answering.send("Mid-answer", using: stalled)
+        chats.newWindowChat()
+        expect(!answering.isStreaming, "a temporary reply stops when its chat is left")
+        expect(
+            chats.answeringIDs.isEmpty && store.conversations.isEmpty,
+            "and it is never parked or saved as an answering chat")
+        stalled.finishAll()
+    }
+
+    /// A chat's own prompt is stored beside it, and a blank one or a deleted chat leaves no row.
+    static func chatInstructionsPersistAndCascade() async {
+        let (store, directory) = temporaryStore("instructions")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let database = directory.appendingPathComponent("ai-chats.sqlite3")
+        let rows = "SELECT COUNT(*) FROM conversation_instructions;"
+        let chat = AIChatState(history: store)
+        chat.setInstructions("  Answer in French.  ")
+        expect(chat.session.instructions == "Answer in French.", "instructions are trimmed")
+        expect(
+            !FileManager.default.fileExists(atPath: database.path) || count(database, rows) == 0,
+            "an unsaved chat stores nothing yet")
+        chat.send("Hi", using: ScriptedProvider(rounds: [[.text("Salut"), .finished]]))
+        await settle(chat)
+        let id = chat.session.id
+        expect(store.session(id: id)?.instructions == "Answer in French.", "the first save stores them")
+        chat.setInstructions("Terse.")
+        expect(store.session(id: id)?.instructions == "Terse.", "a saved chat stores a change at once")
+        chat.setInstructions(" \n ")
+        expect(
+            chat.session.instructions == nil && count(database, rows) == 0
+                && store.session(id: id)?.instructions == nil,
+            "a blank prompt clears the row")
+        chat.setInstructions("Again.")
+        store.remove(id: id)
+        expect(count(database, rows) == 0, "deleting the chat takes its instructions with it")
     }
 }
 

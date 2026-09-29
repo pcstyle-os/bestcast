@@ -63,6 +63,9 @@ struct AIChatDetailView: View {
         .overlay {
             if isDropTargeted { dropHint }
         }
+        .sheet(isPresented: Bindable(coordinator).showsChatInstructions) {
+            ChatInstructionsSheet(chat: chat, coordinator: coordinator)
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -83,7 +86,8 @@ struct AIChatDetailView: View {
                     ? ChatFindHighlight(
                         query: find.needle, matches: Set(occurrences.map(\.messageID)),
                         current: find.currentOccurrence(in: occurrences))
-                    : nil
+                    : nil,
+                actions: coordinator.messageActions(for: chat)
             )
             // A switched chat is a new scroll: its own tail-following, opening at its latest line.
             .id(chat.session.id)
@@ -121,7 +125,7 @@ private struct AIChatComposer: View {
 
     private var canSend: Bool {
         !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !chat.pendingAttachments.isEmpty
+            || !chat.pendingAttachments.isEmpty || chat.editingMessageID != nil
     }
 
     var body: some View {
@@ -131,6 +135,9 @@ private struct AIChatComposer: View {
                 Label(notice, systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            }
+            if chat.editingMessageID != nil {
+                ChatEditingBanner { coordinator.cancelEdit(in: chat) }
             }
             chips
             ZStack(alignment: .topLeading) {

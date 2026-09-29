@@ -7,16 +7,19 @@ struct ChatSession: Equatable, Sendable {
     private(set) var messages: [ChatMessage]
     /// The route this chat talks to, so coming back to it comes back to the same model.
     var model: AIModelSelection?
+    /// This chat's own system prompt; it stands in for Settings' prompt, never beside it.
+    var instructions: String?
 
     init(
         id: UUID = UUID(), createdAt: Date = Date(), updatedAt: Date? = nil,
-        messages: [ChatMessage] = [], model: AIModelSelection? = nil
+        messages: [ChatMessage] = [], model: AIModelSelection? = nil, instructions: String? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt
         self.messages = messages
         self.model = model
+        self.instructions = instructions
     }
 
     var title: String {
@@ -128,15 +131,36 @@ struct ChatSession: Equatable, Sendable {
         return true
     }
 
-    /// Editing the last question: it and whatever answered it go, and the question comes back.
-    mutating func dropLastExchange() -> ChatMessage? {
-        guard let index = messages.lastIndex(where: { $0.role == .user }) else { return nil }
-        let question = messages[index]
+    /// Edit's first half: the message and everything after it go, and the message comes back.
+    @discardableResult
+    mutating func truncate(from id: UUID) -> ChatMessage? {
+        guard let index = messages.firstIndex(where: { $0.id == id }) else { return nil }
+        let removed = messages[index]
         messages.removeSubrange(index...)
-        return question
+        return removed
     }
 
-    /// What Copy Chat puts on the pasteboard: each turn under its speaker, attachments by name.
+    /// Retry's first half for any reply: it goes with everything after it, its question stays.
+    @discardableResult
+    mutating func dropReply(_ id: UUID) -> Bool {
+        guard let index = messages.firstIndex(where: { $0.id == id }), index > 0,
+            messages[index].role == .assistant, messages[index - 1].role == .user
+        else { return false }
+        messages.removeSubrange(index...)
+        return true
+    }
+
+    /// A new chat up to `messageID`, with fresh message ids: the store keys every row on them.
+    func branch(through messageID: UUID, id: UUID = UUID(), now: Date = Date()) -> ChatSession? {
+        guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return nil }
+        let kept = messages[...index]
+        guard !kept.contains(where: { $0.state == .streaming }) else { return nil }
+        return ChatSession(
+            id: id, createdAt: now, updatedAt: now, messages: kept.map { $0.reissued() },
+            model: model, instructions: instructions)
+    }
+
+    /// What Copy as Markdown copies: each turn under its speaker, attachments by name.
     func markdownTranscript(title: String) -> String {
         var parts = ["# \(title)"]
         for message in messages
@@ -170,4 +194,13 @@ struct ChatConversation: Identifiable, Equatable, Sendable {
     var generatedTitle: String?
 
     var displayTitle: String { customTitle ?? generatedTitle ?? title }
+}
+
+extension ChatMessage {
+    fileprivate func reissued() -> ChatMessage {
+        ChatMessage(
+            role: role, text: text, state: state, sentAt: sentAt, images: images,
+            documents: documents, searches: searches, toolUses: toolUses, reasoning: reasoning,
+            usage: usage, toolScope: toolScope)
+    }
 }

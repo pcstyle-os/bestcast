@@ -9,20 +9,6 @@ enum QuickAIInstructions {
         next, as a ```choices fence, one per line. Skip the fence when no follow-up would help.
         """
 
-    /// A preset's prompt stands in for the global one, so a preset reads the same on any setup.
-    static func compose(
-        systemPrompt: String?, systemPromptEnabled: Bool, preset: QuickAIPreset?, followUps: Bool
-    ) -> String? {
-        let base: String?
-        if let preset {
-            base = AIInstructions.compose(userPrompt: preset.systemPrompt, isEnabled: true)
-        } else {
-            base = AIInstructions.compose(userPrompt: systemPrompt, isEnabled: systemPromptEnabled)
-        }
-        guard followUps else { return base }
-        return base.map { $0 + "\n\n" + followUpRequest } ?? followUpRequest
-    }
-
     /// ⇥ walks the chips through the composer: the next after the one shown, wrapping around.
     static func nextChoice(_ choices: [String], current: String, backwards: Bool) -> String? {
         guard !choices.isEmpty else { return nil }
