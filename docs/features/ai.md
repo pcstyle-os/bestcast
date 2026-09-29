@@ -1256,8 +1256,9 @@ Calculator and System — is switched on in Settings → AI → Integrations, al
 - **An integration's switch is a capability grant**, so `aiIntegrations` has no `settings.json` key
   and is excluded from backups. `aiEnabled` off withdraws every one.
 - **A handle belongs to one thing.** A built-in's wire name is `handle_name`, with no `__`, so it
-  never parses as an MCP tool; an extension's tool is named the same way. A new MCP server cannot take an integration's handle; one saved
-  before integrations existed keeps its slug, and the integration of that name steps aside.
+  never parses as an MCP tool; an extension's tool is named the same way. A new MCP server cannot
+  take an integration's handle; one saved before integrations existed keeps its slug, and the
+  integration of that name steps aside.
 
 ### Addressing
 

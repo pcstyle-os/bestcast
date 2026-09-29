@@ -8,7 +8,7 @@ struct ExtensionToolSource: Equatable, Sendable {
     let instructions: String?
     let tools: [ExtensionTool]
 
-    /// Unique within the source: a tool whose name truncates onto another's is dropped.
+    /// A tool whose name truncates to nothing, or onto another's, is dropped.
     init(
         handle: String, extensionName: String, title: String, instructions: String?,
         tools: [ExtensionTool]
@@ -19,7 +19,8 @@ struct ExtensionToolSource: Equatable, Sendable {
         self.instructions = instructions
         var seen: Set<String> = []
         self.tools = tools.filter {
-            seen.insert(ExtensionToolName.wireName(handle: handle, tool: $0.name)).inserted
+            !ExtensionToolName.innerName(handle: handle, tool: $0.name).isEmpty
+                && seen.insert(ExtensionToolName.wireName(handle: handle, tool: $0.name)).inserted
         }
     }
 
@@ -104,12 +105,14 @@ enum ExtensionToolPolicy {
     ) -> [ExtensionToolSource] {
         var claimed = taken
         return manifests.compactMap { manifest in
-            guard !manifest.tools.isEmpty, let handle = ExtensionToolName.handle(for: manifest.name),
-                claimed.insert(handle).inserted
+            guard let handle = ExtensionToolName.handle(for: manifest.name), !claimed.contains(handle)
             else { return nil }
-            return ExtensionToolSource(
+            let source = ExtensionToolSource(
                 handle: handle, extensionName: manifest.name, title: manifest.title,
                 instructions: manifest.aiInstructions, tools: manifest.tools)
+            guard !source.tools.isEmpty else { return nil }
+            claimed.insert(handle)
+            return source
         }
     }
 

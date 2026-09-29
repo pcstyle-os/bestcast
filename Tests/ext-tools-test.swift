@@ -90,6 +90,10 @@ struct ExtensionToolsTest {
         expect(
             sources.map(\.handle) == ["github", "git-hub"],
             "a taken handle, a second claim and a tool-less extension are all skipped")
+        let crowded = manifest(String(repeating: "a", count: 63), tools: [deleteNote])
+        expect(
+            ExtensionToolPolicy.sources([crowded].compactMap { $0 }, taken: []).isEmpty,
+            "a handle that leaves no room for a tool name offers nothing")
         let github = sources[0]
         expect(
             github.aiTools.map(\.name) == ["github_delete-note"],

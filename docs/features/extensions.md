@@ -791,7 +791,8 @@ reach no unaddressed turn: `@notes` offers Notes' tools for that turn only.
 
 Each tool is a plain `AITool` named `<handle>_<tool>` (capped at 64 characters, never containing
 `__`, so it cannot be mistaken for an MCP tool), with the tool's `description` and `instructions` as
-its description and its `input` schema as its parameters. The top-level `ai.instructions` joins the
+its description and its `input` schema as its parameters; a tool whose name truncates to nothing is
+dropped, so a handle past 62 characters offers none. The top-level `ai.instructions` joins the
 system prompt when the extension is addressed. The same tools reach Codex and Claude CLIs through
 `LoopbackToolEndpoint`, one loopback MCP server per addressed extension.
 
