@@ -68,6 +68,7 @@ struct AIChatTests {
         searchFindsChatsByTheirMessages()
         await temporaryChatsAreNeverSaved()
         await chatInstructionsPersistAndCascade()
+        await aComparisonStreamsEveryColumnAndStopsThemAll()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -1498,6 +1499,44 @@ extension AIChatTests {
 }
 
 extension AIChatTests {
+    /// Each column streams from its own route; cancel ends every one, and late events are dropped.
+    static func aComparisonStreamsEveryColumnAndStopsThemAll() async {
+        let fast = ScriptedProvider(rounds: [[.text("Quick"), .finished], [.text("Again"), .finished]])
+        let slow = StalledProvider()
+        let state = ModelComparisonState()
+        state.togglePick(.appleIntelligence)
+        state.togglePick(.codex(model: "gpt-5", effort: nil))
+        let comparison = ModelComparison(
+            context: ModelComparison.question("Hi", now: Date()), models: state.picks, now: Date())
+        state.begin(comparison)
+        let (first, second) = (comparison.columns[0].id, comparison.columns[1].id)
+        let request = AIRequest(messages: comparison.requestMessages())
+        state.run(first, using: fast, request: request)
+        state.run(second, using: slow, request: request)
+        for _ in 0..<50 where state.comparison?.column(first)?.isStreaming == true {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        expect(state.comparison?.column(first)?.reply.text == "Quick", "a fast column finishes")
+        expect(state.comparison?.column(first)?.timeToFirstToken != nil, "its latency is measured")
+        expect(state.isStreaming, "a stalled column keeps the comparison streaming")
+        state.cancel()
+        expect(!state.isStreaming, "cancel stops every column")
+        slow.finishAll()
+        try? await Task.sleep(for: .milliseconds(100))
+        expect(
+            state.comparison?.column(second)?.reply.text == ModelComparison.cancelled,
+            "a cancelled column ignores what its stream says afterwards")
+        expect(state.retry(first), "a finished column retries")
+        state.run(first, using: fast, request: request)
+        for _ in 0..<50 where state.comparison?.column(first)?.isStreaming == true {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        expect(state.comparison?.column(first)?.reply.text == "Again", "the retry streams anew")
+        expect(
+            state.comparison?.column(second)?.reply.text == ModelComparison.cancelled,
+            "retrying one column leaves the others alone")
+    }
+
     /// Sending an edit replaces the question and every turn after it, in memory and on disk.
     static func anEditReplacesTheQuestionAndWhatFollows() async {
         let (store, directory) = temporaryStore("edit")

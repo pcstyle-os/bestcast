@@ -28,6 +28,8 @@ struct ChatTranscriptView: View {
     var onChoose: ((String) -> Void)?
     var find: ChatFindHighlight?
     var actions: ChatMessageActions?
+    /// Compare With…'s card, drawn under the reply it re-asks; only the window passes one.
+    var inlineComparison: ModelComparisonState?
     /// Cleared when the reader scrolls up, so a streaming reply stops dragging them back down.
     @State private var followsTail = true
 
@@ -62,6 +64,9 @@ struct ChatTranscriptView: View {
                         .equatable()
                         .environment(\.chatTextHighlight, highlight(for: message.id))
                         .id(message.id)
+                        if let inlineComparison, inlineComparison.anchor?.reply == message.id {
+                            ModelComparisonInlineCard(state: inlineComparison)
+                        }
                     }
                     if let total = usage?.totalTokens {
                         Text("\(total.formatted()) tokens")
@@ -122,6 +127,7 @@ struct ChatTranscriptView: View {
             }
             .onChange(of: messages) { follow(proxy, always: false) }
             .onChange(of: usage) { follow(proxy, always: false) }
+            .onChange(of: inlineComparison?.comparison) { follow(proxy, always: false) }
             .overlay(alignment: .bottom) {
                 ResumeFollowingButton {
                     followsTail = true
@@ -422,7 +428,7 @@ private struct RegenerateButton: View {
 }
 
 /// One stretch of thinking: folded by default, one click from being read, and opened by find.
-private struct ChatReasoningBlock: View {
+struct ChatReasoningBlock: View {
     @Environment(\.metrics) private var metrics
     @Environment(\.chatTextHighlight) private var highlight
     @Environment(\.chatFindPath) private var path
@@ -629,7 +635,7 @@ private struct ChatToolRow: View {
 }
 
 /// A web search inside a reply: live while it runs, a record of what it looked up once done.
-private struct ChatSearchRow: View {
+struct ChatSearchRow: View {
     @Environment(\.metrics) private var metrics
     let search: ChatSearch
 

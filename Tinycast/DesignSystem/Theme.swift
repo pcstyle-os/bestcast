@@ -219,6 +219,8 @@ enum Theme {
         static let aiChatReadingWidth: CGFloat = 760
         /// The composer grows with its text up to this, then scrolls inside itself.
         static let aiChatComposerMaxHeight: CGFloat = 180
+        /// Compare Models splits the detail this far before a column scrolls sideways instead.
+        static let aiComparisonColumnMinimum: CGFloat = 220
         static let chatContextGauge: CGFloat = 14
         /// A source chip's title before it middle-truncates, so three chips share a row.
         static let chatSourceTitle: CGFloat = 200

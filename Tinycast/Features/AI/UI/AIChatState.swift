@@ -3,7 +3,7 @@ import Observation
 
 @MainActor
 @Observable
-final class AIChatState {
+final class AIChatState: ChatAttachmentStaging {
     private(set) var session = ChatSession()
     private(set) var isStreaming = false
     private(set) var isThinking = false
@@ -143,14 +143,7 @@ final class AIChatState {
     /// Refused, not truncated: the composer is the last place an oversized turn can be explained.
     @discardableResult
     func attach(_ attachment: ChatAttachment) -> ChatAttachmentRefusal? {
-        // Deliberately not de-duped: pasting the same file twice means you wanted it twice.
-        guard pendingAttachments.count < AIAttachmentBudget.maxCount else { return .count }
-        guard
-            AIAttachmentBudget.admits(
-                images: pendingAttachments.compactMap(\.image),
-                documents: pendingAttachments.compactMap(\.document),
-                addingBytes: attachment.payload.byteCount)
-        else { return .size }
+        if let refusal = pendingAttachments.refusal(adding: attachment) { return refusal }
         pendingAttachments.append(attachment)
         return nil
     }
@@ -464,6 +457,27 @@ enum ChatAttachmentRefusal: Equatable, Sendable {
         case .documentsUnsupported:
             return "This model can't read PDFs. Switch model, or paste the text instead."
         }
+    }
+}
+
+/// Where a read file lands: a chat's composer, or a comparison's.
+@MainActor
+protocol ChatAttachmentStaging: AnyObject {
+    /// Moved on whenever staged files are consumed or dropped, so a late read knows it missed.
+    var stagingGeneration: Int { get }
+    func attach(_ attachment: ChatAttachment) -> ChatAttachmentRefusal?
+}
+
+extension [ChatAttachment] {
+    /// Deliberately not de-duped: pasting the same file twice means you wanted it twice.
+    func refusal(adding attachment: ChatAttachment) -> ChatAttachmentRefusal? {
+        guard count < AIAttachmentBudget.maxCount else { return .count }
+        guard
+            AIAttachmentBudget.admits(
+                images: compactMap(\.image), documents: compactMap(\.document),
+                addingBytes: attachment.payload.byteCount)
+        else { return .size }
+        return nil
     }
 }
 

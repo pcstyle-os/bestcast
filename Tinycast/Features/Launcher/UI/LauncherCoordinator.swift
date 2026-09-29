@@ -176,6 +176,9 @@ final class LauncherCoordinator {
         case .aiChat:
             dismissPalette()
             core.aiChatCoordinator.showWindow()
+        case .compareAIModels:
+            dismissPalette()
+            core.aiChatCoordinator.showComparison()
         case .fixGrammar:
             core.quickActionCoordinator.run(.fixGrammar)
         case .rewrite:

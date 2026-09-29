@@ -11,6 +11,10 @@ final class AIChatSurfacesState {
     private(set) var window: AIChatState
     /// Window conversations left mid-reply; each saves itself when its reply ends.
     private var answeringElsewhere: [UUID: AIChatState] = [:]
+    /// The window's side-by-side mode; while it is set the window shows it in place of the chat.
+    var comparison: ModelComparisonState?
+    /// One reply re-asked of another model, drawn under that reply in the window's chat.
+    var inlineComparison: ModelComparisonState?
 
     private let history: ChatHistoryStore
 
@@ -136,6 +140,10 @@ final class AIChatSurfacesState {
     func reset() {
         for state in live { state.startNewChat() }
         answeringElsewhere = [:]
+        comparison?.cancel()
+        comparison = nil
+        inlineComparison?.cancel()
+        inlineComparison = nil
     }
 
     /// A parked chat that has finished is already saved, so only one still answering counts.

@@ -455,9 +455,9 @@ The `AI Chat` command (`command:ai-chat-window`, `HotKeyAction.command(.aiChat)`
 way Settings is — an `AIChatSplitViewController` with a native sidebar item, here collapsible, and a
 unified toolbar whose title is the open chat's — so it takes the system's own sidebar, toolbar and
 menus rather than the palette's scrim. `AIChatWindowChrome` owns the toolbar — the sidebar toggle
-and New Chat as two round buttons at the sidebar's trailing edge, then Find in Chat and Actions
-alone at the window's — the title, and one key monitor for ⌘V, ⌘F, ⌘G / ⇧⌘G, ⌘K, ⇧⌘N, Escape
-while an edit is open, and the Actions menu's own chords, and dies with the window. A temporary
+and New Chat as two round buttons at the sidebar's trailing edge, then Compare Models, Find in Chat
+and Actions alone at the window's — the title, and one key monitor for ⌘V, ⌘F, ⌘G / ⇧⌘G, ⌘K, ⇧⌘N,
+⇧⌘M, Escape while an edit is open, and the Actions menu's own chords, and dies with the window. A temporary
 chat's subtitle reads "Temporary · not saved to history", and its title is "Temporary Chat" until
 its first message.
 
@@ -484,9 +484,9 @@ its first message.
 - **Actions** (⌘K): Quick AI's ⌘K menu for a window, on the same chords — Stop Response (`⌘.`), New
   Chat (`⌘N`), Regenerate (`⌘R`), Copy Last Response (`⇧⌘C`), Remove Attachments, Find in Chat
   (`⌘F`) and AI Settings (`⌥⌘,`). The window adds:
-  - New Temporary Chat (`⇧⌘N`).
-  - Actions for the last turn: Edit Last Message, a Retry With submenu of every model, Speak Last
-    Reply and Branch Chat.
+  - New Temporary Chat (`⇧⌘N`) and Compare Models… (`⇧⌘M`).
+  - Actions for the last turn: Edit Last Message, a Retry With submenu of every model, a Compare
+    Last Reply With submenu, Speak Last Reply and Branch Chat.
   - Copy as Markdown, which works for any chat with messages, a temporary one included.
   - Chat Instructions….
   - For a saved chat only: Export as Markdown…, Pin and Delete.
@@ -499,14 +499,16 @@ its first message.
   offers Copy and Edit (or Regenerate) as named actions. The palette's transcript passes no actions,
   so it keeps its old footer.
   - A question offers Edit, Copy and Branch.
-  - A reply offers Copy, Regenerate, a Retry With menu of every model, Branch, Speak and its own
-    token count and cost.
+  - A reply offers Copy, Regenerate, a Retry With menu of every model, a Compare With menu,
+    Branch, Speak and its own token count and cost.
   - **Edit** loads the question, `@server` included, into the composer. It dims that message and
     everything after it, and shows a banner saying so. Sending the edit truncates from the question
     and asks again, carrying over the question's pictures and documents. Escape or the banner's
     Cancel gives back the draft that was being typed before.
   - **Retry With** first makes the picked model the chat's own, as the picker does, and then asks
     again.
+  - **Compare With** leaves the reply alone and asks its question again of the picked model, with
+    the chat up to that question, in a card under the reply (see Compare Models below).
   - **Branch** saves a copy of the chat up to that message as "<title> (branch)" and opens it. The
     copy gets fresh message ids and keeps the chat's model and instructions.
   - **Speak** reads the reply on-device with `AVSpeechSynthesizer`, without markup or the choices
@@ -583,6 +585,48 @@ streaming gets.
 `ChatHistoryStore` writes `ai-chats.sqlite3` below the bundle-specific Application Support directory.
 It uses the system SQLite already linked by Tinycast, stores no provider credentials, and repairs a
 reply left streaming by a prior process into an interrupted failure when loaded.
+
+#### Compare Models
+
+Compare Models asks one question, with its attachments, of two to four models at once and shows
+the replies side by side. It opens from the toolbar button, from ⌘K → Compare Models… or ⇧⌘M in
+the window, and from the launcher's `Compare AI Models` command (`command:compare-ai-models`, shown
+and hidden with AI like `AI Chat`). While it is open, the window's detail shows `ModelComparisonView`
+in place of the chat, and the title reads "Compare Models". Opening another chat, ⌘N, ⇧⌘N, the close
+button, Escape or ⇧⌘M leaves it. Leaving stops every column and keeps nothing.
+
+- **State.** `ModelComparison` (`Model/`, Foundation-only) is the reducer. It holds the question as
+  a `ChatSession` context, one `Column` per model (its reply as a `ChatMessage`, when it started,
+  when the first answer text came and when it ended), and the focused column. Every event carries
+  the time it arrived, so `model-comparison-test` measures latency on an injected clock.
+  `ModelComparisonState` (`UI/`) runs one provider stream per column. It batches events on a 40 ms
+  cadence, so four streams redraw the row once per tick. `AIChatSurfacesState` owns it as
+  `comparison`, and the one inline card as `inlineComparison`, so `AppCore` owns both.
+- **Routes.** Each column goes through the same `AIProviderFactory` route, system prompt and chat
+  instructions an ordinary chat uses. Web search follows Settings where that model offers it.
+  Tools stay off, because a comparison compares what each model says, not what it ran. A route
+  that fails to start fails only its own column.
+- **Picks.** The composer's pill lists every model as a toggle, grouped as the chat picker groups
+  them. A fifth pick is refused with a HUD. Picking another effort of a picked model unpicks it.
+  The picks freeze while any column streams. The window's model seeds the first pick. Attachments
+  must be readable by every pick: `ModelComparison.common` intersects their capabilities, so one
+  text-only model refuses pictures for all, with the paste's own refusals.
+- **Columns.** Each card shows its model, its `⌘`-number, the time to first token, the total time,
+  and tokens and cost when the route reports them. They share the row down to
+  `aiComparisonColumnMinimum`, then scroll sideways. Each card offers Copy, Retry and Continue as
+  Chat. The focused card wears the system focus ring, and a click focuses it.
+- **Keyboard.** ⌘1–⌘4 focus a column. ⌘↩ continues the focused one as a chat. ⇧⌘C copies it and
+  ⌘R retries it. ⌘. stops every column. Escape stops them all while any streams, else closes.
+  Return in the composer compares, and ⌘K lists the same actions. VoiceOver reads each card as
+  "Column N, model" with its timings, and offers Copy Reply, Continue as Chat and Retry as named
+  actions.
+- **Continue as Chat** takes a finished column only. It saves the question and that reply as an
+  ordinary chat on that model, with fresh message ids, and opens it. From an inline card the new
+  chat holds the whole conversation up to that question, named "<title> (<model>)". A temporary
+  chat is never saved, so its inline card cannot continue.
+- **Cancel** ends every streaming column as "Cancelled" and keeps what already arrived. Late events
+  from a stopped stream are dropped. **Retry** restarts one ended column, with its clock, and leaves
+  the others alone.
 
 ## Palette integration
 
@@ -699,14 +743,29 @@ the twenty-second.
   Press ⌘N: the temporary chat is gone, and `ai-chats.sqlite3` has no trace of it.
 - ⌘K → Copy as Markdown puts the whole chat on the pasteboard as Markdown, a temporary chat
   included.
+- Run `Compare AI Models` from the launcher, pick three models and ask a question. Three columns
+  stream at once, each with its own timings, and the Send button turns into Stop All. Press ⌘2: the
+  second card takes the focus ring. Press ⌘. mid-stream: every column says Cancelled under what
+  arrived. Press ⌘R: only the focused column starts over.
+- With two columns finished, press ⌘↩. The window opens an ordinary chat on the focused column's
+  model with that question and answer, and it is in the sidebar.
+- Pick a text-only model and paste a picture: the HUD refuses it. Try a fifth pick: the HUD refuses
+  that too. Escape closes the comparison and the chat comes back as it was.
+- Narrow the window with four columns: the cards stop shrinking at their minimum and scroll sideways.
+  ⌘4 scrolls the fourth into view.
+- On a reply, pick Compare With → another model. A card streams under the reply while the reply stays.
+  Continue as Chat opens "<title> (<model>)" with the conversation so far and the new answer.
 - Harnesses: `ai-provider-test` (endpoints, request bodies — web search on and off per route —
   stream decoding, Anthropic's search rows, failed and paused searches, citations with escaped
   titles and search offered only on Anthropic's own URL, persistence repair, Codex framing,
   on-device routing, the two MCP launch encodings and the two consent channels),
   `ai-chat-test` (`ChatSession`, `MarkdownBlock`, `ChatHistoryStore` with renames, pins and chat
   instructions, `AIToolLoopProvider`, regenerate, edit and retry truncation, branching, full-text
-  search with its snippets and escaped wildcards, temporary chats, and `AIChatSurfacesState`'s
-  one-live-place rule), `ai-instructions-test` (the preamble and a chat's own prompt),
+  search with its snippets and escaped wildcards, temporary chats, `AIChatSurfacesState`'s
+  one-live-place rule, and `ModelComparisonState` streaming every column and stopping them all),
+  `model-comparison-test` (picks and their cap, per-column streaming, latency on an injected clock,
+  cancel and late events, failure, retry, focus, continuing with fresh ids and the common
+  capabilities), `ai-instructions-test` (the preamble and a chat's own prompt),
   `codex-turn-test` (the Stop path, driven against a stub app-server stalled where Stop races the
   turn ID, plus the MCP launch boundary, one launch for concurrent starts, the elicitation, the
   rows and the call cap),

@@ -38,7 +38,7 @@ final class AIChatCoordinator {
     }
 
     func applyEnabled() {
-        appIndex.setCommandsVisible([.aiChat, .quickAI], settings.aiEnabled)
+        appIndex.setCommandsVisible([.aiChat, .quickAI, .compareAIModels], settings.aiEnabled)
         guard settings.aiEnabled else {
             for request in naming.values { request.cancel() }
             naming = [:]
@@ -87,6 +87,12 @@ final class AIChatCoordinator {
     var history: ChatHistoryStore { core.chatHistory }
     var aiSettings: AISettingsStore { core.aiSettings }
 
+    var isEnabled: Bool { settings.aiEnabled }
+
+    func report(_ message: String, tone: DialogTone = .neutral) {
+        core.showMessage(message, tone: tone)
+    }
+
     func focusExisting() -> Bool {
         window.focus()
     }
@@ -101,10 +107,12 @@ final class AIChatCoordinator {
     }
 
     func newChat() {
+        leaveComparisons()
         chats.newWindowChat()
     }
 
     func openChat(id: UUID) {
+        leaveComparisons()
         guard chats.openInWindow(id: id) else {
             core.showMessage("That chat could not be opened.", tone: .danger)
             return
@@ -384,7 +392,11 @@ final class AIChatCoordinator {
 
     /// What the chat's model can take; the composer offers only what applies.
     func capabilities(for chat: AIChatState) -> AIModelCapabilities {
-        switch model(for: chat) {
+        capabilities(of: model(for: chat))
+    }
+
+    func capabilities(of selection: AIModelSelection?) -> AIModelCapabilities {
+        switch selection {
         case .appleIntelligence?: return .appleIntelligence
         case .codex?: return .codex
         case .claude?: return .claudeCommand
@@ -400,8 +412,11 @@ final class AIChatCoordinator {
 
     /// How much history the chat's route can hold; the on-device window is far smaller.
     func contextBudget(for chat: AIChatState) -> Int {
-        model(for: chat)?.isOnDevice == true
-            ? AppleIntelligence.contextBudget : ChatSession.defaultTextBudget
+        contextBudget(of: model(for: chat))
+    }
+
+    func contextBudget(of selection: AIModelSelection?) -> Int {
+        selection?.isOnDevice == true ? AppleIntelligence.contextBudget : ChatSession.defaultTextBudget
     }
 
     /// The context card's facts; the gauge redraws per flush, so it skips the card's model title.
@@ -429,21 +444,28 @@ final class AIChatCoordinator {
 
     /// ⌘V stages a file, read off-main; false hands the chord back to the field editor.
     func attachPastedFile(files: [URL], to chat: AIChatState) -> Bool {
+        attachPastedFile(files: files, into: chat, accepting: capabilities(for: chat))
+    }
+
+    /// The same paste for any composer; `can` is what every model it sends to can read.
+    func attachPastedFile(
+        files: [URL], into staging: any ChatAttachmentStaging, accepting can: AIModelCapabilities
+    ) -> Bool {
         let pasteboard = NSPasteboard.general
         let pasted =
             files.isEmpty && Self.pastesAsImage(pasteboard)
             ? pasteboard.availableType(from: [.png, .tiff]).flatMap { pasteboard.data(forType: $0) }
             : nil
         guard !files.isEmpty || pasted != nil else { return false }
-        if let refusal = unattachable(files, in: chat) {
+        if let refusal = unattachable(files, accepting: can) {
             core.showMessage(refusal.message, tone: .neutral)
             return true
         }
-        if pasted != nil, !capabilities(for: chat).images {
+        if pasted != nil, !can.images {
             core.showMessage(ChatAttachmentRefusal.imagesUnsupported.message, tone: .neutral)
             return true
         }
-        stage(files: files, pasted: pasted, into: chat)
+        stage(files: files, pasted: pasted, into: staging)
         return true
     }
 
@@ -455,17 +477,28 @@ final class AIChatCoordinator {
 
     /// A drop or the paperclip: the same refusals as a paste, since the route is what decides.
     func attach(files: [URL], to chat: AIChatState) {
+        attach(files: files, into: chat, accepting: capabilities(for: chat))
+    }
+
+    func attach(
+        files: [URL], into staging: any ChatAttachmentStaging, accepting can: AIModelCapabilities
+    ) {
         let files = files.filter(\.isFileURL)
         guard !files.isEmpty else { return }
-        if let refusal = unattachable(files, in: chat) {
+        if let refusal = unattachable(files, accepting: can) {
             core.showMessage(refusal.message, tone: .neutral)
             return
         }
-        stage(files: files, pasted: nil, into: chat)
+        stage(files: files, pasted: nil, into: staging)
+    }
+
+    func chooseFiles(for chat: AIChatState) {
+        guard let files = chooseFiles() else { return }
+        attach(files: files, to: chat)
     }
 
     /// An accessory app must activate first, or the panel opens behind the frontmost app.
-    func chooseFiles(for chat: AIChatState) {
+    func chooseFiles() -> [URL]? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
@@ -473,8 +506,8 @@ final class AIChatCoordinator {
         panel.prompt = "Attach"
         panel.message = "Choose images, PDFs or text files to send with your next message."
         NSApp.activate(ignoringOtherApps: true)
-        guard panel.runModal() == .OK else { return }
-        attach(files: panel.urls, to: chat)
+        guard panel.runModal() == .OK else { return nil }
+        return panel.urls
     }
 
     func clearAttachments(in chat: AIChatState) {
@@ -486,8 +519,9 @@ final class AIChatCoordinator {
     }
 
     /// The first refusal the current route forces, so a paste explains itself rather than dropping.
-    private func unattachable(_ files: [URL], in chat: AIChatState) -> ChatAttachmentRefusal? {
-        let can = capabilities(for: chat)
+    private func unattachable(
+        _ files: [URL], accepting can: AIModelCapabilities
+    ) -> ChatAttachmentRefusal? {
         for file in files {
             guard let kind = AIAttachmentPolicy.kind(forFileName: file.lastPathComponent) else {
                 return .unsupported(file.pathExtension.lowercased())
@@ -502,16 +536,16 @@ final class AIChatCoordinator {
     }
 
     /// Files first, raw bytes as fallback; the chord is consumed, never pasting a path.
-    private func stage(files: [URL], pasted: Data?, into chat: AIChatState) {
-        let generation = chat.stagingGeneration
-        Task { [weak self, weak chat] in
+    private func stage(files: [URL], pasted: Data?, into staging: any ChatAttachmentStaging) {
+        let generation = staging.stagingGeneration
+        Task { [weak self, weak staging] in
             let read = await Task.detached(priority: .userInitiated) {
                 () -> [ChatAttachmentReader.Outcome] in
                 if !files.isEmpty { return files.map(ChatAttachmentReader.read) }
                 return pasted.map { [ChatAttachmentReader.image($0)] } ?? []
             }.value
-            guard let self, let chat else { return }
-            guard generation == chat.stagingGeneration else {
+            guard let self, let staging else { return }
+            guard generation == staging.stagingGeneration else {
                 core.showMessage(
                     "That file was still loading and did not make it into the chat.",
                     tone: .neutral)
@@ -526,7 +560,7 @@ final class AIChatCoordinator {
                 case .staged(let item):
                     let attachment = ChatAttachment(
                         payload: item.payload, name: item.name, preview: item.preview)
-                    if let refusal = chat.attach(attachment) {
+                    if let refusal = staging.attach(attachment) {
                         core.showMessage(refusal.message, tone: .neutral)
                         return
                     }
@@ -583,7 +617,13 @@ final class AIChatCoordinator {
         guard let selection = model(for: chat) else {
             throw AIProviderError.unavailable("Choose a default AI model in Settings.")
         }
-        return try AIProviderFactory.make(
+        return try provider(for: selection, toolServers: toolServers)
+    }
+
+    func provider(
+        for selection: AIModelSelection, toolServers: AIToolServerSession? = nil
+    ) throws -> any AIProvider {
+        try AIProviderFactory.make(
             selection: selection, settings: core.aiSettings,
             subscription: core.chatGPTSubscription, installedAI: core.installedAI,
             toolServers: toolServers)
@@ -650,11 +690,15 @@ final class AIChatCoordinator {
 
     /// The chat keeps the pick; the default follows it, so the next new chat starts there too.
     func selectModel(_ option: AIModelOption, in chat: AIChatState) {
-        let selection = AIModelOption.withDefaultEffort(
-            option.selection, settings: core.aiSettings,
-            subscription: core.chatGPTSubscription, installedAI: core.installedAI)
+        let selection = withDefaultEffort(option.selection)
         chat.setModel(selection)
         core.aiSettings.select(selection)
+    }
+
+    func withDefaultEffort(_ selection: AIModelSelection) -> AIModelSelection {
+        AIModelOption.withDefaultEffort(
+            selection, settings: core.aiSettings,
+            subscription: core.chatGPTSubscription, installedAI: core.installedAI)
     }
 
     func reasoningEfforts(for chat: AIChatState) -> [ChatGPTSubscription.Effort] {

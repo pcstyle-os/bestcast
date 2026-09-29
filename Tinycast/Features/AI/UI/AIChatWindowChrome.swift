@@ -6,9 +6,11 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
     static let windowIdentifier = NSUserInterfaceItemIdentifier("AIChatWindow")
     private static let sidebar = NSToolbarItem.Identifier("AIChatToggleSidebar")
     private static let newChat = NSToolbarItem.Identifier("AIChatNewChat")
+    private static let compare = NSToolbarItem.Identifier("AIChatCompareModels")
     private static let search = NSToolbarItem.Identifier("AIChatSearch")
     private static let actions = NSToolbarItem.Identifier("AIChatActions")
     private static let escapeKeyCode: UInt16 = 53
+    private static let returnKeyCodes: Set<UInt16> = [36, 76]
 
     private let coordinator: AIChatCoordinator
     private let chats: AIChatSurfacesState
@@ -75,7 +77,7 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
             .flexibleSpace, Self.sidebar, .space, Self.newChat, .sidebarTrackingSeparator,
-            .flexibleSpace, Self.search, Self.actions
+            .flexibleSpace, Self.compare, Self.search, Self.actions
         ]
     }
 
@@ -96,6 +98,10 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
             return button(
                 identifier, symbol: "square.and.pencil", label: "New Chat", toolTip: "New Chat  ⌘N",
                 action: #selector(newChatAction))
+        case Self.compare:
+            return button(
+                identifier, symbol: "rectangle.split.3x1", label: "Compare Models",
+                toolTip: "Compare Models  ⇧⌘M", action: #selector(toggleComparisonAction))
         case Self.search:
             return searchItem
         case Self.actions:
@@ -145,14 +151,21 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
 
     @objc private func newChatAction() { coordinator.newChat() }
 
+    @objc private func toggleComparisonAction() { coordinator.toggleComparison() }
+
     @objc private func toggleSidebar() {
         (window?.contentViewController as? NSSplitViewController)?.toggleSidebar(nil)
     }
 
     @objc private func showActions() {
-        let menu = AIChatActionsMenu.build(
-            chat: chat, coordinator: coordinator,
-            findInChat: { [weak self] in self?.searchItem.beginSearchInteraction() })
+        let menu =
+            if let comparison = chats.comparison {
+                ModelComparisonActionsMenu.build(state: comparison, coordinator: coordinator)
+            } else {
+                AIChatActionsMenu.build(
+                    chat: chat, coordinator: coordinator,
+                    findInChat: { [weak self] in self?.searchItem.beginSearchInteraction() })
+            }
         menu.popUp(
             positioning: nil,
             at: NSPoint(x: 0, y: actionsButton.bounds.maxY + Theme.Spacing.xs),
@@ -164,8 +177,13 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
     /// Re-armed after every read; the hop is because `onChange` fires before the write lands.
     private func observeTitle() {
         withObservationTracking {
-            window?.title = coordinator.title(of: chat)
-            window?.subtitle = chat.isTemporary ? "Temporary · not saved to history" : ""
+            if chats.comparison != nil {
+                window?.title = "Compare Models"
+                window?.subtitle = "Not saved until one is continued as a chat"
+            } else {
+                window?.title = coordinator.title(of: chat)
+                window?.subtitle = chat.isTemporary ? "Temporary · not saved to history" : ""
+            }
         } onChange: { [weak self] in
             Task { @MainActor in self?.observeTitle() }
         }
@@ -197,6 +215,9 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
         let key = (ASCIIKeyboardLayout.character(for: event) ?? event.charactersIgnoringModifiers)?
             .lowercased()
+        if let comparison = chats.comparison {
+            return handle(event, modifiers: modifiers, key: key, comparing: comparison, in: window)
+        }
         if event.keyCode == Self.escapeKeyCode, modifiers.isEmpty, chat.editingMessageID != nil,
             (window.firstResponder as? NSTextView)?.isFieldEditor != true
         {
@@ -214,6 +235,8 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
             coordinator.newChat()
         case ([.command, .shift], "n"):
             coordinator.newTemporaryChat()
+        case ([.command, .shift], "m"):
+            coordinator.showComparison()
         case ([.command], "r") where AIChatActionsMenu.canRegenerate(chat):
             coordinator.regenerate(in: chat)
         case ([.command, .shift], "c") where chat.lastAssistantText != nil:
@@ -231,6 +254,124 @@ final class AIChatWindowChrome: NSObject, WindowChrome, NSToolbarDelegate, NSSea
             return false
         }
         return true
+    }
+
+    /// While comparing, the chat's own chords would act on a chat that is not on screen.
+    private func handle(
+        _ event: NSEvent, modifiers: NSEvent.ModifierFlags, key: String?,
+        comparing state: ModelComparisonState, in window: NSWindow
+    ) -> Bool {
+        let focused = state.comparison?.focusedColumn
+        let editor = window.firstResponder as? NSTextView
+        if event.keyCode == Self.escapeKeyCode, modifiers.isEmpty, editor?.isFieldEditor != true,
+            editor?.hasMarkedText() != true
+        {
+            if state.isStreaming { state.cancel() } else { coordinator.closeComparison() }
+            return true
+        }
+        if modifiers == [.command], Self.returnKeyCodes.contains(event.keyCode) {
+            guard let focused else { return false }
+            coordinator.continueAsChat(focused.id, in: state)
+            return true
+        }
+        if modifiers == [.command], let number = key.flatMap({ Int($0) }),
+            (1...ModelComparison.modelLimit.upperBound).contains(number)
+        {
+            state.focus(number - 1)
+            return true
+        }
+        switch (modifiers, key) {
+        case ([.command], "k"):
+            showActions()
+        case ([.command], "n"):
+            coordinator.newChat()
+        case ([.command, .shift], "n"):
+            coordinator.newTemporaryChat()
+        case ([.command, .shift], "m"):
+            coordinator.closeComparison()
+        case ([.command], ".") where state.isStreaming:
+            state.cancel()
+        case ([.command, .shift], "c"):
+            guard let focused else { return false }
+            coordinator.copy(focused.id, in: state)
+        case ([.command], "r"):
+            guard let focused, !focused.isStreaming else { return false }
+            coordinator.retry(focused.id, in: state)
+        case ([.command, .option], ","):
+            coordinator.showSettings()
+        case ([.command], "v"):
+            guard editor?.isFieldEditor != true else { return false }
+            return coordinator.attachPastedFile(files: PasteboardFiles.urls(on: .general), to: state)
+        default:
+            return false
+        }
+        return true
+    }
+}
+
+/// ⌘K while comparing: the focused column's actions, the columns themselves, and the way out.
+@MainActor
+enum ModelComparisonActionsMenu {
+    static func build(state: ModelComparisonState, coordinator: AIChatCoordinator) -> NSMenu {
+        let menu = NSMenu()
+        if state.isStreaming {
+            menu.addItem(
+                ClosureMenuItem("Stop All", symbol: "stop.fill", key: ".") { state.cancel() })
+        }
+        if let comparison = state.comparison, let focused = comparison.focusedColumn {
+            let title = coordinator.modelTitle(of: focused.model)
+            if !focused.reply.text.isEmpty {
+                menu.addItem(
+                    ClosureMenuItem(
+                        "Copy \(title)'s Reply", symbol: "doc.on.doc", key: "c",
+                        modifiers: [.command, .shift]
+                    ) {
+                        coordinator.copy(focused.id, in: state)
+                    })
+            }
+            if focused.reply.state == .complete {
+                menu.addItem(
+                    ClosureMenuItem(
+                        "Continue \(title) as Chat", symbol: "bubble.left.and.text.bubble.right",
+                        key: "\r"
+                    ) {
+                        coordinator.continueAsChat(focused.id, in: state)
+                    })
+            }
+            if !focused.isStreaming {
+                menu.addItem(
+                    ClosureMenuItem("Retry \(title)", symbol: "arrow.clockwise", key: "r") {
+                        coordinator.retry(focused.id, in: state)
+                    })
+            }
+            menu.addItem(.separator())
+            for (index, column) in comparison.columns.enumerated() {
+                let item = ClosureMenuItem(
+                    "Focus \(coordinator.modelTitle(of: column.model))", symbol: "rectangle.portrait",
+                    key: "\(index + 1)"
+                ) {
+                    state.focus(index)
+                }
+                item.state = index == comparison.focusedIndex ? .on : .off
+                menu.addItem(item)
+            }
+        }
+        menu.addItem(.separator())
+        menu.addItem(
+            ClosureMenuItem("Close Comparison", symbol: "xmark", key: "m", modifiers: [.command, .shift]) {
+                coordinator.closeComparison()
+            })
+        menu.addItem(
+            ClosureMenuItem("New Chat", symbol: "square.and.pencil", key: "n") {
+                coordinator.newChat()
+            })
+        menu.addItem(
+            ClosureMenuItem(
+                "AI Settings", symbol: "slider.horizontal.3", key: ",", modifiers: [.command, .option]
+            ) {
+                coordinator.showSettings()
+            })
+        return menu
     }
 }
 
@@ -261,6 +402,12 @@ enum AIChatActionsMenu {
                 "New Temporary Chat", symbol: "eye.slash", key: "n", modifiers: [.command, .shift]
             ) {
                 coordinator.newTemporaryChat()
+            })
+        menu.addItem(
+            ClosureMenuItem(
+                "Compare Models…", symbol: "rectangle.split.3x1", key: "m", modifiers: [.command, .shift]
+            ) {
+                coordinator.showComparison()
             })
         if canRegenerate(chat) {
             menu.addItem(
@@ -345,6 +492,14 @@ enum AIChatActionsMenu {
             retry.submenu = retryMenu(reply: target, chat: chat, coordinator: coordinator)
             menu.addItem(retry)
         }
+        if let last = messages.last, last.role == .assistant, messages.count > 1 {
+            let compare = NSMenuItem(title: "Compare Last Reply With", action: nil, keyEquivalent: "")
+            compare.image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: nil)
+            compare.submenu = modelsMenu(groups: coordinator.modelGroups) {
+                coordinator.compare(reply: last.id, with: $0, in: chat)
+            }
+            menu.addItem(compare)
+        }
         if let reply = messages.last(where: { $0.role == .assistant }) {
             menu.addItem(
                 ClosureMenuItem(
@@ -365,14 +520,19 @@ enum AIChatActionsMenu {
     private static func retryMenu(
         reply: UUID?, chat: AIChatState, coordinator: AIChatCoordinator
     ) -> NSMenu {
+        modelsMenu(groups: coordinator.modelGroups) {
+            coordinator.retry(reply: reply, with: $0, in: chat)
+        }
+    }
+
+    private static func modelsMenu(
+        groups: [AIModelOptionGroup], pick: @escaping (AIModelOption) -> Void
+    ) -> NSMenu {
         let menu = NSMenu()
-        for group in coordinator.modelGroups {
+        for group in groups {
             menu.addItem(.sectionHeader(title: group.title))
             for option in group.options {
-                menu.addItem(
-                    ClosureMenuItem(option.title, symbol: "") {
-                        coordinator.retry(reply: reply, with: option, in: chat)
-                    })
+                menu.addItem(ClosureMenuItem(option.title, symbol: "") { pick(option) })
             }
         }
         return menu
