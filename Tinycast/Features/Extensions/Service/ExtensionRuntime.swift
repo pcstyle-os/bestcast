@@ -17,6 +17,12 @@ protocol ExtensionRuntimeDelegate: AnyObject {
     func runtime(_ runtime: ExtensionRuntime, session: String, navigationDepth: Int)
     func runtime(_ runtime: ExtensionRuntime, session: String, didFinish: Void)
     func runtime(_ runtime: ExtensionRuntime, log level: String, message: String)
+    /// An AI tool's export settled; `json` is `{"exported": Bool, "value": …}`.
+    func runtime(_ runtime: ExtensionRuntime, session: String, didReturn json: String)
+}
+
+extension ExtensionRuntimeDelegate {
+    func runtime(_ runtime: ExtensionRuntime, session: String, didReturn json: String) {}
 }
 
 /// The one `JSContext` a command runs in; every touch is on `queue`, only values cross.
@@ -124,6 +130,28 @@ final class ExtensionRuntime: @unchecked Sendable {
         }
     }
 
+    /// Evaluate an AI tool's bundle; `callTool` then runs its exports against the same module.
+    func loadTool(
+        session: String, code: String, file: URL, context launchContext: ExtensionLaunchContext
+    ) async {
+        let payload = launchContext.jsonString()
+        await onQueue { context in
+            _ = context.objectForKeyedSubscript("__tinycast")?.invokeMethod(
+                "loadTool",
+                withArguments: [
+                    session, code, file.path, file.deletingLastPathComponent().path, payload
+                ])
+        }
+    }
+
+    /// `export` is `confirmation` or `default`; the answer arrives as `didReturn` or `didFail`.
+    func callTool(session: String, export: String, input: String) async {
+        await onQueue { context in
+            _ = context.objectForKeyedSubscript("__tinycast")?
+                .invokeMethod("callTool", withArguments: [session, export, input])
+        }
+    }
+
     /// Pre-encoded: `[Any]` isn't Sendable, so only the JSON string crosses onto the queue.
     func dispatch(session: String, handler: String, payload: String, completesSession: Bool = false) async {
         await onQueue { context in
@@ -196,6 +224,11 @@ final class ExtensionRuntime: @unchecked Sendable {
             let delegate = self.delegate
             Task { @MainActor in delegate?.runtime(self, session: session, didFinish: ()) }
         }
+        let returned: @convention(block) (String, String) -> Void = { [weak self] session, json in
+            guard let self else { return }
+            let delegate = self.delegate
+            Task { @MainActor in delegate?.runtime(self, session: session, didReturn: json) }
+        }
         let fieldCommand: @convention(block) (String, String) -> Void = { _, _ in
             // Field focus requests have no native target yet; the palette focuses the first field.
         }
@@ -221,6 +254,7 @@ final class ExtensionRuntime: @unchecked Sendable {
         host?.setObject(failed, forKeyedSubscript: "failed" as NSString)
         host?.setObject(navigation, forKeyedSubscript: "navigationDepthChanged" as NSString)
         host?.setObject(finished, forKeyedSubscript: "finished" as NSString)
+        host?.setObject(returned, forKeyedSubscript: "returned" as NSString)
         host?.setObject(fieldCommand, forKeyedSubscript: "fieldCommand" as NSString)
         host?.setObject(invoke, forKeyedSubscript: "invoke" as NSString)
         host?.setObject(invokeSync, forKeyedSubscript: "invokeSync" as NSString)

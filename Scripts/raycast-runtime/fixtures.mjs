@@ -783,6 +783,28 @@ export default function Command() {
 }
 `;
 
+// A tiny AI extension's one tool: `tools/delete-note.js`, with a confirmation.
+const toolSource = `
+import { Action, Tool } from "@raycast/api";
+
+let asked = 0;
+
+export const confirmation = async (input) => {
+  asked++;
+  if (!input.title) return undefined;
+  return {
+    style: Action.Style.Destructive,
+    message: "Delete the note?",
+    info: [{ name: "Note", value: input.title }],
+  };
+};
+
+export default async function tool(input) {
+  if (input.title === "boom") throw new Error("no such note");
+  return { deleted: input.title, asked };
+}
+`;
+
 const errorSource = `
 export default function Command() {
   throw new Error("kaboom");
@@ -1297,6 +1319,47 @@ export async function runFixtures() {
   `, "menu-bar", async (harness) => {
     check("null commits an empty screen", harness.state.trees.length > 0 && !findNode(harness.state.trees.at(-1), "MenuBarExtra"));
   });
+
+  console.log("\n▶ An AI tool runs its confirmation, then its default export");
+  const tool = createHarness();
+  tool.boot(bootConfig());
+  tool.loadTool("t1", compile(toolSource), "/fixtures/tools/delete-note.js", "/fixtures/tools", {
+    environment: { extensionName: "notes-fixture", commandName: "delete-note", commandMode: "no-view" },
+  });
+  tool.callTool("t1", "confirmation", { title: "Groceries" });
+  await wait();
+  const [confirmation] = tool.state.returns;
+  check("confirmation is exported", confirmation?.exported === true, JSON.stringify(confirmation));
+  check(
+    "confirmation carries its message, info and style",
+    confirmation?.value?.message === "Delete the note?" && confirmation?.value?.style === "destructive"
+      && confirmation?.value?.info?.[0]?.value === "Groceries",
+    JSON.stringify(confirmation?.value),
+  );
+  tool.callTool("t1", "confirmation", { title: "" });
+  await wait();
+  check("undefined skips the confirmation", tool.state.returns[1]?.exported === true && tool.state.returns[1]?.value === null);
+  tool.callTool("t1", "default", { title: "Groceries" });
+  await wait();
+  check(
+    "the default export sees the input and shares module state",
+    tool.state.returns[2]?.value?.deleted === "Groceries" && tool.state.returns[2]?.value?.asked === 2,
+    JSON.stringify(tool.state.returns[2]),
+  );
+  tool.callTool("t1", "default", { title: "boom" });
+  await wait();
+  check("a throwing tool reports a failure", tool.state.failures.some((message) => message.includes("no such note")));
+  tool.stop("t1");
+
+  const bare = createHarness();
+  bare.boot(bootConfig());
+  bare.loadTool("t2", compile(`export default async () => "plain text";`), "/fixtures/tools/t.js", "/fixtures/tools", {});
+  bare.callTool("t2", "confirmation", {});
+  bare.callTool("t2", "default", {});
+  await wait();
+  check("a missing confirmation says so", bare.state.returns[0]?.exported === false);
+  check("a string result crosses as-is", bare.state.returns[1]?.value === "plain text");
+  bare.stop("t2");
 
   console.log("\n▶ Errors surface instead of crashing");
   const harness = createHarness();

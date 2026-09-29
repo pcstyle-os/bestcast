@@ -35,6 +35,10 @@ produces, rendered natively into the palette. No Electron, no browser, no Node.j
   the installed set and clears the launcher rows;
   `refresh()` returns early while it is off, so nothing is scanned and nothing is held. Enabling is also
   consent to run third-party code, so it confirms first and never rides a settings backup.
+- **An extension's AI tools are mention-only, and every call gets a fresh context.** A chat reaches
+  them only through `@handle`; a tool that is not clearly read-only runs only after the user agrees.
+  `ExtensionToolSession` boots, loads, calls and throws the runtime away, so no tool state outlives
+  its call. See [AI tools](#ai-tools).
 - **`SymbolCatalog` reads a system bundle, not API.** The list comes from `CoreGlyphs.bundle` at
   runtime; every read stays optional and falls back to `SymbolCatalog.suggested`, and Apple's restricted
   marks are never offered.
@@ -133,9 +137,13 @@ Two host-call flavours:
 | `Service/ExtensionManager.swift` | the single owner: installed set, foreground session, no-view refreshes, menu-bar manager, launcher entries |
 | `Service/ExtensionMenuBarManager.swift` | serialized refreshes, short-lived menu sessions and their deadlines |
 | `Service/ExtensionMenuBarHost.swift` | immutable per-session namespace and menu-specific host behavior |
+| `Service/ExtensionToolHost.swift` | an AI tool call's host context: a user-initiated one-shot with HUDs, alerts and OAuth |
+| `Service/ExtensionToolSession.swift` | one tool call's runtime: load, call an export with a deadline, tear down |
+| `Model/ExtensionToolPolicy.swift` | tool sources, wire names, `@`-scope, consent and result text |
+| `UI/ExtensionToolCoordinator.swift` | hands the tools to chat as `AITool`s and `@` sources, and runs a call |
 | `UI/ExtensionMenuBarController.swift` | native `NSStatusItem` and `NSMenu` rendering and dispatch |
 | `UI/ExtensionMenuBarImage.swift` | small native icons with light/dark variants |
-| `Model/ExtensionManifest.swift` | `package.json` → commands, preferences, arguments |
+| `Model/ExtensionManifest.swift` | `package.json` → commands, preferences, arguments, tools, `ai.instructions` |
 | `Model/ExtensionRefreshPolicy.swift` | background-refresh decisions: interval parsing, due dates, backoff |
 | `Model/ExtensionLaunchType.swift` | `userInitiated` / `background`, mirroring `@raycast/api` `LaunchType` |
 | `Model/RenderNode.swift` | the decoded render tree (`RenderTree` / `RenderNode` / `RenderValue`) |
@@ -773,6 +781,36 @@ stream, as does ending the extension session. Reasoning and tool events are not 
 Extensions bundle their own `@raycast/utils`; its `useAI` hook uses this streaming `AI.ask` API.
 Tinycast does not bundle a separate copy of that hook.
 
+### AI tools
+
+An extension that declares `tools` in `package.json` becomes an `@`-mentionable integration in AI
+Chat, next to the built-in ones and MCP servers. Its handle is its name, lowercased with every run of
+other characters folded to `-`; a handle already held by a built-in integration or an MCP server, or
+claimed by an earlier extension, is skipped. Extensions never appear in the chat's tools picker and
+reach no unaddressed turn: `@notes` offers Notes' tools for that turn only.
+
+Each tool is a plain `AITool` named `<handle>_<tool>` (capped at 64 characters, never containing
+`__`, so it cannot be mistaken for an MCP tool), with the tool's `description` and `instructions` as
+its description and its `input` schema as its parameters. The top-level `ai.instructions` joins the
+system prompt when the extension is addressed. The same tools reach Codex and Claude CLIs through
+`LoopbackToolEndpoint`, one loopback MCP server per addressed extension.
+
+A call runs `tools/<name>.js`, which install copies alongside `assets`:
+
+1. `ExtensionManager.openToolSession` checks the extension is on and its required preferences are
+   set, then boots a fresh runtime and evaluates the bundle with `LaunchType.UserInitiated`.
+2. If the bundle exports `confirmation`, it runs with the input. A `{ message, info, style }` answer
+   is shown in Tinycast's dialog, with each `info` entry as a `Name: value` line and a destructive
+   style kept; `undefined` runs the tool unasked. With no `confirmation` export, a tool whose name
+   does not start with a read verb (`get`, `list`, `search`, `find`, `read`, …) asks anyway, showing
+   the input.
+3. The default export runs with the input. A string reaches the model as is, anything else as JSON,
+   and a throw as a tool error. Each export has 60 seconds.
+
+The tool's module code runs before the question is asked, as in Raycast, because `confirmation` lives
+in it. Every question queues behind `BuiltInToolCoordinator.confirm`, the one dialog every tool
+consent goes through. The call and its result appear as ordinary tool rows in the transcript.
+
 ## What isn't supported yet
 
 | Gap | Why |
@@ -784,7 +822,7 @@ Tinycast does not bundle a separate copy of that hook.
 | **Interactive `spawn` stdin** | stdout and stderr stream, but stdin is sent once as the child starts: whatever was written in the same tick. A later `stdin.write` is dropped. |
 | **`net` / `tls`** | Resolve but throw on use. Nothing bridges a raw socket; a bundled `ws` reaches the network through the WebSocket bridge instead. `tls.TLSSocket` is the one exception: `http2-wrapper`, inside `got`, derives a class from one at import time, so it constructs as an inert duplex. |
 | **Streaming HTTP** | The bridge answers a request with the whole body at once, so `http.request` delivers one chunk and `Response.body` replays bytes that already arrived. Server-sent events, network-level progress and backpressure onto the socket are all out of reach; `stream` itself is real enough to carry them the day the bridge is. |
-| **Tool/AI-extension entry points (`tools/`)** | Not surfaced. |
+| **An extension with tools but no commands** | The manifest still needs one command, so a tools-only extension is not recognised as one. |
 
 ## Working on the runtime
 

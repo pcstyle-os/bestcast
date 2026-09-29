@@ -93,6 +93,7 @@ struct ExtensionTests {
         var trees: [RenderTree] = []
         var failures: [String] = []
         var logs: [String] = []
+        var returns: [String] = []
         var finished = false
 
         func runtime(_ runtime: ExtensionRuntime, session: String, didRender tree: RenderTree) {
@@ -103,6 +104,9 @@ struct ExtensionTests {
         }
         func runtime(_ runtime: ExtensionRuntime, session: String, navigationDepth: Int) {}
         func runtime(_ runtime: ExtensionRuntime, session: String, didFinish: Void) { finished = true }
+        func runtime(_ runtime: ExtensionRuntime, session: String, didReturn json: String) {
+            returns.append(json)
+        }
         func runtime(_ runtime: ExtensionRuntime, log level: String, message: String) {
             logs.append("[\(level)] \(message)")
         }
@@ -203,6 +207,7 @@ struct ExtensionTests {
         await asyncComponentChecks()
         await menuBarRuntimeChecks()
         await menuBarHostChecks()
+        await toolRuntimeChecks()
         await ExtensionFetchTests.runChecks()
 
         print("\n\(passes) passed, \(failures) failed")
@@ -257,6 +262,100 @@ struct ExtensionTests {
             "os.loadavg returns three finite values",
             loadAverages?.count == 3
                 && loadAverages?.allSatisfy { $0.doubleValue.isFinite && $0.doubleValue >= 0 } == true)
+    }
+
+    /// A tiny extension with one AI tool: its manifest, its bundle, its confirmation and its run.
+    @MainActor
+    static func toolRuntimeChecks() async {
+        let fm = FileManager.default
+        let directory = fm.temporaryDirectory.appendingPathComponent("tinycast-tool-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: directory) }
+        let manifest = #"""
+            {"name": "notes-fixture", "title": "Notes",
+             "commands": [{"name": "open", "title": "Open", "mode": "no-view"}],
+             "tools": [{"name": "delete-note", "title": "Delete Note", "description": "Deletes a note.",
+                        "input": {"type": "object", "properties": {"title": {"type": "string"}}},
+                        "confirmation": true}],
+             "ai": {"instructions": "Notes are markdown."}}
+            """#
+        let bundle = #"""
+            "use strict";
+            const { Action } = require("@raycast/api");
+            let asked = 0;
+            exports.confirmation = async (input) => {
+              asked++;
+              if (!input.title) return undefined;
+              return { style: Action.Style.Destructive, message: "Delete the note?",
+                       info: [{ name: "Note", value: input.title }] };
+            };
+            exports.default = async function tool(input) {
+              if (input.title === "boom") throw new Error("no such note");
+              return { deleted: input.title, asked };
+            };
+            """#
+        do {
+            try fm.createDirectory(
+                at: directory.appendingPathComponent("tools"), withIntermediateDirectories: true)
+            try manifest.write(
+                to: directory.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+            try bundle.write(
+                to: directory.appendingPathComponent("tools/delete-note.js"), atomically: true,
+                encoding: .utf8)
+        } catch {
+            check("the tool fixture is written", false, error.localizedDescription)
+            return
+        }
+        guard let parsed = try? ExtensionManifest.load(directory: directory),
+            let tool = parsed.tools.first
+        else {
+            check("a manifest's tools are read", false)
+            return
+        }
+        check("a manifest's tools are read", tool.name == "delete-note" && tool.title == "Delete Note")
+        check("its `ai.instructions` are read", parsed.aiInstructions == "Notes are markdown.")
+        let installed = InstalledExtension(manifest: parsed, directory: directory)
+        guard let file = installed.bundleURL(for: tool) else {
+            check("a tool's bundle is found under tools/", false)
+            return
+        }
+
+        let (runtime, _, recorder) = makeRuntime()
+        defer { runtime.shutdown() }
+        try? await runtime.boot(config: .current(supportDirectory: fm.temporaryDirectory))
+        await runtime.loadTool(
+            session: "tool", code: bundle, file: file,
+            context: launchContext(extensionName: "notes-fixture", command: "delete-note", mode: .noView))
+
+        func call(_ export: String, _ input: String) async -> [String: Any]? {
+            let before = recorder.returns.count
+            await runtime.callTool(session: "tool", export: export, input: input)
+            await settle(100)
+            guard recorder.returns.count > before, let last = recorder.returns.last else { return nil }
+            return try? JSONSerialization.jsonObject(with: Data(last.utf8)) as? [String: Any]
+        }
+
+        let asked = await call("confirmation", #"{"title":"Groceries"}"#)
+        let prompt = asked?["value"] as? [String: Any]
+        let info = (prompt?["info"] as? [[String: Any]])?.first
+        check(
+            "a tool's confirmation crosses with its message, info and style",
+            asked?["exported"] as? Bool == true && prompt?["message"] as? String == "Delete the note?"
+                && prompt?["style"] as? String == "destructive" && info?["value"] as? String == "Groceries",
+            "\(asked ?? [:]) \(recorder.failures)")
+        let skipped = await call("confirmation", "{}")
+        check(
+            "a confirmation that returns nothing crosses as null",
+            skipped?["exported"] as? Bool == true && skipped?["value"] is NSNull)
+        let ran = (await call("default", #"{"title":"Groceries"}"#))?["value"] as? [String: Any]
+        check(
+            "the default export runs on the same module state",
+            ran?["deleted"] as? String == "Groceries" && ran?["asked"] as? Int == 2, "\(ran ?? [:])")
+        let missing = await call("nope", "{}")
+        check("a missing export is reported as one", missing?["exported"] as? Bool == false)
+        _ = await call("default", #"{"title":"boom"}"#)
+        check(
+            "a throwing tool reports its error",
+            recorder.failures.contains { $0.contains("no such note") }, recorder.failures.joined())
     }
 
     @MainActor

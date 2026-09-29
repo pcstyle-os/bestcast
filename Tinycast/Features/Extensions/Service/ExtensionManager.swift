@@ -448,6 +448,50 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         accessoryValues = [:]
     }
 
+    // MARK: - AI tools
+
+    /// A fresh runtime per call, so a tool never shares a context with the palette's command.
+    func openToolSession(
+        extensionName: String, tool: ExtensionTool
+    ) async throws -> ExtensionToolSession {
+        guard isEnabled, let owner = extensionNamed(extensionName), let coordinator else {
+            throw ExtensionLaunchError.unknownCommand(extensionName)
+        }
+        let schemas = owner.manifest.preferences
+        let missing = storage.missingRequiredPreferences(extension: owner.manifest.name, schemas: schemas)
+        guard missing.isEmpty else { throw ExtensionLaunchError.missingPreferences(missing) }
+        guard let bundle = owner.bundleURL(for: tool) else {
+            throw ExtensionLaunchError.notBuilt(tool.title)
+        }
+        let support = ExtensionCatalog.supportPath(for: owner.manifest.name)
+        let code = try await Task.detached(priority: .userInitiated) {
+            try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+            return try String(contentsOf: bundle, encoding: .utf8)
+        }.value
+        let host = ExtensionToolHost(
+            owner: owner, storage: storage, manager: self, coordinator: coordinator)
+        let bridge = self.bridge.scoped(to: host)
+        let session = ExtensionToolSession(runtime: ExtensionRuntime(hostAPI: bridge)) { [storage] in
+            host.stop()
+            bridge.context = nil
+            storage.flush()
+        }
+        let context = ExtensionLaunchContext(
+            extensionName: owner.manifest.name, extensionTitle: owner.title, commandName: tool.name,
+            commandMode: .noView, assetsPath: owner.assetsPath, supportPath: support.path,
+            preferences: storage.resolvedPreferences(extension: owner.manifest.name, schemas: schemas),
+            caches: storage.caches(extension: owner.manifest.name), arguments: [:],
+            fallbackText: nil, isDarkAppearance: NSApp.effectiveAppearance.isDark,
+            canAccessAI: bridge.ai.canAccess())
+        do {
+            try await session.load(code: code, file: bundle, context: context, support: support)
+        } catch {
+            session.end()
+            throw error
+        }
+        return session
+    }
+
     // MARK: - Background refresh
 
     func backgroundInfo(extension name: String, command: String) -> ExtensionCommandMetadata {

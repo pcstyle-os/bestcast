@@ -5,19 +5,23 @@ import Foundation
 final class BuiltInToolCoordinator {
     private unowned let core: AppCore
     private let runner: BuiltInToolRunner
-    private lazy var endpoint = BuiltInToolEndpoint(
-        service: BuiltInToolEndpoint.Service(
-            tools: { [weak self] handle in
+    private lazy var endpoint = LoopbackToolEndpoint(
+        service: LoopbackToolEndpoint.Service(
+            server: { [weak self] handle in
                 guard let self, let integration = BuiltInIntegration(handle: handle),
                     offeredIntegrations.contains(integration)
                 else { return nil }
-                return BuiltInToolCatalog.tools(for: integration)
+                return LoopbackMCP.Server(
+                    title: integration.title,
+                    tools: BuiltInToolCatalog.tools(for: integration).map(\.loopbackTool))
             },
-            call: { [weak self] tool, arguments in
-                guard let self else { return .failure("", "Tinycast is shutting down.") }
+            call: { [weak self] handle, name, arguments in
+                guard let self, let tool = BuiltInToolCatalog.tool(handle: handle, name: name) else {
+                    return .failure("", "Tinycast is shutting down.")
+                }
                 return await run(tool, arguments: arguments, callID: "")
             }))
-    /// The dialog takes one question at a time, and a CLI may send several calls at once.
+    /// The dialog takes one question at a time, and a CLI or an extension may ask several at once.
     private var consentTail: Task<Void, Never>?
 
     init(core: AppCore) {
@@ -42,7 +46,7 @@ final class BuiltInToolCoordinator {
 
     var sources: [ChatToolSource] {
         offeredIntegrations.map {
-            ChatToolSource(handle: $0.handle, title: $0.title, symbol: $0.symbol, isBuiltIn: true)
+            ChatToolSource(handle: $0.handle, title: $0.title, symbol: $0.symbol, kind: .tinycast)
         }
     }
 
@@ -104,7 +108,9 @@ final class BuiltInToolCoordinator {
             let step = try await runner.prepare(request)
             if verdict == .ask {
                 guard let prompt = BuiltInToolPrompt.make(for: request, subject: step.subject),
-                    await confirm(prompt, symbol: tool.integration.symbol)
+                    await confirm(
+                        title: prompt.title, message: prompt.message,
+                        confirmTitle: prompt.confirmTitle, symbol: tool.integration.symbol)
                 else { return .failure(callID, "The user declined this tool call.") }
             }
             return AIToolResult(callID: callID, content: try await step.perform(), isError: false)
@@ -115,15 +121,19 @@ final class BuiltInToolCoordinator {
         }
     }
 
-    private func confirm(_ prompt: BuiltInToolPrompt, symbol: String) async -> Bool {
+    /// Every tool consent queues here, so two sources never race for the one dialog.
+    func confirm(
+        title: String, message: String, confirmTitle: String, symbol: String,
+        isDestructive: Bool = false
+    ) async -> Bool {
         guard !Task.isCancelled else { return false }
         let previous = consentTail
         let asking = Task { [core] in
             await previous?.value
             return await core.confirm(
-                title: prompt.title, message: prompt.message, symbol: symbol,
-                confirmTitle: prompt.confirmTitle, tone: .neutral, confirmRole: .standard,
-                dismissTitle: "Don't Allow")
+                title: title, message: message, symbol: symbol, confirmTitle: confirmTitle,
+                tone: isDestructive ? .danger : .neutral,
+                confirmRole: isDestructive ? .destructive : .standard, dismissTitle: "Don't Allow")
         }
         consentTail = Task { _ = await asking.value }
         return await asking.value

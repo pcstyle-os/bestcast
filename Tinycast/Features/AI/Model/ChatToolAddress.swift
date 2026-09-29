@@ -1,11 +1,17 @@
 import Foundation
 
-/// Something a turn can be addressed to with `@`: a built-in integration or an MCP server.
+/// Something a turn can be addressed to with `@`: an integration, an extension or an MCP server.
 struct ChatToolSource: Identifiable, Equatable, Sendable {
+    enum Kind: Equatable, Sendable {
+        case tinycast
+        case raycastExtension
+        case mcpServer
+    }
+
     let handle: String
     let title: String
     let symbol: String
-    let isBuiltIn: Bool
+    let kind: Kind
 
     var id: String { handle }
 }

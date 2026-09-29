@@ -126,7 +126,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `ext-store-test` | `Extensions/Model/` — the registry model and both registry APIs' parsers |
 | `ext-refresh-test` | `Extensions/Model/ExtensionRefreshPolicy.swift` — interval parsing, due dates, backoff, subtitle fallback, indicator state |
 | `ext-metadata-test` | `Extensions/Service/ExtensionCommandMetadataStore.swift` — round-trip, failure runs, uninstall |
-| `ext-test` | the extension runtime and native menu-bar lifecycle — boots shipped sources in JavaScriptCore; menu tests cover restoration, refresh serialization, actions and teardown; fetch tests cover HTTP connection cleanup, cancellation and request isolation |
+| `ext-test` | the extension runtime and native menu-bar lifecycle — boots shipped sources in JavaScriptCore; menu tests cover restoration, refresh serialization, actions and teardown; fetch tests cover HTTP connection cleanup, cancellation and request isolation; a fixture tool covers its `confirmation`, default export and errors |
 | `ext-icon-test` | `Extensions/Service/ExtensionIconCache.swift` — artwork sizing and its fallback |
 | `icon-cache-test` | `Platform/Images/IconCache.swift` — row sizing at 1×/2×, warm reuse, stamp and style invalidation, bitmap release, fitted geometry across all 256 alpha values, and that a row icon draws identically to the 96px one |
 | `entry-icon-test` | `EntryIcon` — that each case draws, caches and prints apart from the others, and that a moved `FileIconStamp` retires the bitmap decoded before it |
@@ -141,6 +141,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `support-test` | `Support/Model/` — when the support reminder comes due, and a clock moved backwards |
 | `mcp-test` | `MCP/Model/` and `MCPSettingsStore` — JSON-RPC framing, handles, tool names, output flattening, trust, `@` addressing, handles reserved for integrations, the shape a vendor CLI is handed, and which servers Tinycast leaves to that CLI |
 | `ai-tools-test` | `AI/Model/` built-in tools — catalog schemas, wire names, what a turn is offered, consent classification, argument checks, calendar spans, dialog text, file access, multi-handle `@` addressing and suggestions, and the loopback endpoint's HTTP and JSON-RPC |
+| `ext-tools-test` | `Extensions/Model/ExtensionToolPolicy.swift` — a manifest's tools, handles and wire names, `@`-scope, `ai.instructions`, when a call asks and what the dialog says, and the result text |
 | `mcp-stdio-test` | `MCP/Service/` against a stub server — handshake, listing, calling, and every way one can go away |
 | `mcp-oauth-test` | OAuth parsing, RFC 7636 PKCE, discovery and resource binding, loopback callback validation/cancellation, dynamic registration, supplied client credentials and their token-endpoint authentication, Keychain token rotation, concurrent refresh, the wider margin for a token lent to a CLI, redirects and one-retry 401 handling |
 

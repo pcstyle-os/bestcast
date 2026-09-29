@@ -24,6 +24,12 @@ struct BuiltInTool: Equatable, Sendable {
             name: wireName, description: description, parameters: parameters,
             origin: integration.title, title: title)
     }
+
+    var loopbackTool: LoopbackMCP.Tool {
+        LoopbackMCP.Tool(
+            name: name, title: title, description: description, inputSchema: parameters,
+            isReadOnly: effect == .read)
+    }
 }
 
 enum BuiltInToolCatalog {

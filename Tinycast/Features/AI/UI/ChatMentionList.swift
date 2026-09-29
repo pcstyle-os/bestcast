@@ -17,7 +17,7 @@ struct ChatMentionList: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(source.title), @\(source.handle)")
-                .accessibilityHint(source.isBuiltIn ? "Tinycast integration" : "MCP server")
+                .accessibilityHint(hint(source.kind))
                 .accessibilityAddTraits(index == selected ? .isSelected : [])
             }
         }
@@ -41,8 +41,8 @@ struct ChatMentionList: View {
             Text(source.title)
                 .foregroundStyle(Theme.Colors.textSecondary)
             Spacer(minLength: 0)
-            if !source.isBuiltIn {
-                Text("MCP")
+            if let badge = badge(source.kind) {
+                Text(badge)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
         }
@@ -53,5 +53,21 @@ struct ChatMentionList: View {
             isSelected ? Theme.Colors.selection : .clear,
             in: RoundedRectangle(cornerRadius: Theme.Radius.menuRow, style: .continuous))
         .contentShape(Rectangle())
+    }
+
+    private func hint(_ kind: ChatToolSource.Kind) -> String {
+        switch kind {
+        case .tinycast: "Tinycast integration"
+        case .raycastExtension: "Raycast extension"
+        case .mcpServer: "MCP server"
+        }
+    }
+
+    private func badge(_ kind: ChatToolSource.Kind) -> String? {
+        switch kind {
+        case .tinycast: nil
+        case .raycastExtension: "Extension"
+        case .mcpServer: "MCP"
+        }
     }
 }

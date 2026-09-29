@@ -9,6 +9,21 @@ enum LoopbackMCP {
     static let version = "2025-06-18"
     static let supportedVersions: Set<String> = [version, "2025-03-26", "2024-11-05"]
 
+    /// One server a handle names: an integration, or an extension's tools.
+    struct Server: Equatable, Sendable {
+        let title: String
+        let tools: [Tool]
+    }
+
+    /// A tool under its name inside the server; a CLI prefixes the server's own.
+    struct Tool: Equatable, Sendable {
+        let name: String
+        let title: String
+        let description: String
+        let inputSchema: JSONValue
+        let isReadOnly: Bool
+    }
+
     struct Request: Equatable, Sendable {
         let method: String
         let path: String
@@ -110,16 +125,15 @@ enum LoopbackMCP {
         ])
     }
 
-    /// Under the name inside the integration: the CLI prefixes the server's own.
-    static func toolList(_ tools: [BuiltInTool]) -> JSONValue {
+    static func toolList(_ tools: [Tool]) -> JSONValue {
         .object([
             "tools": .array(
                 tools.map { tool in
                     .object([
                         "name": .string(tool.name), "title": .string(tool.title),
                         "description": .string(tool.description),
-                        "inputSchema": tool.parameters,
-                        "annotations": .object(["readOnlyHint": .bool(tool.effect == .read)])
+                        "inputSchema": tool.inputSchema,
+                        "annotations": .object(["readOnlyHint": .bool(tool.isReadOnly)])
                     ])
                 })
         ])

@@ -411,8 +411,8 @@ private struct AIToolsPicker: View {
                     isOn: Binding(
                         get: { scope.isEnabled },
                         set: { coordinator.setToolsEnabled($0, in: chat) }))
-                section("Tinycast", sources.filter(\.isBuiltIn), scope: scope)
-                section("Servers", sources.filter { !$0.isBuiltIn }, scope: scope)
+                section("Tinycast", sources.filter { $0.kind == .tinycast }, scope: scope)
+                section("Servers", sources.filter { $0.kind == .mcpServer }, scope: scope)
             }
             Divider()
             Button("AI Settings…", action: coordinator.showMCPSettings)

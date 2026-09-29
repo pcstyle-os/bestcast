@@ -39,7 +39,8 @@ final class MCPCoordinator {
     func dropWithdrawnServers(besides withdrawn: UUID? = nil) {
         let offered = store.enabledServers.filter { $0.trust != .never && $0.id != withdrawn }
         core.chatGPTSubscription.dropWithdrawnServers(
-            keeping: (isActive ? Set(offered.map(\.slug)) : []).union(core.builtInTools.handles))
+            keeping: (isActive ? Set(offered.map(\.slug)) : []).union(core.builtInTools.handles)
+                .union(core.extensionTools.handles))
     }
 
     /// Connecting on the way into chat, so the first send does not wait on every handshake.

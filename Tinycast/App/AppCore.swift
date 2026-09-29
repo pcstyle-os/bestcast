@@ -210,6 +210,7 @@ final class AppCore {
     @ObservationIgnored private(set) lazy var mcpCoordinator = MCPCoordinator(
         settings: settings, store: mcpSettings, manager: mcp, core: self)
     @ObservationIgnored private(set) lazy var builtInTools = BuiltInToolCoordinator(core: self)
+    @ObservationIgnored private(set) lazy var extensionTools = ExtensionToolCoordinator(core: self)
     /// Its own window and lifecycle, like Settings; Quick AI is the palette's half of the feature.
     @ObservationIgnored private(set) lazy var aiChatCoordinator = AIChatCoordinator(
         chats: aiChats, settings: settings, appIndex: appIndex,
@@ -304,6 +305,7 @@ final class AppCore {
             quickAICoordinator.applyPresetsPresence()
             mcpCoordinator.applyEnabled()
             builtInTools.applyEnabled()
+            extensionTools.applyEnabled()
             customQuickActions.onChange = { [weak self] _ in
                 self?.quickActionCoordinator.applyCustomQuickActionsPresence()
                 self?.aiInboxCoordinator.commandsChanged()
@@ -718,6 +720,17 @@ final class AppCore {
                 _ = $0.mcpEnabled
             }, reproject: { $0.builtInTools.applyEnabled() })
         track(aiSettings, { _ = $0.integrations }, reproject: { $0.builtInTools.applyEnabled() })
+        track(
+            {
+                _ = $0.aiEnabled
+                _ = $0.mcpEnabled
+            }, reproject: { $0.extensionTools.applyEnabled() })
+        track(
+            extensions,
+            {
+                _ = $0.isEnabled
+                _ = $0.installed
+            }, reproject: { $0.extensionTools.applyEnabled() })
         track(
             { _ = $0.quickActionsEnabled },
             reproject: { $0.quickActionCoordinator.applyEnabled() })

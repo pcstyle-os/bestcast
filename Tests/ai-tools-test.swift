@@ -341,9 +341,9 @@ struct AIToolsTests {
             "an unknown @ followed by words is text")
 
         let sources = [
-            ChatToolSource(handle: "clipboard", title: "Clipboard", symbol: "", isBuiltIn: true),
-            ChatToolSource(handle: "calendar", title: "Calendar", symbol: "", isBuiltIn: true),
-            ChatToolSource(handle: "gh", title: "Calculator Hub", symbol: "", isBuiltIn: false)
+            ChatToolSource(handle: "clipboard", title: "Clipboard", symbol: "", kind: .tinycast),
+            ChatToolSource(handle: "calendar", title: "Calendar", symbol: "", kind: .tinycast),
+            ChatToolSource(handle: "gh", title: "Calculator Hub", symbol: "", kind: .mcpServer)
         ]
         expect(
             ChatToolAddress.suggestions(for: "CAL", among: sources).map(\.handle) == ["calendar", "gh"],
@@ -417,7 +417,7 @@ struct AIToolsTests {
             fallback.objectValue?["protocolVersion"]?.stringValue == LoopbackMCP.version,
             "an unknown one is answered with Tinycast's own")
 
-        let listed = LoopbackMCP.toolList(BuiltInToolCatalog.tools(for: .clipboard))
+        let listed = LoopbackMCP.toolList(BuiltInToolCatalog.tools(for: .clipboard).map(\.loopbackTool))
         let entries = listed.objectValue?["tools"]?.arrayValue ?? []
         expect(
             entries.compactMap { $0.objectValue?["name"]?.stringValue } == ["search", "read", "copy"],

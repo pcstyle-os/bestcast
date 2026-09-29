@@ -91,6 +91,7 @@ const hostCalls = {
   navigationDepthChanged: (sessionId, depth) =>
     globalThis.__tinycastHost.navigationDepthChanged(sessionId, String(depth)),
   finished: (sessionId) => globalThis.__tinycastHost.finished(sessionId),
+  returned: (sessionId, json) => globalThis.__tinycastHost.returned(sessionId, json),
 };
 
 setUncaughtHandler((error) => {
@@ -152,6 +153,42 @@ globalThis.__tinycast = {
     return "ok";
   },
 
+  /// An AI tool: its bundle is evaluated once, so `confirmation` and the run share module state.
+  loadTool(sessionId, code, filename, dirname, contextJson) {
+    configureSystem(JSON.parse(contextJson || "{}"));
+    const session = new Session(sessionId, hostCalls);
+    sessions.set(sessionId, session);
+    try {
+      session.exports = evaluateCommonJS(code, filename, dirname) ?? {};
+    } catch (error) {
+      session.fail(error);
+    }
+    return "ok";
+  },
+
+  /// Answers `returned` with `{exported, value}`: a missing export is not an `undefined` result.
+  callTool(sessionId, member, inputJson) {
+    const session = sessions.get(sessionId);
+    if (!session) return "0";
+    if (!session.exports) {
+      session.fail(new Error("The tool did not load."));
+      return "0";
+    }
+    const exports = session.exports;
+    const entry = member === "default" ? exports.default ?? exports : exports[member];
+    if (typeof entry !== "function") {
+      hostCalls.returned(sessionId, JSON.stringify({ exported: false }));
+      return "1";
+    }
+    Promise.resolve()
+      .then(() => entry(JSON.parse(inputJson || "{}")))
+      .then(
+        (value) => hostCalls.returned(sessionId, encodeToolResult(value)),
+        (error) => session.fail(error),
+      );
+    return "1";
+  },
+
   /// Route a UI event back to the callback it came from.
   dispatch(sessionId, handlerId, argsJson, completesSession = false) {
     const session = sessions.get(sessionId);
@@ -187,6 +224,15 @@ globalThis.__tinycast = {
     return "ok";
   },
 };
+
+/// A tool may return anything; what cannot be JSON reaches the model as its string form.
+function encodeToolResult(value) {
+  try {
+    return JSON.stringify({ exported: true, value: value === undefined ? null : value });
+  } catch {
+    return JSON.stringify({ exported: true, value: String(value) });
+  }
+}
 
 /// `{"$date": …}` is how a Form.DatePicker value crosses back from Swift.
 function reviveArg(value) {

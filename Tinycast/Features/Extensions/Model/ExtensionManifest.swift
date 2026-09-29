@@ -193,6 +193,31 @@ struct ExtensionCommand: Sendable, Hashable, Identifiable {
     }
 }
 
+/// One entry from a manifest's `tools`: something a model calls, bundled as `tools/<name>.js`.
+struct ExtensionTool: Sendable, Hashable, Identifiable {
+    let name: String
+    let title: String
+    let description: String
+    let instructions: String?
+    /// The JSON schema as the manifest wrote it; only the model reads it.
+    let inputSchema: String
+
+    var id: String { name }
+
+    init?(json: Any) {
+        guard let dict = json as? [String: Any], let name = dict["name"] as? String, !name.isEmpty,
+            !name.contains("/")
+        else { return nil }
+        self.name = name
+        title = dict["title"] as? String ?? name
+        description = dict["description"] as? String ?? ""
+        instructions = (dict["instructions"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let schema = dict["input"] as? [String: Any] ?? ["type": "object", "properties": [:]]
+        inputSchema = (try? JSONSerialization.data(withJSONObject: schema, options: .sortedKeys))
+            .map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+    }
+}
+
 /// A Raycast extension's `package.json`, reduced to what Tinycast uses.
 struct ExtensionManifest: Sendable, Hashable {
     let name: String
@@ -204,6 +229,9 @@ struct ExtensionManifest: Sendable, Hashable {
     let platforms: [String]?
     let commands: [ExtensionCommand]
     let preferences: [ExtensionPreferenceSchema]
+    let tools: [ExtensionTool]
+    /// `ai.instructions`: what the model is told whenever the extension is addressed.
+    let aiInstructions: String?
 
     /// `platforms` is absent on older manifests, which predate Windows support and are macOS-only.
     var supportsMacOS: Bool {
@@ -249,5 +277,8 @@ struct ExtensionManifest: Sendable, Hashable {
         platforms = json["platforms"] as? [String]
         self.commands = commands
         preferences = (json["preferences"] as? [Any] ?? []).compactMap(ExtensionPreferenceSchema.init(json:))
+        tools = (json["tools"] as? [Any] ?? []).compactMap(ExtensionTool.init(json:))
+        aiInstructions = ((json["ai"] as? [String: Any])?["instructions"] as? String)
+            .flatMap { $0.isEmpty ? nil : $0 }
     }
 }

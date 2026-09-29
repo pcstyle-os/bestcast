@@ -288,8 +288,8 @@ final class AIChatCoordinator {
             let sent = chat.send(
                 address.rest, using: try provider(for: chat, scopedTo: scope),
                 model: model(for: chat), webSearch: webSearch(for: chat),
-                instructions: instructions(for: chat), contextBudget: contextBudget(for: chat),
-                toolScope: scope)
+                instructions: instructions(for: chat, scopedTo: scope),
+                contextBudget: contextBudget(for: chat), toolScope: scope)
             // Named while the answer streams, so the sidebar has a title before the reply ends.
             if sent { nameIfNeeded(chat) }
             dropStaleInlineComparison(in: chat)
@@ -325,7 +325,8 @@ final class AIChatCoordinator {
             chat.regenerate(
                 reply: reply, using: try provider(for: chat, scopedTo: scope),
                 model: model(for: chat), webSearch: webSearch(for: chat),
-                instructions: instructions(for: chat), contextBudget: contextBudget(for: chat))
+                instructions: instructions(for: chat, scopedTo: scope),
+                contextBudget: contextBudget(for: chat))
         } catch {
             chat.report(error.localizedDescription)
         }
@@ -337,11 +338,17 @@ final class AIChatCoordinator {
             && capabilities(for: chat).webSearch
     }
 
-    private func instructions(for chat: AIChatState) -> String? {
-        AIInstructions.compose(
+    /// An addressed extension's `ai.instructions` ride along only while its tools can be called.
+    private func instructions(for chat: AIChatState, scopedTo scope: String?) -> String? {
+        let toolInstructions =
+            capabilities(for: chat).tools && chat.toolScope.isEnabled
+            ? core.extensionTools.instructions(
+                scopedTo: ChatToolAddress.handles(inScope: scope), excluded: chat.toolScope.excluded)
+            : nil
+        return AIInstructions.compose(
             userPrompt: core.aiSettings.systemPrompt,
             isEnabled: core.aiSettings.systemPromptEnabled, chatPrompt: chat.session.instructions,
-            presetPrompt: chat.preset?.systemPrompt,
+            presetPrompt: chat.preset?.systemPrompt, toolInstructions: toolInstructions,
             followUpRequest: chat === chats.quickAI && core.aiSettings.quickAIFollowUps
                 ? QuickAIInstructions.followUpRequest : nil)
     }
@@ -362,15 +369,20 @@ final class AIChatCoordinator {
         let chatID = chat.session.id
         let mcp = core.mcpCoordinator
         let builtIn = core.builtInTools
+        let extensions = core.extensionTools
         return AIToolServerSession(rounds: core.aiSettings.toolRounds.limit) {
             let servers = await mcp.toolServers(scopedTo: handles).filter {
                 !excluded.contains($0.handle)
             }
             return servers + (await builtIn.toolServers(scopedTo: handles, excluded: excluded))
+                + (await extensions.toolServers(scopedTo: handles, excluded: excluded))
         } consent: { call in
             // A server saved under an integration's name shadows it, so its own policy applies.
             guard await mcp.server(slug: call.handle) == nil else {
                 return await mcp.permit(call, in: chatID)
+            }
+            guard await !extensions.handles.contains(call.handle) else {
+                return await extensions.permit(call)
             }
             return await builtIn.permit(call)
         }
@@ -385,10 +397,11 @@ final class AIChatCoordinator {
         let chatID = chat.session.id
         return AIToolLoopProvider(
             base: provider, tools: tools, maxRounds: core.aiSettings.toolRounds.limit
-        ) { [mcp = core.mcpCoordinator, builtIn = core.builtInTools] call in
+        ) { [mcp = core.mcpCoordinator, builtIn = core.builtInTools, extensions = core.extensionTools] call in
             guard BuiltInToolCatalog.tool(wireName: call.name) == nil else {
                 return await builtIn.invoke(call)
             }
+            guard await !extensions.owns(call.name) else { return await extensions.invoke(call) }
             return await mcp.invoke(call, in: chatID)
         }
     }
@@ -402,24 +415,30 @@ final class AIChatCoordinator {
             guard let route = MCPToolName.parse(tool.name) else { return true }
             return !excluded.contains(route.slug)
         }
-        return core.builtInTools.tools(scopedTo: handles, excluded: excluded) + servers
+        return core.builtInTools.tools(scopedTo: handles, excluded: excluded)
+            + core.extensionTools.tools(scopedTo: handles, excluded: excluded) + servers
     }
 
     /// The servers a chat's tools menu offers; empty when MCP is off or nothing is set up.
     var mcpServers: [MCPServer] { core.mcpCoordinator.servers }
 
-    /// What `@` can name: the integrations switched on, then the MCP servers.
+    /// What the tools menu lists: the integrations switched on, then the MCP servers.
     var toolSources: [ChatToolSource] {
         core.builtInTools.sources
             + mcpServers.map {
                 ChatToolSource(
                     handle: $0.slug, title: $0.title, symbol: "wrench.and.screwdriver",
-                    isBuiltIn: false)
+                    kind: .mcpServer)
             }
     }
 
+    /// What `@` can name: the menu's sources, then extensions, which are reached by name only.
+    private var mentionSources: [ChatToolSource] {
+        toolSources + core.extensionTools.chatSources
+    }
+
     private var toolHandles: Set<String> {
-        core.builtInTools.handles.union(core.mcpCoordinator.slugs)
+        core.builtInTools.handles.union(core.mcpCoordinator.slugs).union(core.extensionTools.handles)
     }
 
     func setToolsEnabled(_ enabled: Bool, in chat: AIChatState) {
@@ -436,7 +455,7 @@ final class AIChatCoordinator {
 
     /// The sources a draft is addressed to, so the composer can show them as chips while typing.
     func addressedSources(in draft: String) -> [ChatToolSource] {
-        let sources = toolSources
+        let sources = mentionSources
         return ChatToolAddress.parse(draft, handles: toolHandles).handles.compactMap { handle in
             sources.first { $0.handle == handle }
         }
@@ -447,7 +466,7 @@ final class AIChatCoordinator {
         guard let partial = ChatToolAddress.pendingMention(in: draft, handles: toolHandles) else {
             return nil
         }
-        return ChatToolAddress.suggestions(for: partial, among: toolSources)
+        return ChatToolAddress.suggestions(for: partial, among: mentionSources)
     }
 
     func stopResponse(in chat: AIChatState) {

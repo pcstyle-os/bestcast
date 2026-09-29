@@ -676,6 +676,13 @@ run mcp-test               Tinycast/Features/Settings/AppSettingsKey.swift \
                            Tinycast/Features/MCP/Model/*.swift \
                            Tinycast/Features/MCP/Settings/MCPSettingsStore.swift
 run ai-tools-test          Tinycast/Features/AI/Model/*.swift $W
+run ext-tools-test         Tinycast/Features/AI/Model/*.swift $W \
+                           $E/Model/ExtensionToolPolicy.swift \
+                           $E/Model/ExtensionManifest.swift \
+                           Tinycast/Platform/AppDisplayName.swift \
+                           $E/Model/ExtensionLaunchType.swift \
+                           $E/Model/ExtensionRefreshPolicy.swift \
+                           $E/Model/ExtensionRefreshState.swift
 run -O text-diff-test     Tinycast/Features/QuickActions/Model/TextDiffEngine.swift
 run index text-diff-performance Tinycast/Features/QuickActions/Model/TextDiffEngine.swift
 run quick-action-test      Tinycast/Features/Settings/AppSettingsKey.swift \

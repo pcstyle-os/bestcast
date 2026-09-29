@@ -36,7 +36,7 @@ const runtime = readFileSync(runtimePath, "utf8");
 export function createHarness({ onRender, onFail, verbose = false, stubs = {} } = {}) {
   const context = createContext({});
   const timers = new Map();
-  const state = { trees: [], failures: [], logs: [], finished: false, hostCalls: [] };
+  const state = { trees: [], failures: [], logs: [], finished: false, hostCalls: [], returns: [] };
 
   const host = {
     log(level, message) {
@@ -57,6 +57,9 @@ export function createHarness({ onRender, onFail, verbose = false, stubs = {} } 
     },
     finished() {
       state.finished = true;
+    },
+    returned(sessionId, json) {
+      state.returns.push(JSON.parse(json));
     },
     fieldCommand() {},
     startTimer(id, ms, repeats) {
@@ -121,6 +124,18 @@ export function createHarness({ onRender, onFail, verbose = false, stubs = {} } 
     start(sessionId, code, filename, dirname, mode, ctx) {
       return runInContext(
         `__tinycast.start(${JSON.stringify(sessionId)}, ${JSON.stringify(code)}, ${JSON.stringify(filename)}, ${JSON.stringify(dirname)}, ${JSON.stringify(mode)}, ${JSON.stringify(JSON.stringify(ctx))})`,
+        context,
+      );
+    },
+    loadTool(sessionId, code, filename, dirname, ctx) {
+      return runInContext(
+        `__tinycast.loadTool(${JSON.stringify(sessionId)}, ${JSON.stringify(code)}, ${JSON.stringify(filename)}, ${JSON.stringify(dirname)}, ${JSON.stringify(JSON.stringify(ctx))})`,
+        context,
+      );
+    },
+    callTool(sessionId, member, input) {
+      return runInContext(
+        `__tinycast.callTool(${JSON.stringify(sessionId)}, ${JSON.stringify(member)}, ${JSON.stringify(JSON.stringify(input))})`,
         context,
       );
     },

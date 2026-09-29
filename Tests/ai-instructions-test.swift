@@ -56,6 +56,16 @@ struct AIInstructionsTest {
                 == AIInstructions.compose(userPrompt: "Haiku.", isEnabled: true))
 
         check(
+            "an addressed extension's instructions follow the prompt",
+            AIInstructions.compose(userPrompt: nil, isEnabled: true, toolInstructions: "Use ids.")
+                == AIPreamble.text + "\n\nUse ids.")
+        check(
+            "they still reach the model with the system prompt off",
+            AIInstructions.compose(
+                userPrompt: nil, isEnabled: false, toolInstructions: "Use ids.", followUpRequest: "F")
+                == "Use ids.\n\nF")
+
+        check(
             "the preamble names the app so the model can answer for it",
             AIPreamble.text.contains("Tinycast"))
         check(

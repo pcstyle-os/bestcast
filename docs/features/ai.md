@@ -1254,13 +1254,14 @@ Calculator and System — is switched on in Settings → AI → Integrations, al
 - **An integration's switch is a capability grant**, so `aiIntegrations` has no `settings.json` key
   and is excluded from backups. `aiEnabled` off withdraws every one.
 - **A handle belongs to one thing.** A built-in's wire name is `handle_name`, with no `__`, so it
-  never parses as an MCP tool. A new MCP server cannot take an integration's handle; one saved
+  never parses as an MCP tool; an extension's tool is named the same way. A new MCP server cannot take an integration's handle; one saved
   before integrations existed keeps its slug, and the integration of that name steps aside.
 
 ### Addressing
 
-Typing `@` in AI Chat's composer or Quick AI's field opens a picker of the integrations that are on
-and the connected MCP servers. ↑/↓ move through it, Return or ⇥ completes the handle and a trailing
+Typing `@` in AI Chat's composer or Quick AI's field opens a picker of the integrations that are on,
+the connected MCP servers and the installed extensions with
+[AI tools](extensions.md#ai-tools). ↑/↓ move through it, Return or ⇥ completes the handle and a trailing
 space, and Escape closes it in AI Chat until the text changes. Each row carries an accessibility
 label with the title and handle and marks the highlighted one selected. Leading `@handle`s scope the
 next turn to those sources and each shows as a chip; an unknown handle is text. `ChatToolAddress`
@@ -1268,7 +1269,7 @@ parses, stores and completes them.
 
 ### CLI routes
 
-Codex and Claude are their own MCP clients, so `BuiltInToolEndpoint` serves the integrations over
+Codex and Claude are their own MCP clients, so `LoopbackToolEndpoint` serves the integrations over
 streamable HTTP on `127.0.0.1` at a random port, one path per integration (`/mcp/<handle>`), behind
 a bearer token generated per launch. It starts on the first CLI turn that needs it and stops when
 no integration is left on. The Network framework's `NetworkListener` accepts the connections;
@@ -1276,7 +1277,8 @@ no integration is left on. The Network framework's `NetworkListener` accepts the
 answers. A CLI's own permission question for a built-in is answered yes when the integration is on,
 and the write dialog comes from the endpoint's `tools/call`, where the arguments are; so the same
 dialog asks on every route. Codex waits 60 seconds for a tool call by default, so a dialog left
-open longer fails that call.
+open longer fails that call. Extension tools get a second endpoint of the same kind, owned by
+`ExtensionToolCoordinator`, with one path per addressed extension.
 
 ## Notes and snippets
 

@@ -28,6 +28,12 @@ struct InstalledExtension: Sendable, Hashable, Identifiable {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
+    /// An AI tool's bundle, which Raycast's build writes under `tools/`.
+    func bundleURL(for tool: ExtensionTool) -> URL? {
+        let url = directory.appendingPathComponent("tools").appendingPathComponent("\(tool.name).js")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
     func command(named name: String) -> ExtensionCommand? {
         manifest.commands.first { $0.name == name }
     }
@@ -221,9 +227,11 @@ enum ExtensionCatalog {
                     at: source.appendingPathComponent(file),
                     to: destination.appendingPathComponent(file))
             }
-            let assets = source.appendingPathComponent("assets")
-            if fm.fileExists(atPath: assets.path) {
-                try fm.copyItem(at: assets, to: destination.appendingPathComponent("assets"))
+            for folder in ["assets", "tools"] {
+                let item = source.appendingPathComponent(folder)
+                if fm.fileExists(atPath: item.path) {
+                    try fm.copyItem(at: item, to: destination.appendingPathComponent(folder))
+                }
             }
             try restoreExecutablePermissions(in: destination)
         } catch {

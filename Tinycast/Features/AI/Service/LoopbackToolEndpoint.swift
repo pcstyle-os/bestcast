@@ -1,13 +1,13 @@
 import Foundation
 import Network
 
-/// The loopback MCP server a CLI route's own client reaches Tinycast's tools through.
+/// The loopback MCP server a CLI route's own client reaches Tinycast-run tools through.
 @MainActor
-final class BuiltInToolEndpoint {
-    /// What the endpoint serves; `tools` is `nil` for a handle that is not on offer right now.
+final class LoopbackToolEndpoint {
+    /// What the endpoint serves; `server` is `nil` for a handle that is not on offer right now.
     struct Service {
-        let tools: @MainActor (_ handle: String) -> [BuiltInTool]?
-        let call: @MainActor (_ tool: BuiltInTool, _ arguments: String) async -> AIToolResult
+        let server: @MainActor (_ handle: String) -> LoopbackMCP.Server?
+        let call: @MainActor (_ handle: String, _ tool: String, _ arguments: String) async -> AIToolResult
     }
 
     /// A request that has not arrived whole by then never will; a tool's own run is not bounded.
@@ -124,8 +124,7 @@ final class BuiltInToolEndpoint {
         guard LoopbackMCP.isAuthorized(request, token: token) else {
             return LoopbackMCP.http(status: "401 Unauthorized")
         }
-        guard let handle = LoopbackMCP.handle(inPath: request.path),
-            let integration = BuiltInIntegration(handle: handle), let tools = service.tools(handle)
+        guard let handle = LoopbackMCP.handle(inPath: request.path), let server = service.server(handle)
         else { return LoopbackMCP.http(status: "404 Not Found") }
         // No event stream to offer: a GET is how a client asks for one, and 405 is how it hears no.
         guard request.method == "POST" else { return LoopbackMCP.http(status: "405 Method Not Allowed") }
@@ -140,17 +139,17 @@ final class BuiltInToolEndpoint {
         case .initialize(let id, let version):
             body = LoopbackMCP.response(
                 id: id,
-                result: LoopbackMCP.initializeResult(version: version, title: integration.title))
+                result: LoopbackMCP.initializeResult(version: version, title: server.title))
         case .listTools(let id):
-            body = LoopbackMCP.response(id: id, result: LoopbackMCP.toolList(tools))
+            body = LoopbackMCP.response(id: id, result: LoopbackMCP.toolList(server.tools))
         case .ping(let id):
             body = LoopbackMCP.response(id: id, result: .object([:]))
         case .callTool(let id, let name, let arguments):
-            guard let tool = tools.first(where: { $0.name == name }) else {
+            guard server.tools.contains(where: { $0.name == name }) else {
                 body = LoopbackMCP.error(id: id, code: -32602, message: "Unknown tool: \(name)")
                 break
             }
-            let result = await service.call(tool, arguments)
+            let result = await service.call(handle, name, arguments)
             body = LoopbackMCP.response(id: id, result: LoopbackMCP.toolResult(result))
         case .unknown(let id, let method):
             body = LoopbackMCP.error(id: id, code: -32601, message: "Method not found: \(method)")

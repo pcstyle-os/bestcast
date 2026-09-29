@@ -5,7 +5,7 @@ enum AIInstructions {
     /// A chat's or preset's prompt replaces Settings'; a preset keeps the preamble on any setup.
     static func compose(
         userPrompt: String?, isEnabled: Bool, chatPrompt: String? = nil,
-        presetPrompt: String? = nil, followUpRequest: String? = nil
+        presetPrompt: String? = nil, toolInstructions: String? = nil, followUpRequest: String? = nil
     ) -> String? {
         let own = [presetPrompt, chatPrompt].map(trimmed).filter { !$0.isEmpty }
         let base: String?
@@ -17,8 +17,8 @@ enum AIInstructions {
             let preamble = isEnabled || presetPrompt != nil ? [AIPreamble.text] : []
             base = (preamble + own).joined(separator: "\n\n")
         }
-        guard let followUpRequest else { return base }
-        return base.map { $0 + "\n\n" + followUpRequest } ?? followUpRequest
+        let parts = [base, toolInstructions, followUpRequest].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
 
     private static func trimmed(_ text: String?) -> String {
