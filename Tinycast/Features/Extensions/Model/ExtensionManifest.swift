@@ -214,7 +214,7 @@ struct ExtensionTool: Sendable, Hashable, Identifiable {
         instructions = (dict["instructions"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         let schema = dict["input"] as? [String: Any] ?? ["type": "object", "properties": [:]]
         inputSchema = (try? JSONSerialization.data(withJSONObject: schema, options: .sortedKeys))
-            .map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+            .flatMap { String(bytes: $0, encoding: .utf8) } ?? "{}"
     }
 }
 

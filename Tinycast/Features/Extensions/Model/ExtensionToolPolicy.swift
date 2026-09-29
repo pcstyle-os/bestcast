@@ -241,7 +241,7 @@ enum ExtensionToolOutput {
         default:
             let data = try? JSONSerialization.data(
                 withJSONObject: value.jsonObject, options: [.fragmentsAllowed, .sortedKeys])
-            return data.map { String(decoding: $0, as: UTF8.self) } ?? ""
+            return data.flatMap { String(bytes: $0, encoding: .utf8) } ?? ""
         }
     }
 }
