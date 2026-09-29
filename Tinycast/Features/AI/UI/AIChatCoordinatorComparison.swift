@@ -157,6 +157,14 @@ extension AIChatCoordinator {
         chats.inlineComparison = nil
     }
 
+    /// A regenerated or edited-away reply takes its comparison with it, rather than streaming unseen.
+    func dropStaleInlineComparison(in chat: AIChatState) {
+        guard let anchor = chats.inlineComparison?.anchor, anchor.chat == chat.session.id,
+            !chat.session.messages.contains(where: { $0.id == anchor.reply })
+        else { return }
+        closeInlineComparison()
+    }
+
     /// The inline comparison belonging to `chat`, if the reply it re-asks is still there.
     func inlineComparison(in chat: AIChatState) -> ModelComparisonState? {
         guard let state = chats.inlineComparison, let anchor = state.anchor,

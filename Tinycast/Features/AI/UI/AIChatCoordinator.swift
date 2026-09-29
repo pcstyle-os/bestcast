@@ -185,6 +185,7 @@ final class AIChatCoordinator {
                 title: "Delete chat?", message: "“\(title)” will be removed. This can't be undone.",
                 symbol: "trash", confirmTitle: "Delete")
         else { return }
+        if chats.inlineComparison?.anchor?.chat == id { closeInlineComparison() }
         chats.delete(id: id)
     }
 
@@ -196,6 +197,7 @@ final class AIChatCoordinator {
                     + "This can't be undone.",
                 symbol: "trash", confirmTitle: "Delete All")
         else { return }
+        closeInlineComparison()
         chats.deleteAll()
     }
 
@@ -278,6 +280,7 @@ final class AIChatCoordinator {
                 toolScope: address.slug)
             // Named while the answer streams, so the sidebar has a title before the reply ends.
             if sent { nameIfNeeded(chat) }
+            dropStaleInlineComparison(in: chat)
             return sent
         } catch {
             chat.report(error.localizedDescription)
@@ -299,6 +302,7 @@ final class AIChatCoordinator {
         } catch {
             chat.report(error.localizedDescription)
         }
+        dropStaleInlineComparison(in: chat)
     }
 
     private func webSearch(for chat: AIChatState) -> Bool {
