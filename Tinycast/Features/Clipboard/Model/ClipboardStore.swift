@@ -189,7 +189,7 @@ final class ClipboardStore {
         }
     }
     @ObservationIgnored var onItemsChanged: (() -> Void)?
-    /// A new text row, never a re-copy of the one on top; Passive AI derives its insight from it.
+    /// A new text row, never a re-copy of the one on top; Passive AI and AI Commands read it.
     @ObservationIgnored var onTextCaptured: ((ClipboardItem) -> Void)?
     /// Every stored insight, keyed by row; empty while Passive AI's clipboard switch is off.
     private(set) var insights: [ClipboardItem.ID: ClipboardInsight] = [:]

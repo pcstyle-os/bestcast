@@ -44,6 +44,7 @@ struct AISettingsView: View {
                 conversationsSection
                 systemPromptSection
                 PassiveAISettingsSection()
+                scheduledCommandsSection
                 MCPSettingsSection()
             }
             .settingsEnabled(appSettings.aiEnabled)
@@ -184,6 +185,29 @@ struct AISettingsView: View {
             SettingsSectionHeader(.aiSystemPrompt)
         } footer: {
             Text("Sent before every message, after Tinycast's own. Both are billed each turn.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var scheduledCommandsSection: some View {
+        @Bindable var settings = settings
+        return Section {
+            Toggle(isOn: $settings.scheduledCommandsEnabled) {
+                SettingsRowTitle(.aiScheduledCommands, "Run AI Commands by themselves")
+                Text("Schedules and clipboard triggers set in each command's editor.")
+            }
+            SettingsRow(
+                title: "AI Inbox", subtitle: "Where their replies land.",
+                anchor: .aiScheduledCommands
+            ) {
+                Button("Open") { core.aiInboxCoordinator.show() }
+                    .accessibilityLabel("Open AI Inbox")
+            }
+        } header: {
+            SettingsSectionHeader(.aiScheduledCommands)
+        } footer: {
+            Text("Off stops every scheduled and triggered run at once. Nothing runs while AI is off.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

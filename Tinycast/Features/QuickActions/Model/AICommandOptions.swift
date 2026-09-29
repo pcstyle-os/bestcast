@@ -70,3 +70,43 @@ enum AICommandCreativity: String, Codable, CaseIterable, Identifiable, Sendable 
         }
     }
 }
+
+/// When a command runs by itself, read against the reader's own calendar.
+enum AICommandSchedule: Codable, Hashable, Sendable {
+    case daily(hour: Int, minute: Int)
+    case weekdays(hour: Int, minute: Int)
+    case everyHours(Int)
+    case atLogin
+
+    var title: String {
+        switch self {
+        case .daily(let hour, let minute): return "Daily at " + Self.clock(hour, minute)
+        case .weekdays(let hour, let minute): return "Weekdays at " + Self.clock(hour, minute)
+        case .everyHours(let hours): return hours == 1 ? "Every hour" : "Every \(hours) hours"
+        case .atLogin: return "At login"
+        }
+    }
+
+    var isValid: Bool {
+        switch self {
+        case .daily(let hour, let minute), .weekdays(let hour, let minute):
+            return (0..<24).contains(hour) && (0..<60).contains(minute)
+        case .everyHours(let hours): return (1...24).contains(hours)
+        case .atLogin: return true
+        }
+    }
+
+    private static func clock(_ hour: Int, _ minute: Int) -> String {
+        String(format: "%02d:%02d", hour, minute)
+    }
+}
+
+/// A command's unattended runs; their replies land in the AI Inbox, never in a document.
+struct AICommandAutomation: Codable, Hashable, Sendable {
+    var schedule: AICommandSchedule?
+    /// A regular expression; each new clipboard text it matches starts a run.
+    var clipboardPattern: String?
+    var notifies = false
+
+    var isEmpty: Bool { schedule == nil && clipboardPattern == nil }
+}

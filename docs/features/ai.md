@@ -1070,3 +1070,6 @@ unasked, and the route can move typed questions off the Mac. Only `ai.passiveInl
 the opt-in `settings.json` mirror: the route names a destination, and selection suggestions and
 clipboard intelligence read other apps' text as `clipboard.textSearchEnabled` reads images, so all
 three are capability grants with no key.
+`aiScheduledCommands`, the **Scheduled Commands** kill switch, stays behind for the same reason: it
+lets AI Commands send what they read to a model with nobody there, so it has no key either. How
+those runs work is in [quick-actions.md](quick-actions.md#running-by-itself).

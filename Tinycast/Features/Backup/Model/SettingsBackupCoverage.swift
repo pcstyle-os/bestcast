@@ -147,6 +147,9 @@ enum SettingsBackupCoverage {
         AppSettingsKey.aiPassiveClipboard.rawValue:
             "Hands copied text to the on-device model in the background; an import must not start "
             + "that on another Mac.",
+        AppSettingsKey.aiScheduledCommands.rawValue:
+            "Arms AI Commands to run unattended and send what they read to a model; an import "
+            + "must not switch that on.",
         AppSettingsKey.mcpEnabled.rawValue:
             "Doubles as consent to run third-party MCP servers, one of which is a local process; a "
             + "flag that grants a capability is never carried by a backup.",

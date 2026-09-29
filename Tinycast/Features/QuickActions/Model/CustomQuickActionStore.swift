@@ -96,6 +96,8 @@ final class CustomQuickActionStore {
         guard !value.name.isEmpty else { throw .emptyName }
         guard !value.name.contains("\0") else { throw .invalidCharacter }
         guard !value.instructions.isEmpty else { throw .emptyInstructions }
+        value.automation = try AICommandSchedulePolicy.normalized(
+            draft.automation, instructions: value.instructions)
         return value
     }
 
@@ -127,6 +129,9 @@ final class CustomQuickActionStore {
                 value.iconSymbol?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             cleaned.instructions = value.instructions.trimmingCharacters(
                 in: .whitespacesAndNewlines)
+            // A hand-edited file loses only its automation, never the command it belongs to.
+            cleaned.automation = try? AICommandSchedulePolicy.normalized(
+                value.automation, instructions: cleaned.instructions)
             guard !cleaned.name.isEmpty, !cleaned.name.contains("\0"),
                 !cleaned.instructions.isEmpty, ids.insert(cleaned.id).inserted
             else { continue }

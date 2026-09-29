@@ -93,6 +93,7 @@ enum AppSettingsKey: String, CaseIterable {
     case aiPassiveInlineAnswers = "aiPassiveInlineAnswers"
     case aiPassiveSelectionSuggestions = "aiPassiveSelectionSuggestions"
     case aiPassiveClipboard = "aiPassiveClipboard"
+    case aiScheduledCommands = "aiScheduledCommands"
     case mcpEnabled = "mcpEnabled"
     case mcpServers = "mcpServers"
     case quickActionsEnabled = "quickActionsEnabled"

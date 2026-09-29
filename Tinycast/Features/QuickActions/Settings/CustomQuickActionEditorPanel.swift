@@ -16,6 +16,7 @@ struct CustomQuickActionEditorPanel: View {
     @State private var output: AICommandOutput
     @State private var creativity: AICommandCreativity
     @State private var model: AIModelSelection?
+    @State private var automation: AICommandAutomation
     @State private var failure: String?
     @State private var showingIconPicker = false
 
@@ -39,6 +40,7 @@ struct CustomQuickActionEditorPanel: View {
         _output = State(initialValue: request.action?.output ?? .panel)
         _creativity = State(initialValue: request.action?.creativity ?? .medium)
         _model = State(initialValue: model)
+        _automation = State(initialValue: request.action?.automation ?? AICommandAutomation())
     }
 
     var body: some View {
@@ -69,6 +71,8 @@ struct CustomQuickActionEditorPanel: View {
             }
 
             QuickActionModelPicker(selection: $model)
+
+            AICommandAutomationFields(automation: $automation, instructions: instructions)
 
             if let failure {
                 Text(failure)
@@ -169,7 +173,8 @@ struct CustomQuickActionEditorPanel: View {
         let draft = CustomQuickAction(
             id: existing?.id ?? UUID(), name: name, iconSymbol: iconSymbol,
             instructions: instructions, output: output, creativity: creativity,
-            createdAt: existing?.createdAt ?? Date())
+            createdAt: existing?.createdAt ?? Date(),
+            automation: automation.isEmpty ? nil : automation)
         do {
             if existing == nil {
                 try core.quickActionCoordinator.addCustomQuickAction(draft, model: model)

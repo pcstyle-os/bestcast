@@ -12,11 +12,12 @@ struct CustomQuickAction: Codable, Hashable, Identifiable, Sendable {
     var output: AICommandOutput
     var creativity: AICommandCreativity
     var createdAt: Date
+    var automation: AICommandAutomation?
 
     init(
         id: UUID = UUID(), name: String, iconSymbol: String? = nil, instructions: String,
         output: AICommandOutput = .panel, creativity: AICommandCreativity = .medium,
-        createdAt: Date = Date()
+        createdAt: Date = Date(), automation: AICommandAutomation? = nil
     ) {
         self.id = id
         self.name = name
@@ -25,10 +26,11 @@ struct CustomQuickAction: Codable, Hashable, Identifiable, Sendable {
         self.output = output
         self.creativity = creativity
         self.createdAt = createdAt
+        self.automation = automation
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, iconSymbol, instructions, output, creativity, createdAt
+        case id, name, iconSymbol, instructions, output, creativity, createdAt, automation
         case previewsResult
     }
 
@@ -46,6 +48,7 @@ struct CustomQuickAction: Codable, Hashable, Identifiable, Sendable {
         creativity =
             try container.decodeIfPresent(AICommandCreativity.self, forKey: .creativity) ?? .medium
         createdAt = try container.decode(Date.self, forKey: .createdAt)
+        automation = try container.decodeIfPresent(AICommandAutomation.self, forKey: .automation)
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -57,6 +60,7 @@ struct CustomQuickAction: Codable, Hashable, Identifiable, Sendable {
         try container.encode(output, forKey: .output)
         try container.encode(creativity, forKey: .creativity)
         try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(automation, forKey: .automation)
     }
 
     var symbol: String { iconSymbol ?? Self.sfSymbol }
@@ -80,6 +84,9 @@ enum CustomQuickActionError: Error, LocalizedError, Equatable {
     case emptyInstructions
     case invalidCharacter
     case storageUnavailable
+    case invalidSchedule
+    case invalidClipboardPattern
+    case cannotRunUnattended(String)
 
     var errorDescription: String? {
         switch self {
@@ -87,6 +94,9 @@ enum CustomQuickActionError: Error, LocalizedError, Equatable {
         case .emptyInstructions: return "Tell the model what the action should do."
         case .invalidCharacter: return "The name contains a character Tinycast can't store."
         case .storageUnavailable: return "Tinycast couldn't save to its actions file."
+        case .invalidSchedule: return "Pick a time of day, or every 1 to 24 hours."
+        case .invalidClipboardPattern: return "The clipboard pattern isn't a valid regex."
+        case .cannotRunUnattended(let reason): return reason
         }
     }
 }

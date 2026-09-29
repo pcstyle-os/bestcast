@@ -80,8 +80,8 @@ move a highlight rather than VoiceOver's cursor, so `RootPaletteView` posts the 
 `spokenTitle` as an announcement whenever it changes while the palette is shown and VoiceOver is
 running — never while hidden, where a pop to root would otherwise speak. The default is `nil`, which
 stays silent; the launcher, clipboard, quicklinks, file search, calculator history, emoji,
-uninstall, schedule, menu search, window switcher, snippets and chat history answer it, and Quick AI
-answers with the conversation's title. Each row still exposes itself as one element — a label, a
+uninstall, schedule, menu search, window switcher, snippets, chat history and AI Inbox answer it, and
+Quick AI answers with the conversation's title. Each row still exposes itself as one element — a label, a
 value for what it shows beside the title, the selected trait, a default action and, where the
 screen has a ⌘K menu, a `Show Actions` action — for a reader who walks the list with the VoiceOver
 cursor.
@@ -104,6 +104,7 @@ every screen but the clipboard, which lands past its pins
 | `.uninstall` | `UninstallScreen` | `UninstallList` (see [uninstall.md](uninstall.md)) |
 | `.quicklinks` | `QuicklinkListScreen` | `QuicklinkList` + preview (see [quicklinks.md](quicklinks.md#search-quicklinks)) |
 | `.snippets` | `SnippetsScreen` | `SnippetsList` + preview (see [snippets.md](snippets.md#search-snippets)) |
+| `.aiInbox` | `AIInboxScreen` | `AIInboxList` + preview (see [quick-actions.md](quick-actions.md#running-by-itself)) |
 | `.dictionary` | `DictionaryScreen` | `DictionaryEntryView` (see [dictionary.md](dictionary.md)) |
 | `.extensionCommand` | `ExtensionCommandScreen` | `ExtensionCommandView` (see [extensions.md](extensions.md)) |
 

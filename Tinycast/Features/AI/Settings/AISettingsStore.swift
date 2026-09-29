@@ -51,6 +51,13 @@ final class AISettingsStore {
             defaults.set(quickAIFollowUps, forKey: AppSettingsKey.aiQuickAIFollowUps.rawValue)
         }
     }
+    /// The kill switch over every scheduled or clipboard-triggered AI Command.
+    var scheduledCommandsEnabled: Bool {
+        didSet {
+            defaults.set(
+                scheduledCommandsEnabled, forKey: AppSettingsKey.aiScheduledCommands.rawValue)
+        }
+    }
     var quickAIPresets: [QuickAIPreset] {
         didSet {
             guard let data = try? JSONEncoder().encode(quickAIPresets) else { return }
@@ -107,6 +114,8 @@ final class AISettingsStore {
             defaults.object(forKey: AppSettingsKey.aiAskFromRootSearch.rawValue) as? Bool ?? true
         quickAIFollowUps =
             defaults.object(forKey: AppSettingsKey.aiQuickAIFollowUps.rawValue) as? Bool ?? true
+        scheduledCommandsEnabled =
+            defaults.object(forKey: AppSettingsKey.aiScheduledCommands.rawValue) as? Bool ?? true
         quickAIPresets =
             defaults.data(forKey: AppSettingsKey.aiQuickAIPresets.rawValue)
             .flatMap { try? JSONDecoder().decode([QuickAIPreset].self, from: $0) } ?? []

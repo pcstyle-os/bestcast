@@ -103,6 +103,16 @@ selectable Markdown renderer with AI Chat.
   up, and `quickActionModelOverrides` is excluded like `quickActionModel`. **Import…** in the pane is
   the one way in from a file. It is a gesture made in the pane, and it adds records without binding
   a shortcut or choosing a route.
+- **Nothing runs by itself while AI is off.** An unattended run needs `aiEnabled`,
+  `quickActionsEnabled` and **Settings → AI → Scheduled Commands**, all three, checked again before
+  each run and before its reply lands. Turning any one off stops the loop, and a reply that finishes
+  after that is dropped. `aiScheduledCommands` arms commands that send what they read to a model with
+  nobody watching, so it is a capability grant: excluded from backups, with no `settings.json` key.
+  Import never carries a schedule or a trigger either, since `AICommandArchive` has no field for one.
+- **Only a command that needs nobody may run by itself.** `AICommandSchedulePolicy.backgroundBlocker`
+  refuses a prompt that transforms the selection, names `{selection}` or `{browser-tab}`, or has an
+  argument without a default, and `normalized` makes saving such a command throw. A hand-edited file
+  with a broken schedule or pattern loses only its automation, never the command.
 
 ## The actions
 
@@ -212,6 +222,45 @@ Low, Medium and High map to `AIRequest.temperature` of 0.2, 0.6 and 1.0. The val
 models, clamped to 0…1. Apple Intelligence takes it through `GenerationOptions`. OpenAI's reasoning
 models (`o*`, `gpt-5*`) and current Claude models (Opus 4.7+, Sonnet 5+, Fable) reject the field, and installed CLI routes have no such knob, so there it is
 dropped without a word rather than failing the run. Built-in actions send no temperature.
+
+### Running by itself
+
+An AI Command can run with nobody there. The editor's **Run by itself** block stores an
+`AICommandAutomation` on the record:
+- a schedule (`AICommandSchedule`): daily or weekdays at a time, every 1 to 24 hours, or at login;
+- a clipboard pattern, a regex that starts a run for each newly copied text it matches, read as
+  `{clipboard}`;
+- whether a banner follows the reply.
+
+`AIInboxCoordinator` owns the runs. Its loop asks `AICommandSchedulePolicy.plan` what is due, runs
+it, then sleeps until the next slot or `maxWait` (15 minutes), whichever is sooner. A wake from sleep
+and every edit to the commands cut that sleep short. A slot missed while the Mac slept or Tinycast was
+quit runs **once** on return, never once per missed slot. **At login** means once per launch of
+Tinycast, which is at login when it is a login item. Runs go one at a time, on the command's own
+route through `AppCore.quickActionProvider`, with `QuickActionRunner.run`. The output choice does not
+apply: every reply, and every failure, lands in the **AI Inbox**.
+
+`AICommandRunLedger` (`ai-command-runs.json`) remembers each command's last scheduled run and its
+clipboard runs in the last day. A new or changed schedule is baselined to now, so saving one never
+fires a catch-up for a slot that passed before it existed. A run is marked before it starts, so a
+failing command waits for its next slot rather than retrying every wake.
+
+The clipboard trigger hangs off `ClipboardStore.onTextCaptured`, beside Passive AI's indexer, so it
+sees only what clipboard history kept. A copy it hid (a concealed or transient type) never reaches a
+model, and the trigger needs clipboard history on. Each command waits `clipboardCooldown` (60 s)
+between runs and stops after `clipboardDailyCap` (30) a day. Text over 10,000 characters is ignored,
+and so is a copy of a reply that already sits in the inbox, which stops a command feeding itself.
+A scheduled run that names `{clipboard}` reads the pasteboard directly and gets nothing when it
+carries a concealed type.
+
+The **AI Inbox** (`CommandID.aiInbox`, palette mode `.aiInbox`) lists replies newest first, bucketed
+by day and searchable by command, reply and failure text. ↵ copies a reply, ⌘J continues it in AI
+Chat on the command's route, ⌃X deletes one and ⌃⇧X deletes all after a Tinycast dialog.
+`AIInboxStore` keeps the newest 200 in `ai-inbox.json`, outside settings backups like chat history.
+
+A banner is `AIInboxNotifier` on `UNUserNotificationCenter`. Permission is asked only when the reader
+switches **Show a notification** on in the editor; a refusal switches it back off with a HUD. Clicking
+a banner opens the inbox.
 
 ### Library, import and export
 
@@ -417,7 +466,22 @@ failure handler, so automatic expansion stays silent as before.
   second reports that everything is already there. Import a Raycast export: titles, prompts and
   creativity arrive.
 - Run **Browse AI Commands** from ⌘Space: Settings opens on AI Commands with the library showing.
+- Give a `{date}` command **Every hour**, save it, and confirm nothing runs at once. Set the Mac's
+  clock (or wait) past the hour: one reply lands in **AI Inbox** (⌘Space → "AI Inbox").
+- Give a command **Daily** a minute from now, sleep the Mac across it and wake it: exactly one reply
+  arrives on wake, not one per slot slept through.
+- Try to schedule a `{selection}` command: saving refuses, and the editor names the reason.
+- Give a `{clipboard}` command the pattern `^https://`, then copy a URL: a reply lands. Copy the
+  same URL again within a minute: nothing. Copy the reply out of the inbox: nothing.
+- Copy a password from a password manager that marks it concealed: nothing runs.
+- Switch **Show a notification** on: macOS asks once. Deny it: the switch goes back off with a HUD.
+  Allow it: the next reply shows a banner, and clicking it opens the inbox.
+- In the inbox: ↵ copies, ⌘J opens the reply as a chat in AI Chat, ⌃X deletes one, ⌃⇧X asks first
+  and then clears everything. VoiceOver reads each row's command, summary, cause and time.
+- Turn Scheduled Commands off in Settings → AI, or AI off: no further runs, and a run already in
+  flight leaves nothing in the inbox. AI off also hides **AI Inbox** from ⌘Space.
 - Harnesses: `quick-action-test` (action metadata, prompt boundaries, output choices, routes and
   their repair, diffs), `ai-command-test` (placeholders, arguments, rendering and its boundary, the
-  library, the archive, browser-tab parsing and temperature policy) and
+  library, the archive, browser-tab parsing and temperature policy), `ai-schedule-test` (slots,
+  catch-up, the ledger, clipboard caps, eligibility, the inbox store) and
   `text-diff-test` (exact chunks, Unicode, ties, token boundaries and fast paths).
