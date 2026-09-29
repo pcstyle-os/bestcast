@@ -54,8 +54,13 @@ final class QuickAICoordinator {
 
     /// A file pasted at the launcher belongs in Quick AI, never in a search for its name.
     func attachPastedFileFromLauncher(files: [URL]) -> Bool {
-        guard settings.aiEnabled, !files.isEmpty else { return false }
+        guard settings.aiEnabled,
+            !files.isEmpty || AIChatCoordinator.pastesAsImage(.general)
+        else { return false }
+        // The half-typed search is the question the picture came with.
+        let question = palette.query
         show()
+        if !question.isEmpty, palette.query.isEmpty { palette.query = question }
         return attachPastedFile(files: files)
     }
 

@@ -741,8 +741,11 @@ In Quick AI attachments arrive by ⌘V; the window also takes a drop and the pap
 three kinds: an **image**, a **PDF** sent as a native document block,
 and a **text-ish file** whose contents are inlined as fenced, named text.
 `PaletteWindowController`'s command-shortcut hook gives chat the chord first; a pasteboard holding
-file URLs or a bare image (a screenshot) stages them, while anything else carrying text falls
-through to the field editor as a normal paste. **Only `isFileURL` URLs are read** — without that
+file URLs or a picture stages them, while anything else carrying text falls through to the field
+editor as a normal paste. `AIAttachmentPolicy.pastesAsImage` tells a picture from text: a PNG or
+TIFF with no text, with only a URL (a browser's Copy Image), or offered ahead of every text type
+is a picture; a text selection that also carries a TIFF is text. The same ⌘V at the launcher
+opens Quick AI with the file or picture staged and the half-typed search kept as the question. **Only `isFileURL` URLs are read** — without that
 filter a copied `https://…/a.png` reaches `Data(contentsOf:)`, turning a keystroke into a network
 request. Every file is **sized before it is read**, so a huge CSV can never be slurped into memory.
 

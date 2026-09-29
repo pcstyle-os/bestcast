@@ -24,6 +24,7 @@ struct AIChatTests {
         onlyPDFsSurviveAsDocuments()
         inlinedTextIsFencedAndNamed()
         attachmentPolicyClassifiesWhatCanBeAttached()
+        pastedImageBoardsAreTold()
         historyRoundTripsAndRepairsInterruptedReplies()
         savesRewriteOnlyTheStoredTail()
         crashRepairSurvivesTailSaves()
@@ -599,6 +600,22 @@ struct AIChatTests {
         expect(
             !AIAttachmentPolicy.sanitized(name: "a\nb").contains("\n"),
             "newlines are stripped from a staged name")
+    }
+
+    static func pastedImageBoardsAreTold() {
+        let paste = AIAttachmentPolicy.pastesAsImage
+        expect(paste(["public.png"], nil), "a screenshot is a picture")
+        expect(
+            paste(["public.tiff", "public.url", "public.utf8-plain-text"], "https://x.com/a.png"),
+            "Copy Image with its address is a picture")
+        expect(
+            paste(["public.png", "public.utf8-plain-text"], "Screenshot 2026.png"),
+            "a picture offered first with its name is a picture")
+        expect(
+            !paste(["public.rtf", "public.utf8-plain-text", "public.tiff"], "some words"),
+            "a text selection carrying a TIFF is text")
+        expect(!paste(["public.utf8-plain-text"], "hello"), "plain text is text")
+        expect(!paste([], nil), "an empty board is nothing")
     }
 
     static func attachmentPolicyClassifiesWhatCanBeAttached() {

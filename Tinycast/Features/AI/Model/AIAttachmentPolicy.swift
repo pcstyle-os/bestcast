@@ -61,6 +61,26 @@ enum AIAttachmentPolicy {
             """
     }
 
+    private static let pastedImageTypes: Set<String> = ["public.png", "public.tiff"]
+
+    private static let pastedTextTypes: Set<String> = [
+        "public.utf8-plain-text", "public.rtf", "com.apple.flat-rtfd", "public.html",
+        "NSStringPboardType"
+    ]
+
+    /// `types` is the first item's in the source's order; a text selection often carries a TIFF.
+    static func pastesAsImage(types: [String], string: String?) -> Bool {
+        guard let image = types.firstIndex(where: pastedImageTypes.contains) else { return false }
+        let text = (string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return true }
+        // Copy Image in a browser writes the picture's address beside it.
+        if !text.contains(where: \.isWhitespace), let url = URL(string: text), url.scheme != nil {
+            return true
+        }
+        let firstText = types.firstIndex(where: pastedTextTypes.contains) ?? types.endIndex
+        return image < firstText
+    }
+
     /// A file named `a\nAttached file: passwd` must not be able to forge a second header.
     static func sanitized(name: String) -> String {
         let cleaned = name.unicodeScalars

@@ -414,9 +414,8 @@ final class AIChatCoordinator {
     /// ⌘V stages a file, read off-main; false hands the chord back to the field editor.
     func attachPastedFile(files: [URL], to chat: AIChatState) -> Bool {
         let pasteboard = NSPasteboard.general
-        // A copied text selection often carries a TIFF too; only a board with no string is a picture.
         let pasted =
-            files.isEmpty && pasteboard.string(forType: .string) == nil
+            files.isEmpty && Self.pastesAsImage(pasteboard)
             ? pasteboard.availableType(from: [.png, .tiff]).flatMap { pasteboard.data(forType: $0) }
             : nil
         guard !files.isEmpty || pasted != nil else { return false }
@@ -430,6 +429,12 @@ final class AIChatCoordinator {
         }
         stage(files: files, pasted: pasted, into: chat)
         return true
+    }
+
+    static func pastesAsImage(_ pasteboard: NSPasteboard) -> Bool {
+        AIAttachmentPolicy.pastesAsImage(
+            types: pasteboard.pasteboardItems?.first?.types.map(\.rawValue) ?? [],
+            string: pasteboard.string(forType: .string))
     }
 
     /// A drop or the paperclip: the same refusals as a paste, since the route is what decides.
