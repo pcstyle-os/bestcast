@@ -236,7 +236,8 @@ An AI Command can run with nobody there. The editor's **Run by itself** block st
 it, then sleeps until the next slot or `maxWait` (15 minutes), whichever is sooner. A wake from sleep
 and every edit to the commands cut that sleep short. A slot missed while the Mac slept or Tinycast was
 quit runs **once** on return, never once per missed slot. **At login** means once per launch of
-Tinycast, which is at login when it is a login item. Runs go one at a time, on the command's own
+Tinycast, which is at login when it is a login item. Scheduled and clipboard runs share one queue and
+go one at a time, each on the command's own
 route through `AppCore.quickActionProvider`, with `QuickActionRunner.run`. The output choice does not
 apply: every reply, and every failure, lands in the **AI Inbox**.
 

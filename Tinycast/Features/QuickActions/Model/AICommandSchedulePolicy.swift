@@ -119,12 +119,16 @@ enum AICommandSchedulePolicy {
         guard !trimmed.isEmpty, trimmed.count <= clipboardMaxCharacters,
             !recentReplies.contains(trimmed)
         else { return false }
-        let recent = runs.filter { now.timeIntervalSince($0) < 86_400 }
-        guard recent.count < clipboardDailyCap,
-            !recent.contains(where: { now.timeIntervalSince($0) < clipboardCooldown }),
+        guard clipboardHasBudget(runs: runs, now: now),
             let regex = try? NSRegularExpression(pattern: pattern)
         else { return false }
         return regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
+    static func clipboardHasBudget(runs: [Date], now: Date) -> Bool {
+        let recent = runs.filter { now.timeIntervalSince($0) < 86_400 }
+        return recent.count < clipboardDailyCap
+            && !recent.contains { now.timeIntervalSince($0) < clipboardCooldown }
     }
 
     private static func slot(

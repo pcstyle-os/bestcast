@@ -21,6 +21,7 @@ final class AIInboxCoordinator {
     @ObservationIgnored private let ledgerURL: URL
     @ObservationIgnored private let sessionStart = Date()
     @ObservationIgnored private var wakeObserver: NotificationToken?
+    @ObservationIgnored private var queueTail: Task<Void, Never>?
     @ObservationIgnored private lazy var notifier = AIInboxNotifier { [weak self] in self?.show() }
 
     init(
@@ -151,8 +152,11 @@ final class AIInboxCoordinator {
                 }.map(\.0)
             }.value
             for id in matched {
+                // A second copy may have matched while this one's regex ran off-main.
                 guard isActive, let command = commands.action(id: id),
-                    command.automation?.clipboardPattern != nil
+                    command.automation?.clipboardPattern != nil,
+                    AICommandSchedulePolicy.clipboardHasBudget(
+                        runs: ledger.clipboardRuns(for: id), now: now)
                 else { continue }
                 ledger.reconcile(commands.actions, now: now)
                 ledger.noteClipboardRun(id, at: now)
@@ -175,7 +179,25 @@ final class AIInboxCoordinator {
 
     // MARK: - Running
 
+    /// Scheduled and clipboard runs share one queue, so only one ever talks to a model at a time.
     private func run(
+        _ command: CustomQuickAction, cause: AIInboxEntry.Cause, clipboard: String
+    ) async {
+        let previous = queueTail
+        let next = Task { [weak self] in
+            await previous?.value
+            guard let self, self.isActive, !Task.isCancelled else { return }
+            await self.perform(command, cause: cause, clipboard: clipboard)
+        }
+        queueTail = next
+        await withTaskCancellationHandler {
+            await next.value
+        } onCancel: {
+            next.cancel()
+        }
+    }
+
+    private func perform(
         _ command: CustomQuickAction, cause: AIInboxEntry.Cause, clipboard: String
     ) async {
         let started = Date()
