@@ -76,6 +76,8 @@ enum Theme {
         static let noteSwitcher = CGSize(width: 300, height: 240)
         static let noteSwitcherEmptyHeight: CGFloat = 96
         static let noteSwitcherDrop: CGFloat = 56
+        /// Tall enough for the eight root actions, and for a preview worth reading before accepting.
+        static let noteAIMenu = CGSize(width: 380, height: 340)
         /// Fixed like every menu's width; the height is exactly four heading rows.
         static let noteHeadingMenu = CGSize(
             width: 220, height: menuRowHeight * 4 + menuRowSpacing * 3 + Spacing.sm * 2)

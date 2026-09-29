@@ -614,6 +614,20 @@ final class AppCore {
             guardrails: .permissiveContentTransformations)
     }
 
+    /// Notes and snippets write with the chat model; the AI switch is checked at every request.
+    func writingProvider() throws -> any AIProvider {
+        guard settings.aiEnabled else {
+            throw AIProviderError.unavailable("Turn on AI in Settings \u{2192} AI.")
+        }
+        guard let selection = aiSettings.defaultModel else {
+            throw AIProviderError.unavailable("Choose a model in Settings \u{2192} AI.")
+        }
+        return try AIProviderFactory.make(
+            selection: selection, settings: aiSettings, subscription: chatGPTSubscription,
+            installedAI: installedAI,
+            guardrails: .permissiveContentTransformations)
+    }
+
     // MARK: - Feature switches
 
     private func observeFeatureSwitches() {
@@ -675,6 +689,7 @@ final class AppCore {
         track({ _ = $0.notesEnabled }, reproject: { $0.notesCoordinator.applyEnabled() })
         track({ _ = $0.aiEnabled }, reproject: { $0.aiChatCoordinator.applyEnabled() })
         track({ _ = $0.aiEnabled }, reproject: { $0.quickAICoordinator.applyPresetsPresence() })
+        track({ _ = $0.aiEnabled }, reproject: { $0.notesCoordinator.applyAIEnabled() })
         track(
             aiSettings, { _ = $0.quickAIPresets },
             reproject: { $0.quickAICoordinator.applyPresetsPresence() })
@@ -709,6 +724,11 @@ final class AppCore {
                 _ = $0.fileSearchIgnorePatterns
             }, reproject: { $0.fileSearchCoordinator.applyPolicy() })
         track({ _ = $0.snippetsEnabled }, reproject: { $0.snippetCoordinator.applySnippetsEnabled() })
+        track(
+            {
+                _ = $0.aiEnabled
+                _ = $0.snippetAIPlaceholders
+            }, reproject: { $0.snippetCoordinator.applyAIPlaceholdersEnabled() })
         // Not a feature switch, but the same re-projection: a combo has the chord's ⇧ bit baked in.
         track({ _ = $0.hyperKeyIncludesShift }, reproject: { $0.applyHyperChord() })
         track(

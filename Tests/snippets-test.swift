@@ -24,6 +24,8 @@ struct SnippetsTests {
         try await testStoreEditingRoundTrip()
         testTemplateExpansion()
         testDynamicPlaceholders()
+        testAIPlaceholders()
+        await testAIFillSession()
         testTemplateEncodingAndSelectionAlias()
         testKeywordPolicy()
         testForeignKeyboardInput()
@@ -1229,6 +1231,121 @@ struct SnippetsTests {
             snippets: depthRecords,
             context: context)
         check("reference depth limit leaves the unexpanded token visible", depthResult.text == "{snippet:S6}")
+    }
+
+    private static func testAIFillSession() async {
+        var settled: [[String: String]] = []
+        let answered = SnippetAIFillSession(prompts: ["a", "b"], timeout: .seconds(5)) { prompt in
+            if prompt == "b" { throw CancellationError() }
+            return "reply to \(prompt)"
+        }
+        answered.start { settled.append($0) }
+        await settle { !settled.isEmpty }
+        check(
+            "an {ai} fill settles once every prompt is back, a failure as empty",
+            settled == [["a": "reply to a", "b": ""]])
+
+        settled = []
+        let late = SnippetAIFillSession(prompts: ["fast", "slow"], timeout: .milliseconds(80)) {
+            if $0 == "slow" { try await Task.sleep(for: .seconds(30)) }
+            return "done"
+        }
+        let started = ContinuousClock.now
+        late.start { settled.append($0) }
+        await settle(within: .seconds(2)) { !settled.isEmpty }
+        check(
+            "the deadline settles a fill with what arrived, never waiting on a stuck reply",
+            settled == [["fast": "done"]] && ContinuousClock.now - started < .seconds(2))
+        try? await Task.sleep(for: .milliseconds(120))
+        check("a fill settles exactly once", settled.count == 1)
+
+        settled = []
+        let cancelled = SnippetAIFillSession(prompts: ["a"], timeout: .milliseconds(50)) { _ in
+            try await Task.sleep(for: .milliseconds(20))
+            return "late"
+        }
+        cancelled.start { settled.append($0) }
+        cancelled.cancel()
+        try? await Task.sleep(for: .milliseconds(120))
+        check("a cancelled fill delivers nothing, not even at its deadline", settled.isEmpty)
+
+        settled = []
+        let withdrawn = SnippetAIFillSession(prompts: ["a"], timeout: .seconds(5)) { _ in
+            try await Task.sleep(for: .seconds(30))
+            return "late"
+        }
+        withdrawn.start { settled.append($0) }
+        withdrawn.settle()
+        try? await Task.sleep(for: .milliseconds(50))
+        check("a settled fill delivers at once, a missing reply as absent", settled == [[:]])
+    }
+
+    private static func testAIPlaceholders() {
+        let base = SnippetTemplateEngine.ExpansionContext(
+            clipboard: "", selection: "", now: Date(timeIntervalSince1970: 0),
+            calendar: Calendar(identifier: .gregorian), locale: Locale(identifier: "en_US_POSIX"),
+            timeZone: TimeZone(secondsFromGMT: 0)!)
+        let greeting = record(
+            "/tmp/ai-greeting.md",
+            Snippet(name: "Greeting", text: "Hi, {ai prompt=\"a greeting\"}"))
+        let letter = record(
+            "/tmp/ai-letter.md",
+            Snippet(
+                name: "Letter",
+                text: "{snippet name=\"Greeting\"}\n{ai prompt=\"a pun\" | uppercase}{ai prompt=\"a greeting\"}"))
+        let library = [greeting, letter]
+
+        check(
+            "{ai} prompts are collected once each, nested references included, in written order",
+            SnippetTemplateEngine.aiPrompts(in: letter, snippets: library) == ["a greeting", "a pun"])
+        check(
+            "a template with no {ai} asks for nothing",
+            SnippetTemplateEngine.aiPrompts(
+                in: record("/tmp/plain.md", Snippet(name: "Plain", text: "{clipboard}")),
+                snippets: []
+            ).isEmpty)
+        check(
+            "without answers the {ai} token is left exactly as written",
+            SnippetTemplateEngine.expand(greeting, snippets: library, context: base).text
+                == "Hi, {ai prompt=\"a greeting\"}")
+
+        var answered = base
+        answered.aiAnswers = ["a greeting": "hello", "a pun": "pun"]
+        check(
+            "answers fill every {ai} token and modifiers apply to them",
+            SnippetTemplateEngine.expand(letter, snippets: library, context: answered).text
+                == "Hi, hello\nPUNhello")
+        var timedOut = base
+        timedOut.aiAnswers = ["a greeting": "hello"]
+        check(
+            "a prompt with no answer (a timeout or failure) expands empty",
+            SnippetTemplateEngine.expand(letter, snippets: library, context: timedOut).text
+                == "Hi, hello\nhello")
+        check(
+            "the selection copy keeps the answers",
+            answered.replacingSelection(with: "x").aiAnswers?["a pun"] == "pun")
+        check(
+            "{ai} is reported as its own placeholder",
+            SnippetTemplateEngine.placeholders(in: "{ai prompt=\"x\"}") == [.ai])
+        for malformed in ["{ai}", "{ai prompt=\"  \"}", "{ai prompt=\"x\" model=\"y\"}"] {
+            check(
+                "a malformed \(malformed) stays literal and asks for nothing",
+                SnippetTemplateEngine.placeholders(in: malformed).isEmpty)
+        }
+
+        check(
+            "a fenced draft loses its fence",
+            SnippetAIPrompt.cleaned("```text\nHello {argument name=\"Name\"}\n```\n")
+                == "Hello {argument name=\"Name\"}")
+        check(
+            "an unfenced draft is only trimmed",
+            SnippetAIPrompt.cleaned("  Thanks,\n{cursor}  ") == "Thanks,\n{cursor}")
+        check(
+            "a lone opening fence is left alone",
+            SnippetAIPrompt.cleaned("```\nstill open") == "```\nstill open")
+        check(
+            "the draft prompt never offers {ai}",
+            !SnippetAIPrompt.draftInstructions.contains("{ai"))
     }
 
     /// Every token, parameter and modifier, against injected clock, locale and UUIDs.

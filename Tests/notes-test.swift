@@ -16,6 +16,7 @@ struct NotesTests {
         try testUnnamedNotesTitleThemselves()
         testSwitcherInteraction()
         testWindowPlacement()
+        testAIActions()
         try await testStoreCollectionAndAutosave()
         try await testCollectionMutationsFlushTheDraft()
         try await testStoreRecoversFromFailures()
@@ -1074,6 +1075,119 @@ struct NotesTests {
             try? await Task.sleep(for: .milliseconds(20))
         }
         return condition()
+    }
+
+    private static func testAIActions() {
+        let note = "# Plan\n\nShip the thing.\nThen rest."
+        let whole = NoteAITarget.resolve(source: note, selection: NSRange(location: 3, length: 0))
+        check("no selection targets the whole note", whole?.isSelection == false && whole?.text == note)
+        check(
+            "a blank note has nothing to work on",
+            NoteAITarget.resolve(source: " \n\t", selection: NSRange(location: 0, length: 0)) == nil)
+        let blankSelection = NoteAITarget.resolve(
+            source: note, selection: NSRange(location: 6, length: 2))
+        check("a whitespace-only selection falls back to the whole note", blankSelection?.isSelection == false)
+        let shipRange = (note as NSString).range(of: "Ship the thing.")
+        guard let ship = NoteAITarget.resolve(source: note, selection: shipRange) else {
+            return check("a real selection resolves", false)
+        }
+        check("a selection is the target", ship.isSelection && ship.text == "Ship the thing.")
+        check(
+            "a note past the Quick Actions ceiling is refused",
+            NoteAITarget.resolve(
+                source: String(repeating: "a", count: NoteAITarget.maxBytes + 1),
+                selection: NSRange(location: 0, length: 0))?.isTooLong == true)
+
+        func applied(_ plan: NoteEditPlan, to source: String) -> (String, String) {
+            let result = (source as NSString).replacingCharacters(in: plan.range, with: plan.replacement)
+            return (result, (result as NSString).substring(with: plan.selection))
+        }
+
+        let replaced = applied(
+            NoteAIEdit.plan(reply: "  Ship it. \n", for: ship, placement: .replace, in: note), to: note)
+        check("replace swaps only the passage", replaced.0 == "# Plan\n\nShip it.\nThen rest.")
+        check("replace leaves the reply selected", replaced.1 == "Ship it.")
+
+        let padded = NoteAITarget(
+            range: NSRange(location: 0, length: 9), text: "\n  hi  \n\n", isSelection: true)
+        let keptPadding = applied(
+            NoteAIEdit.plan(reply: "hello", for: padded, placement: .replace, in: "\n  hi  \n\nnext"),
+            to: "\n  hi  \n\nnext")
+        check("replace keeps the passage's surrounding whitespace", keptPadding.0 == "\n  hello  \n\nnext")
+
+        let continued = applied(
+            NoteAIEdit.plan(reply: "And more.", for: ship, placement: .continueAfter, in: note), to: note)
+        check(
+            "a continuation follows the passage after a space",
+            continued.0 == "# Plan\n\nShip the thing. And more.\nThen rest.")
+        check("the continuation is selected", continued.1 == "And more.")
+        let midWord = NoteAITarget(range: NSRange(location: 0, length: 3), text: "one", isSelection: true)
+        check(
+            "a continuation spaces itself from text straight after it",
+            applied(
+                NoteAIEdit.plan(reply: "two", for: midWord, placement: .continueAfter, in: "onethree"),
+                to: "onethree").0 == "one two three")
+
+        let below = applied(
+            NoteAIEdit.plan(reply: "Summary.", for: ship, placement: .insertBelow, in: note), to: note)
+        check(
+            "insert below is its own paragraph and keeps what follows apart",
+            below.0 == "# Plan\n\nShip the thing.\n\nSummary.\nThen rest.")
+        let endOfNote = applied(
+            NoteAIEdit.plan(
+                reply: "Summary.", for: NoteAITarget.resolve(source: "Done.\n", selection: .init())!,
+                placement: .insertBelow, in: "Done.\n"),
+            to: "Done.\n")
+        check("insert below counts the breaks already there", endOfNote.0 == "Done.\n\nSummary.")
+
+        check("continue writing defaults to following the text", NoteAIAction.continueWriting.placement == .continueAfter)
+        check("continue writing has no alternate placement", NoteAIAction.continueWriting.alternatePlacement == nil)
+        check("summarize inserts below, or replaces on ⌘↵", NoteAIAction.summarize.alternatePlacement == .replace)
+        check("a rewrite replaces, or inserts below on ⌘↵", NoteAIAction.shorter.alternatePlacement == .insertBelow)
+        check(
+            "every action's instructions carry the material-not-instructions boundary",
+            [NoteAIAction.continueWriting, .summarize, .fixSpelling, .shorter, .longer,
+             .changeTone(.casual), .translate(language: "Polish"), .custom(prompt: "rhyme")]
+                .allSatisfy { $0.instructions.hasPrefix(NoteAIAction.preamble) })
+        check(
+            "tone and language reach the prompt",
+            NoteAIAction.changeTone(.friendly).instructions.contains("friendly tone")
+                && NoteAIAction.translate(language: "Polish").instructions.contains("into Polish"))
+        check("the passage is delimited", NoteAIAction.shorter.message(for: "x") == "Text:\nx")
+
+        let root = NoteAIMenu.items(level: .root, query: "", languages: [])
+        check(
+            "the root menu lists every action, tone and language as submenus, and Ask",
+            root.map(\.title) == [
+                "Continue Writing", "Summarize", "Fix Spelling & Grammar", "Make Shorter",
+                "Make Longer", "Change Tone…", "Translate…", "Ask About Note",
+            ])
+        let filtered = NoteAIMenu.items(level: .root, query: "short", languages: [])
+        check(
+            "a query filters actions and offers a custom prompt and a question",
+            filtered.map(\.command) == [
+                .run(.shorter), .run(.custom(prompt: "short")), .ask("short"),
+            ])
+        let freeform = NoteAIMenu.items(level: .root, query: "make it rhyme ", languages: [])
+        check(
+            "an unmatched query leads with the custom prompt",
+            freeform.first?.command == .run(.custom(prompt: "make it rhyme")))
+        let languages = NoteAIMenu.languages(preferred: ["Polish", "English"])
+        check(
+            "preferred languages lead and none repeats",
+            Array(languages.prefix(3)) == ["Polish", "English", "Spanish"]
+                && Set(languages).count == languages.count)
+        check(
+            "an unlisted language can be typed",
+            NoteAIMenu.items(level: .languages, query: "Klingon", languages: languages).map(\.command)
+                == [.run(.translate(language: "Klingon"))])
+        check(
+            "a listed language is not offered twice",
+            NoteAIMenu.items(level: .languages, query: "polish", languages: languages).count == 1)
+        check(
+            "tones filter by name",
+            NoteAIMenu.items(level: .tones, query: "fri", languages: []).map(\.command)
+                == [.run(.changeTone(.friendly))])
     }
 
     private static func check(_ message: String, _ condition: @autoclosure () throws -> Bool) {

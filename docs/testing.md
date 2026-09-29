@@ -597,6 +597,17 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - Quitting inside the debounce window saves the last edit
 - Over a light desktop, the corner matches the palette's, the shadow follows it, and no dark edge shows
   around the glass controls
+- With AI off there is no sparkles button and ⌘J shows a HUD pointing at Settings → AI. On, ⌘J, the
+  button, and ⌘K outside the rendered editor open the AI menu under the title bar with its field
+  focused; ↑↓ move, ↵ runs, typing filters or offers Edit with Prompt, and Escape backs out a level
+- Fix Spelling on a selection previews a diff; ↵ replaces just the selection, the reply is selected,
+  and ⌘Z restores the original in one step. ⌘↵ inserts it below instead
+- With no selection the header says Whole note; Continue Writing inserts after the text and
+  Summarize inserts its own paragraph below
+- Escape during a reply stops it; clicking the note during a preview closes the menu and leaves the
+  note untouched. Ask About Note opens Quick AI with the note attached
+- VoiceOver reads the menu as "AI Actions", each row by title with the selected one marked, and the
+  footer hints by their keys
 
 ### Snippets
 
@@ -607,6 +618,9 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - Editing a snippet file externally reloads it
 - A keyword still expands next to a dictation or autocomplete tool, and a phrase it inserts that only
   *contains* a keyword never expands
+- The AI placeholder and Generate with AI steps in
+  [snippets.md](features/snippets.md#manual-sweep) pass, and a backup import leaves Fill AI
+  placeholders off
 
 ### Calculator and currency
 

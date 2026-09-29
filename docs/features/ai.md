@@ -1078,6 +1078,15 @@ this Mac rather than by the chat's own model. A Claude chat still asks Claude's 
 Notes are deliberately left alone: a note's title *is* its file name, and renaming a file behind
 the reader's back would break links and the external-edit handling in [notes.md](notes.md).
 
+## Notes and snippets
+
+A note's [AI menu](notes.md#ai-actions) and a snippet's [`{ai}` placeholder and Generate with
+AI](snippets.md#ai-placeholders-and-drafts) are one-shot writing requests. Both reach the provider
+through `AppCore.writingProvider()`, which answers on the default model and throws while `aiEnabled`
+is off or no model is chosen, and both stream through `QuickActionRunner.stream`, so they trim and fail
+as Quick Actions do. Neither keeps a conversation. `{ai}` also needs its own switch in Settings →
+Snippets, since it sends a prompt on a keystroke rather than on a click.
+
 ## Settings and backup boundary
 
 Settings → AI is a normal grouped `Form` inside Tinycast's existing Settings window. Its top AI
@@ -1113,7 +1122,8 @@ turn supplies — plus, on a Claude turn the reader opted into search for, `WebS
 `WebFetch`. That is a sandbox boundary on a local CLI, not Tinycast describing itself, and a user
 switch must not be able to lift it.
 
-`mcpEnabled` and `mcpServers` are excluded for the reasons in [mcp.md](mcp.md).
+`mcpEnabled` and `mcpServers` are excluded for the reasons in [mcp.md](mcp.md), and
+`snippetAIPlaceholders` for the reasons in [snippets.md](snippets.md#ai-placeholders-and-drafts).
 `aiConnections`, `aiDefaultModel`, `aiSystemPrompt` and `aiSystemPromptEnabled` are deliberately
 excluded from settings backups. The first is meaningless without machine-local Keychain items; the
 second names an external destination and must not silently redirect AI traffic after an import; the

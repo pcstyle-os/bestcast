@@ -19,6 +19,7 @@ final class NotesCoordinator {
         coordinator: self)
     @ObservationIgnored private lazy var headingMenuController = NoteHeadingMenuWindowController(
         coordinator: self)
+    @ObservationIgnored private lazy var aiController = NoteAIWindowController(coordinator: self)
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var issueTask: Task<Void, Never>?
     @ObservationIgnored private var operationTask: Task<Void, Never>?
@@ -33,6 +34,7 @@ final class NotesCoordinator {
     private(set) var formatting = NoteFormatting.plain
     private(set) var isFormattingBarExpanded: Bool
     private(set) var isHeadingMenuPresented = false
+    private(set) var aiSession: NoteAISession?
     /// A press closes the menu before its button fires, so the button must not reopen it.
     @ObservationIgnored private var headingMenuWasOpenAtPress = false
     /// The heading button in the panel's flipped content space, reported by the bar as it lays out.
@@ -79,6 +81,7 @@ final class NotesCoordinator {
     }
 
     var activeTitle: String { store.activeTitle }
+    var isAIAvailable: Bool { settings.aiEnabled }
     var rendersMarkdown: Bool { settings.notesRendersMarkdown }
     var showsFormattingBar: Bool { settings.notesRendersMarkdown && settings.notesShowsFormattingBar }
     var isSearching: Bool { store.isSearching }
@@ -105,6 +108,7 @@ final class NotesCoordinator {
         loadTask = nil
         operationTask?.cancel()
         closeHeadingMenu()
+        closeAIMenu(focusEditor: false)
         closeSwitcher(focusEditor: false)
         windowController.hide(restoreFocus: false)
         Task { [weak self] in
@@ -140,6 +144,7 @@ final class NotesCoordinator {
     func openSwitcher() {
         guard settings.notesEnabled, store.isLoaded else { return }
         closeHeadingMenu()
+        closeAIMenu(focusEditor: false)
         if isSwitcherPresented {
             switcherFocusRevision &+= 1
             return
@@ -162,6 +167,7 @@ final class NotesCoordinator {
 
     func hide() {
         closeHeadingMenu()
+        closeAIMenu(focusEditor: false)
         presentationGeneration &+= 1
         pendingPresentation = nil
         closeSwitcher(focusEditor: false)
@@ -170,7 +176,9 @@ final class NotesCoordinator {
     }
 
     func handleEscape() {
-        if isHeadingMenuPresented {
+        if aiSession != nil {
+            closeAIMenu()
+        } else if isHeadingMenuPresented {
             closeHeadingMenu()
         } else if isSwitcherPresented {
             closeSwitcher()
@@ -387,6 +395,116 @@ final class NotesCoordinator {
     func noteWindowMouseDown() {
         headingMenuWasOpenAtPress = isHeadingMenuPresented
         closeHeadingMenu()
+    }
+
+    // MARK: - AI
+
+    /// ⌘J, ⌘K when the editor has not claimed it for a link, and the title bar's sparkles.
+    func toggleAIMenu() {
+        guard aiSession == nil else { return closeAIMenu() }
+        guard settings.notesEnabled, hasActiveNote else { return }
+        guard settings.aiEnabled else {
+            core.showMessage("Turn on AI in Settings \u{2192} AI to use it in notes.", tone: .neutral)
+            return
+        }
+        guard let snapshot = windowController.editorSnapshot() else { return }
+        guard let target = NoteAITarget.resolve(source: snapshot.source, selection: snapshot.selection)
+        else {
+            core.showMessage("Write something first. AI works on the note's text.", tone: .neutral)
+            return
+        }
+        guard !target.isTooLong else {
+            core.showMessage("That's too much text for AI. Select a shorter passage.", tone: .neutral)
+            return
+        }
+        closeHeadingMenu()
+        closeSwitcher(focusEditor: false)
+        aiSession = NoteAISession(
+            source: snapshot.source, target: target, noteTitle: activeTitle,
+            languages: NoteAIMenu.languages(preferred: Self.preferredLanguageNames))
+        windowController.presentAIMenu(aiController)
+    }
+
+    func closeAIMenu(focusEditor: Bool = true) {
+        guard let aiSession else { return }
+        aiSession.cancel()
+        self.aiSession = nil
+        aiController.hide()
+        if focusEditor { windowController.focusEditor() }
+    }
+
+    /// Escape steps back one level, from a reply to the menu and from a submenu to the root.
+    func handleAIEscape() {
+        guard let aiSession else { return }
+        if !aiSession.back() { closeAIMenu() }
+    }
+
+    func applyAIEnabled() {
+        if !settings.aiEnabled { closeAIMenu(focusEditor: false) }
+    }
+
+    func activateAIItem(_ item: NoteAIMenu.Item) {
+        guard let aiSession else { return }
+        switch item.command {
+        case .open(let level):
+            aiSession.open(level)
+        case .run(let action):
+            runAI(action)
+        case .ask(let question):
+            let note = aiSession.source
+            let title = aiSession.noteTitle
+            closeAIMenu(focusEditor: false)
+            core.quickAICoordinator.ask(aboutNote: note, titled: title, question: question)
+        }
+    }
+
+    func retryAI() {
+        guard let action = aiSession?.action else { return }
+        runAI(action)
+    }
+
+    /// Lands only on the exact text the reply was written for, as one step ⌘Z takes back.
+    func acceptAI(alternate: Bool) {
+        guard let aiSession, aiSession.phase == .preview, let action = aiSession.action else { return }
+        guard windowController.editorSnapshot()?.source == aiSession.source else {
+            closeAIMenu()
+            core.showMessage("The note changed, so the suggestion was not applied.", tone: .neutral)
+            return
+        }
+        let placement = alternate ? action.alternatePlacement ?? action.placement : action.placement
+        let plan = NoteAIEdit.plan(
+            reply: aiSession.reply, for: aiSession.target, placement: placement,
+            in: aiSession.source)
+        closeAIMenu(focusEditor: false)
+        windowController.apply(plan)
+    }
+
+    /// Outside a preview ⌘C is the query field's own copy, so it is passed on rather than taken.
+    func copyAIReply() {
+        guard let aiSession, aiSession.phase == .preview else {
+            NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil)
+            return
+        }
+        Paster.copyPlainText(aiSession.reply)
+        core.showMessage("Copied")
+    }
+
+    private func runAI(_ action: NoteAIAction) {
+        guard let aiSession else { return }
+        do {
+            aiSession.run(action, using: try core.writingProvider())
+        } catch {
+            aiSession.fail(error.localizedDescription)
+        }
+    }
+
+    /// English names, since they go into an English instruction to the model.
+    private static var preferredLanguageNames: [String] {
+        let english = Locale(identifier: "en")
+        return Locale.preferredLanguages.compactMap {
+            guard let code = Locale.Language(identifier: $0).languageCode?.identifier else { return nil }
+            return english.localizedString(forLanguageCode: code)
+        }
     }
 
     func editorReady(_ textView: NoteTextView) {

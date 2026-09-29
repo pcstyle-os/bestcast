@@ -16,6 +16,7 @@ final class SnippetCoordinator {
     private let showMessage: @MainActor (String) -> Void
     /// The consent dialog and the `pendingSnippetEdit` handoff to the Settings pane.
     private unowned let core: AppCore
+    private var aiFill: SnippetAIFillSession?
 
     init(
         store: SnippetsStore,
@@ -88,6 +89,39 @@ final class SnippetCoordinator {
         }
     }
 
+    /// On means a keyword may send its prompts to a model, so turning it on asks first.
+    func setAIPlaceholdersEnabled(_ enabled: Bool) {
+        guard enabled != settings.snippetAIPlaceholders else { return }
+        guard enabled else {
+            settings.snippetAIPlaceholders = false
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        Task {
+            guard
+                await core.confirm(
+                    title: "Fill AI placeholders?",
+                    message:
+                        "Expanding a snippet with {ai prompt=\"…\"} sends that prompt to your default AI model.",
+                    symbol: "sparkles", confirmTitle: "Turn On", tone: .neutral,
+                    confirmRole: .standard)
+            else { return }
+            settings.snippetAIPlaceholders = true
+        }
+    }
+
+    /// The editor's Generate: a template body from a description, fence-stripped for the text area.
+    func draftSnippet(describing description: String) async throws -> String {
+        let request = AIRequest(
+            instructions: SnippetAIPrompt.draftInstructions,
+            messages: [
+                AIMessage(role: .user, text: SnippetAIPrompt.draftMessage(description: description))
+            ],
+            maxOutputTokens: SnippetAIPrompt.draftMaxOutputTokens)
+        let reply = try await QuickActionRunner.stream(request, using: core.writingProvider())
+        return SnippetAIPrompt.cleaned(reply)
+    }
+
     // MARK: - Feature presence
 
     /// Either switch off means the feature reaches the launcher not at all — rows and commands.
@@ -109,6 +143,7 @@ final class SnippetCoordinator {
             return
         }
         listener.stop()
+        cancelAIFill()
         injector.cancelAutomaticExpansion()
         store.stop()
         applySnippetsLauncherPresence()
@@ -141,7 +176,10 @@ final class SnippetCoordinator {
     func startSnippetKeywordListener() {
         // `beginAutomaticExpansion` is the gate, so this callback doesn't re-check anything.
         listener.start(
-            onUserActivity: { [weak self] in self?.injector.cancelAutomaticExpansion() },
+            onUserActivity: { [weak self] in
+                self?.cancelAIFill()
+                self?.injector.cancelAutomaticExpansion()
+            },
             onMatch: { [weak self] id, keyword, keywordLength, target in
                 guard let self,
                     let generation = self.injector.beginAutomaticExpansion(target: target)
@@ -198,6 +236,96 @@ final class SnippetCoordinator {
         let context = injector.captureExpansionContext(
             target: target,
             clipboardHistory: clipboardHistoryForExpansion())
+        let prompts = SnippetTemplateEngine.aiPrompts(in: record, snippets: records)
+        guard !prompts.isEmpty, settings.snippetAIPlaceholders, settings.aiEnabled else {
+            expand(
+                record: record,
+                records: records,
+                context: context,
+                target: target,
+                expectedKeyword: expectedKeyword,
+                keywordLength: keywordLength,
+                automaticGeneration: automaticGeneration,
+                confirmation: confirmation)
+            return
+        }
+        fillAIPlaceholders(
+            prompts, target: target, automaticGeneration: automaticGeneration
+        ) { [weak self] answers in
+            var filled = context
+            filled.aiAnswers = answers
+            self?.expand(
+                record: record,
+                records: records,
+                context: filled,
+                target: target,
+                expectedKeyword: expectedKeyword,
+                keywordLength: keywordLength,
+                automaticGeneration: automaticGeneration,
+                confirmation: confirmation)
+        }
+    }
+
+    /// A failed or late reply expands empty: the reader asked for text, not for an error in it.
+    private func fillAIPlaceholders(
+        _ prompts: [String],
+        target: InjectionTarget?,
+        automaticGeneration: UInt?,
+        then finish: @escaping @MainActor ([String: String]) -> Void
+    ) {
+        cancelAIFill()
+        let provider: any AIProvider
+        do {
+            provider = try core.writingProvider()
+        } catch {
+            core.showMessage(error.localizedDescription, tone: .danger)
+            finish([:])
+            return
+        }
+        let fill = SnippetAIFillSession(prompts: prompts) { prompt in
+            let request = AIRequest(
+                instructions: SnippetAIPrompt.fillInstructions,
+                messages: [AIMessage(role: .user, text: prompt)],
+                maxOutputTokens: SnippetAIPrompt.fillMaxOutputTokens)
+            return try await QuickActionRunner.stream(request, using: provider)
+        }
+        aiFill = fill
+        core.showProgress("Filling AI placeholders\u{2026}") { [weak self] in
+            self?.cancelAIFill()
+            self?.injector.cancelArgumentPrompt(
+                automaticGeneration: automaticGeneration, target: target)
+        }
+        fill.start { [weak self] answers in
+            guard let self, self.aiFill === fill else { return }
+            self.aiFill = nil
+            self.core.hideProgress()
+            finish(answers)
+        }
+    }
+
+    /// Consent withdrawn mid-fill stops the requests; the keyword still expands, its `{ai}` empty.
+    func applyAIPlaceholdersEnabled() {
+        guard !(settings.aiEnabled && settings.snippetAIPlaceholders) else { return }
+        aiFill?.settle()
+    }
+
+    private func cancelAIFill() {
+        guard let aiFill else { return }
+        self.aiFill = nil
+        aiFill.cancel()
+        core.hideProgress()
+    }
+
+    private func expand(
+        record: StoredSnippet,
+        records: [StoredSnippet],
+        context: SnippetTemplateEngine.ExpansionContext,
+        target: InjectionTarget?,
+        expectedKeyword: String?,
+        keywordLength: Int,
+        automaticGeneration: UInt?,
+        confirmation: String?
+    ) {
         let result = SnippetTemplateEngine.expand(
             record,
             snippets: records,

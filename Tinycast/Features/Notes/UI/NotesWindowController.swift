@@ -75,6 +75,24 @@ final class NotesWindowController: NSObject, NSWindowDelegate {
         menu.show(above: panel)
     }
 
+    func presentAIMenu(_ menu: NoteAIWindowController) {
+        guard let panel, panel.isVisible else { return }
+        menu.show(under: panel)
+    }
+
+    /// Read straight off the editor: the store's copy trails it by the autosave debounce.
+    func editorSnapshot() -> (source: String, selection: NSRange)? {
+        guard let editor else { return nil }
+        return (editor.string, editor.selectedRange())
+    }
+
+    func apply(_ plan: NoteEditPlan) {
+        guard let panel, panel.isVisible, let editor else { return }
+        focusEditor(in: panel)
+        editor.performEdit(plan)
+        editor.scrollRangeToVisible(plan.selection)
+    }
+
     /// Only this controller knows the host window, so handing it over stays its job.
     func presentSwitcher(_ switcher: NoteSwitcherWindowController) {
         guard let panel, panel.isVisible else { return }
@@ -142,7 +160,9 @@ final class NotesWindowController: NSObject, NSWindowDelegate {
             "p": { [weak coordinator] in coordinator?.searchNotes() },
             "o": { [weak coordinator] in coordinator?.openNotesFolder() },
             "f": { [weak self] in self?.editor?.find(.showFindInterface) },
-            "w": { [weak panel] in panel?.performClose(nil) }
+            "w": { [weak panel] in panel?.performClose(nil) },
+            "j": { [weak coordinator] in coordinator?.toggleAIMenu() },
+            "k": { [weak coordinator] in coordinator?.toggleAIMenu() }
         ]
         panel.optionCommandChords = [
             "t": { [weak coordinator] in coordinator?.toggleFormattingBar() }
