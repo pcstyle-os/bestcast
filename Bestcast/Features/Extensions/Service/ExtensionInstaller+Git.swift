@@ -42,6 +42,7 @@ extension ExtensionInstaller {
                 at: source, into: workspace.appendingPathComponent("build", isDirectory: true),
                 onProgress: onProgress)
         }
+        try Task.checkCancellation()
         onProgress(.installing)
         return GitInstall(installed: try ExtensionCatalog.install(from: prepared), commit: commit)
     }

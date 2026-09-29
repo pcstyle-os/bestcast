@@ -207,7 +207,19 @@ struct ExtensionInstaller: Sendable {
         process.standardOutput = pipe
         process.standardError = pipe
 
-        return try await withCheckedThrowingContinuation { continuation in
+        // A cancelled install must end its child, not leave a build running after the pill goes.
+        try Task.checkCancellation()
+        let result = try await withTaskCancellationHandler {
+            try await launch(process, pipe: pipe)
+        } onCancel: {
+            if process.isRunning { process.terminate() }
+        }
+        try Task.checkCancellation()
+        return result
+    }
+
+    private func launch(_ process: Process, pipe: Pipe) async throws -> CommandResult {
+        try await withCheckedThrowingContinuation { continuation in
             // One resume, whichever of termination and timeout arrives first.
             let state = ResumeGuard()
             process.terminationHandler = { finished in

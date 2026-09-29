@@ -82,6 +82,12 @@ struct ExtensionDevkitTests {
         check("the default capacity is 500", ExtensionConsoleBuffer().capacity == 500)
         buffer.clear()
         check("clear empties the buffer", buffer.entries.isEmpty)
+        let flood = String(repeating: "x", count: ExtensionConsoleBuffer.maximumLength * 4)
+        buffer.append(level: .log, message: flood, stack: flood, at: now)
+        check(
+            "a flood of text is clipped",
+            buffer.entries.last?.message.count == ExtensionConsoleBuffer.maximumLength + 1
+                && buffer.entries.last?.stack?.count == ExtensionConsoleBuffer.maximumLength + 1)
     }
 
     // MARK: - Script Command folders
@@ -127,6 +133,17 @@ struct ExtensionDevkitTests {
             "a bestcast section alone is accepted",
             ExtensionManifest(json: ["name": "x", "bestcast": ["hooks": [String]()]]) != nil)
         check("an empty manifest is refused", ExtensionManifest(json: ["name": "x"]) == nil)
+        let tool: [String: Any] = ["name": "t"]
+        for name in ["..", ".", "", "@.."] {
+            check(
+                "a manifest named \"\(name)\" is refused",
+                ExtensionManifest(json: ["name": name, "tools": [tool]]) == nil)
+        }
+        let climbing = ExtensionManifest(json: [
+            "name": "x", "tools": [tool],
+            "commands": [["name": "../../evil", "title": "Evil"], ["name": "ok", "title": "OK"]]
+        ])
+        check("a command name holding a slash is dropped", climbing?.commands.map(\.name) == ["ok"])
     }
 
     static func context(isDevelopment: Bool) -> ExtensionLaunchContext {

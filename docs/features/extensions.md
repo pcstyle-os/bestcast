@@ -491,14 +491,16 @@ nor `settings.json` can carry a folder that runs code. `ExtensionSourceStore` ow
 `ExtensionDevelopmentCoordinator` drives the UI, and `Tests/ext-devkit-test.swift` covers the models
 and boots a linked fixture under JavaScriptCore.
 
-**Linked folders.** **Link…** records the folder as `linked` and the scan reads it where it is —
-`dist/` when `ray build -e dist` has written a manifest there, the folder itself otherwise. A linked
+**Linked folders.** **Link…** asks first, then records the folder as `linked`; the scan reads it
+where it is — `dist/` when `ray build -e dist` has written a manifest there, the folder itself otherwise. A linked
 copy shadows an installed one of the same name. An `ExtensionFolderWatcher` (FSEvents, 300 ms
 latency as the debounce) watches every linked folder while extensions are on; a batch rescans, and
 when the running command's folder changed, the command is run again in place and a **Reloaded** HUD
 says so. `environment.isDevelopment` is true only for a linked extension. The library row and its
 launcher subtitle carry **Dev**, and the **Development** section lists each link with Reveal,
-Console and Unlink. Unlink is the ordinary uninstall, which leaves the folder alone.
+Console and Unlink. Unlink is the ordinary uninstall, which leaves the folder alone. A link whose
+folder no longer reads as an extension is listed too, with **Forget**, so a folder later restored at
+that path never runs unasked.
 
 **Console.** `ExtensionConsole` keeps a 500-line ring per extension, in memory only: never persisted,
 never backed up. It records `console.log` / `warn` / `error` with an `Error`'s stack apart from its
@@ -515,8 +517,10 @@ escape, and a ref with a slash in it reads as ref plus folder. A confirm dialog 
 time, because build scripts run on this Mac. The clone is `git clone --depth 1` with
 `GIT_TERMINAL_PROMPT=0` in a `bestcast-install-<UUID>` workspace; committed `ray build` bundles install
 as they are, anything else goes through the same build as the store, with each step capped at three
-minutes under a cancellable progress HUD. The record keeps url, ref and commit: the row reads
-`from git · <sha7>` and offers **Update**, which is the same confirm and install again.
+minutes under a progress HUD whose Cancel terminates the running step. A manifest or command name
+that could leave its folder on disk (`..`, a `/` in a command) is not an extension. The record keeps
+url, ref and commit: the row reads `from git · <sha7>` and offers **Update**, which is the same
+confirm and install again.
 
 **Tools-only extensions.** A manifest is an extension when it has commands, tools, or a `bestcast`
 section. One with tools and no commands shows in Settings and in AI Chat, but has no launcher row.
@@ -539,7 +543,9 @@ both.
 | `argument1…3` | the launcher's inline argument fields |
 | `needsConfirmation` | a Bestcast confirm before it runs |
 | `mode` | `fullOutput` streams into the host-owned command output window; `compact` and `silent` show the last line as a HUD; `inline` makes the last line the row's subtitle |
-| `refreshTime` | how often an inline script reruns, never under 10 s |
+| `refreshTime` | how often an inline script reruns, never under 10 s; a run stops after 30 s |
+
+Turning extensions off stops every inline timer and any inline script still running.
 
 ## Registries
 

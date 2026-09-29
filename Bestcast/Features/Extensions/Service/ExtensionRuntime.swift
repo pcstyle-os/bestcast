@@ -211,7 +211,8 @@ final class ExtensionRuntime: @unchecked Sendable {
         let host = JSValue(newObjectIn: context)
 
         let log: @convention(block) (String, String, String) -> Void = { [weak self] level, message, stack in
-            self?.report(level: level, message: message, stack: stack.isEmpty ? nil : stack)
+            let stack = stack.isEmpty || stack == "undefined" ? nil : stack
+            self?.report(level: level, message: message, stack: stack)
         }
         let render: @convention(block) (String, String) -> Void = { [weak self] session, json in
             self?.deliverRender(session: session, json: json)

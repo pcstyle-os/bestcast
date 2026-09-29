@@ -5,6 +5,8 @@ import AppKit
 @Observable
 final class ScriptCommandLibrary {
     static let entryIDPrefix = "script-command:"
+    /// Unattended, so a hung inline script is stopped rather than left running out of sight.
+    static let inlineTimeout: Duration = .seconds(30)
 
     private(set) var headers: [String: ScriptCommandHeader] = [:]
     @ObservationIgnored private var subtitles: [String: String] = [:]
@@ -100,7 +102,8 @@ final class ScriptCommandLibrary {
                     let result = await ShellCommandRunner.run(
                         header.command.command, arguments: [],
                         loadingShellEnvironment: header.command.loadsShellEnvironment,
-                        workingDirectory: header.command.workingDirectory)
+                        workingDirectory: header.command.workingDirectory,
+                        timeout: Self.inlineTimeout)
                     guard !Task.isCancelled, let self else { return }
                     self.subtitles[id] = result.lastOutputLine
                     self.publish()

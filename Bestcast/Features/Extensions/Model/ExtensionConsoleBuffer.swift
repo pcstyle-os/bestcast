@@ -36,6 +36,8 @@ struct ExtensionConsoleEntry: Sendable, Hashable, Identifiable {
 /// One extension's recent output, in memory only: it may hold whatever a command printed.
 struct ExtensionConsoleBuffer: Sendable {
     static let defaultCapacity = 500
+    /// Per message and per stack, so 500 lines stay small whatever a command prints.
+    static let maximumLength = 16 * 1024
 
     let capacity: Int
     private(set) var entries: [ExtensionConsoleEntry] = []
@@ -49,9 +51,16 @@ struct ExtensionConsoleBuffer: Sendable {
         level: ExtensionConsoleLevel, message: String, stack: String? = nil, at date: Date
     ) {
         entries.append(
-            ExtensionConsoleEntry(id: nextID, date: date, level: level, message: message, stack: stack))
+            ExtensionConsoleEntry(
+                id: nextID, date: date, level: level, message: Self.clipped(message),
+                stack: stack.map(Self.clipped)))
         nextID += 1
         if entries.count > capacity { entries.removeFirst(entries.count - capacity) }
+    }
+
+    private static func clipped(_ text: String) -> String {
+        let head = text.prefix(maximumLength)
+        return head.endIndex < text.endIndex ? String(head) + "…" : text
     }
 
     mutating func clear() {

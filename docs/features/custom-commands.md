@@ -62,6 +62,8 @@ The command text is deliberately not searchable. Only the user-facing name enter
 - `BESTCAST=1` added to the inherited environment
 - up to 8 KiB of standard error retained for a failure dialog
 - standard output discarded
+- no time limit unless the caller passes a `timeout`; that, or cancelling the calling task, sends
+  `SIGTERM` and then `SIGKILL` two seconds later, and the run reports `.stopped`
 
 **Show output** takes a different route entirely — see [Show output](#show-output). Nothing else does.
 

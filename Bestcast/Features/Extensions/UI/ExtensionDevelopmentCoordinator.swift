@@ -73,6 +73,14 @@ final class ExtensionDevelopmentCoordinator {
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         Task {
+            guard
+                await core.confirm(
+                    title: "Link \(folder.lastPathComponent)?",
+                    message:
+                        "Its code runs from this folder as it is, and runs again whenever a file "
+                        + "in it changes.",
+                    symbol: "hammer", confirmTitle: "Link", tone: .neutral, confirmRole: .standard)
+            else { return }
             do {
                 let linked = try await extensions.link(folder: folder)
                 watchLinkedFolders()
@@ -83,13 +91,10 @@ final class ExtensionDevelopmentCoordinator {
         }
     }
 
-    /// Forgets the link through the ordinary uninstall, which leaves a linked folder on disk.
-    func unlink(_ owner: InstalledExtension) {
-        Task {
-            await extensions.uninstall(owner)
-            watchLinkedFolders()
-            core.showMessage("Unlinked \(owner.title)")
-        }
+    /// A link whose folder is gone: without this, restoring the path would run it unasked.
+    func forgetLink(_ name: String) {
+        extensions.sources.set(nil, for: name)
+        watchLinkedFolders()
     }
 
     func reveal(_ owner: InstalledExtension) {
