@@ -844,14 +844,14 @@ this, so it is declared under a Bestcast-only key in `package.json`:
 }}
 ```
 
-An `export` is a bundle path, optionally `#member` for a named export; install copies each one next to
-the commands. The inputs and return shapes are in `Scripts/raycast-runtime/types/bestcast-contributions.d.ts`.
+An `export` is a bundle path, `.js` implied when left off, optionally `#member` for a named export;
+install copies each one next to the commands. The inputs and return shapes are in `Scripts/raycast-runtime/types/bestcast-contributions.d.ts`.
 
 | Kind | Where it shows | What the export gets and returns |
 | --- | --- | --- |
 | **Root search** | a section under passive AI's rows, headed by the provider's title | `{ query }`, minus any `prefix`; rows (3 by default, at most 5), or one `mode: "answer"` line |
 | **Fallback** | the `Use "…" with` section | nothing: it names one of the extension's commands, launched with the query as `fallbackText` |
-| **Action** | a trailing group titled after the extension in ⌘K on an app, snippet or quicklink row | `{ kind, item }`; a returned string is shown as a HUD. `command` instead launches that command |
+| **Action** | a trailing group titled after the extension in ⌘K on an app, snippet or quicklink row | `{ kind, item }`; a returned string is shown as a HUD. `command` instead launches that command with `{ kind, item }` as its `launchContext` |
 | **Placeholder** | `{ext:<extension>/<name> key="value"}` in a snippet | `{ arguments }`, only the declared ones; a string is the text |
 
 A search provider is called 150 ms after typing stops, on a warm context kept per export, and has
@@ -859,12 +859,14 @@ A search provider is called 150 ms after typing stops, on a warm context kept pe
 above the highlight push it down, so ↵ still opens what it did. A row's first action is ↵ and the rest
 are its ⌘K menu: copy, paste, open an http(s)/mailto URL or a file path, or launch one of the
 extension's own commands. A placeholder has 3 seconds; a failure, a disabled one or an unknown one
-expands to nothing.
+expands to nothing. Search and placeholder code runs because of a keystroke, not a choice, so it gets
+the `background` launch type: no toasts, HUDs, dialogs or window changes, and no AI.
 
 **Consent.** After an install from a folder or the store, a dialog lists every contribution with a
-toggle, all off; the search group repeats that a provider sees everything typed in the launcher. The
+toggle, all off; the search group repeats that a provider sees everything typed in the launcher, and
+runs as you type. The
 same toggles stay in Settings › Extensions › <extension> under **Contributions**. Switching one off
-stops its warm context. The choices live in `extension-contributions.json`, which no backup carries,
+stops its warm context, and a context still loading when that happens never runs. The choices live in `extension-contributions.json`, which no backup carries,
 and uninstall forgets them.
 
 ## What isn't supported yet

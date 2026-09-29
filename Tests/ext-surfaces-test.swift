@@ -108,6 +108,8 @@ struct ExtensionSurfacesTests {
 
     static func exportRefs() {
         check("a bare path runs default", ExtensionExportRef("src/a.js")?.member == "default")
+        check("a path without .js names the built file", ExtensionExportRef("src/a#run")?.path == "src/a.js")
+        check("another extension is refused", ExtensionExportRef("src/a.ts") == nil)
         check("a member is taken after #", ExtensionExportRef("src/a.js#run")?.member == "run")
         check("an empty member is refused", ExtensionExportRef("a.js#") == nil)
         check("a dot segment is refused", ExtensionExportRef("./a.js") == nil)
@@ -302,7 +304,7 @@ struct ExtensionSurfacesTests {
             Set(parsed.items.map(\.kind)) == Set(ExtensionContributionKind.allCases))
 
         var opened = 0
-        let runner = ExtensionContributionRunner { owner, bundle in
+        let runner = ExtensionContributionRunner { owner, bundle, _ in
             opened += 1
             let session = ExtensionToolSession(
                 runtime: ExtensionRuntime(hostAPI: StubHost(), runtimeURL: runtimeURL)) {}

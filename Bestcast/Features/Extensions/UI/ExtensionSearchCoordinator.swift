@@ -124,7 +124,8 @@ final class ExtensionSearchCoordinator {
                     guard let self else { return }
                     let value = try? await self.manager.contributions.runExport(
                         provider.export, of: owner, input: .object(["query": .string(input)]),
-                        timeout: ExtensionSearchScheduler.timeout, keepWarm: true)
+                        timeout: ExtensionSearchScheduler.timeout, keepWarm: true,
+                        launchType: .background)
                     guard !Task.isCancelled, self.scheduler.accept(generation: generation),
                         self.isEnabled(owner.manifest.name, .search, provider.name), let value
                     else { return }
@@ -270,7 +271,11 @@ final class ExtensionSearchCoordinator {
             guard let commandEntry = commandEntry(extensionName: owner.manifest.name, command: command)
             else { return core.showMessage("That command isn't available", tone: .danger) }
             let text = item["path"] ?? item["text"] ?? item["name"]
-            core.extensionCoordinator.runExtensionCommand(commandEntry, fallbackText: text)
+            core.extensionCoordinator.runExtensionCommand(
+                commandEntry, fallbackText: text,
+                launchContext: [
+                    "kind": .string(target.rawValue), "item": .object(item.mapValues(RenderValue.string))
+                ])
         case .export(let export):
             core.paletteCoordinator.hidePalette(restoreFocus: false)
             let input = JSONValue.object([
@@ -326,10 +331,22 @@ final class ExtensionSearchCoordinator {
         guard
             let value = try? await manager.contributions.runExport(
                 contribution.export, of: owner, input: .object(["arguments": .object(arguments)]),
-                timeout: Self.placeholderTimeout),
+                timeout: Self.placeholderTimeout, launchType: .background),
             let text = value.stringValue
         else { return nil }
         return String(text.prefix(Self.maxPlaceholderLength))
+    }
+
+    /// Each opted-in placeholder as the token the snippet editor's Insert… menu offers.
+    var placeholderTokens: [String] {
+        manager.installed.flatMap { owner in
+            contributions(of: owner).placeholders
+                .filter { isEnabled(owner.manifest.name, .placeholder, $0.name) }
+                .map { placeholder in
+                    let arguments = placeholder.arguments.map { " \($0)=\"\"" }.joined()
+                    return "{ext:\(owner.manifest.name)/\(placeholder.name)\(arguments)}"
+                }
+        }
     }
 
     // MARK: - Consent

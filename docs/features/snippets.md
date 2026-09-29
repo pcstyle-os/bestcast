@@ -144,8 +144,8 @@ so a migrated snippet keeps working.
 | `{ai prompt="…"}`                          | The default model's reply to the prompt, when [AI placeholders](#ai-placeholders-and-drafts) are on; otherwise left as written                                                                                     |
 | `{ext:<extension>/<name> key="value"}`     | An opted-in extension placeholder's text (see [Extension placeholders](#extension-placeholders)); empty when it is off, unknown or fails                                                                           |
 
-The editor's **Insert…** menu lists every token above except `{ext:…}`, and `{ai}` only while AI
-placeholders are on; parameters and modifiers are typed by hand. A
+The editor's **Insert…** menu lists every token above, `{ai}` only while AI placeholders are on and
+`{ext:…}` once per opted-in placeholder, under Extensions; parameters and modifiers are typed by hand. A
 parameter value needs quotes only to carry a `|`: an unquoted one runs to the next `key=`, so
 `{date format=MMMM d, yyyy}` keeps its spaces the way Raycast writes it.
 

@@ -39,7 +39,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
     let appearances = ExtensionAppearanceStore()
     let contributionStore = ExtensionContributionStore(fileURL: ExtensionCatalog.contributionsFile())
     @ObservationIgnored private(set) lazy var contributions = ExtensionContributionRunner { [unowned self] in
-        try await self.openExportSession(owner: $0, bundle: $1)
+        try await self.openExportSession(owner: $0, bundle: $1, launchType: $2)
     }
     private let commandMetadata = ExtensionCommandMetadataStore(
         fileURL: ExtensionCatalog.commandMetadataFile())
@@ -502,9 +502,9 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
         return session
     }
 
-    /// A contribution's export on its own runtime, the same lane an AI tool runs on.
+    /// A contribution's export on its own runtime; `.background` is for code the user didn't run.
     func openExportSession(
-        owner: InstalledExtension, bundle: URL
+        owner: InstalledExtension, bundle: URL, launchType: ExtensionLaunchType
     ) async throws -> ExtensionToolSession {
         guard isEnabled, let coordinator else {
             throw ExtensionLaunchError.unknownCommand(owner.manifest.name)
@@ -517,9 +517,19 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
             return try String(contentsOf: bundle, encoding: .utf8)
         }.value
+        // Loading runs the bundle's top level, so a switch-off during the read must still hold.
+        guard isEnabled, extensionNamed(owner.manifest.name) != nil else {
+            throw ExtensionLaunchError.unknownCommand(owner.manifest.name)
+        }
         let host = ExtensionToolHost(
-            owner: owner, storage: storage, manager: self, coordinator: coordinator)
+            owner: owner, storage: storage, manager: self, coordinator: coordinator,
+            launchType: launchType)
         let bridge = self.bridge.scoped(to: host)
+        // Keystroke-driven code must not spend the reader's AI: these contributions are not AI.
+        if launchType == .background {
+            bridge.ai.makeProvider = nil
+            bridge.ai.canAccess = { false }
+        }
         let session = ExtensionToolSession(runtime: ExtensionRuntime(hostAPI: bridge)) { [storage] in
             host.stop()
             bridge.context = nil
@@ -531,7 +541,7 @@ final class ExtensionManager: ExtensionRuntimeDelegate, ExtensionHostContext {
             assetsPath: owner.assetsPath, supportPath: support.path,
             preferences: storage.resolvedPreferences(extension: owner.manifest.name, schemas: schemas),
             caches: storage.caches(extension: owner.manifest.name), arguments: [:],
-            fallbackText: nil, isDarkAppearance: NSApp.effectiveAppearance.isDark,
+            fallbackText: nil, launchType: launchType, isDarkAppearance: NSApp.effectiveAppearance.isDark,
             canAccessAI: bridge.ai.canAccess())
         do {
             try await session.load(code: code, file: bundle, context: context, support: support)

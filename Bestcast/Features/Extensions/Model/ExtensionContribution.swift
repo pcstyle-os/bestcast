@@ -17,7 +17,7 @@ enum ExtensionContributionKind: String, CaseIterable, Sendable, Codable {
     }
 }
 
-/// `path.js` or `path.js#member`, relative to the extension; `default` when no member is named.
+/// `path` or `path.js`, then `#member`, relative to the extension; `default` when none is named.
 struct ExtensionExportRef: Sendable, Hashable {
     let path: String
     let member: String
@@ -28,7 +28,9 @@ struct ExtensionExportRef: Sendable, Hashable {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, trimmed.count <= Self.maxLength else { return nil }
         let parts = trimmed.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
-        let path = String(parts[0])
+        let written = String(parts[0])
+        let fileName = written.split(separator: "/").last ?? ""
+        let path = fileName.contains(".") ? written : written + ".js"
         let member = parts.count > 1 ? String(parts[1]) : "default"
         let components = path.split(separator: "/", omittingEmptySubsequences: false)
         guard path.hasSuffix(".js"), !path.hasPrefix("/"), !path.hasPrefix("~"),

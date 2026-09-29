@@ -25,7 +25,8 @@ extension InstalledExtension {
 /// Runs a contribution's export one-shot on the tool-session lane; search may keep one warm.
 @MainActor
 final class ExtensionContributionRunner {
-    typealias SessionFactory = @MainActor (InstalledExtension, URL) async throws -> ExtensionToolSession
+    typealias SessionFactory =
+        @MainActor (InstalledExtension, URL, ExtensionLaunchType) async throws -> ExtensionToolSession
 
     static let warmLifetime: Duration = .seconds(30)
     static let defaultTimeout: Duration = .seconds(10)
@@ -40,6 +41,9 @@ final class ExtensionContributionRunner {
     private var warm: [String: WarmSession] = [:]
     /// One-shot sessions in flight, so switching extensions off can end them too.
     private var oneShots: [ObjectIdentifier: (extensionName: String, session: ExtensionToolSession)] = [:]
+    /// Bumped by every stop, so a session still loading when its extension is stopped never runs.
+    private var stops: [String: Int] = [:]
+    private var allStops = 0
 
     init(makeSession: @escaping SessionFactory) {
         self.makeSession = makeSession
@@ -48,12 +52,14 @@ final class ExtensionContributionRunner {
     /// `keepWarm` reuses a loaded bundle for keystroke-rate calls; a failed call never reuses one.
     func runExport(
         _ export: ExtensionExportRef, of owner: InstalledExtension, input: JSONValue,
-        timeout: Duration = defaultTimeout, keepWarm: Bool = false
+        timeout: Duration = defaultTimeout, keepWarm: Bool = false,
+        launchType: ExtensionLaunchType = .userInitiated
     ) async throws -> JSONValue {
         guard let bundle = owner.bundleURL(forExport: export) else {
             throw ExtensionContributionError.notBuilt(export.path)
         }
-        let key = owner.manifest.name + "\n" + export.path
+        let name = owner.manifest.name
+        let key = name + "\n" + export.path + "\n" + launchType.rawValue
         let session: ExtensionToolSession
         if keepWarm, var entry = warm[key], !entry.isBusy {
             entry.isBusy = true
@@ -61,11 +67,16 @@ final class ExtensionContributionRunner {
             warm[key] = entry
             session = entry.session
         } else {
-            session = try await makeSession(owner, bundle)
+            let stopsBefore = (stops[name, default: 0], allStops)
+            session = try await makeSession(owner, bundle, launchType)
+            guard stopsBefore == (stops[name, default: 0], allStops) else {
+                session.end()
+                throw ExtensionContributionError.failed("The extension was switched off.")
+            }
             if keepWarm, warm[key] == nil {
                 warm[key] = WarmSession(session: session, isBusy: true)
             } else {
-                oneShots[ObjectIdentifier(session)] = (owner.manifest.name, session)
+                oneShots[ObjectIdentifier(session)] = (name, session)
             }
         }
         let outcome = await session.call(export.member, input: Self.encode(input), timeout: timeout)
@@ -78,6 +89,7 @@ final class ExtensionContributionRunner {
     }
 
     func stop(extension name: String) {
+        stops[name, default: 0] += 1
         for (key, entry) in warm where key.hasPrefix(name + "\n") {
             entry.expiry?.cancel()
             warm[key] = nil
@@ -90,6 +102,7 @@ final class ExtensionContributionRunner {
     }
 
     func stopAll() {
+        allStops += 1
         let names = Set(warm.keys.compactMap { $0.split(separator: "\n").first.map(String.init) })
             .union(oneShots.values.map(\.extensionName))
         names.forEach(stop(extension:))

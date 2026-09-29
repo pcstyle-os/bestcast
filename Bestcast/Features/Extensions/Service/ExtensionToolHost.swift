@@ -8,19 +8,20 @@ final class ExtensionToolHost: ExtensionHostContext {
     private weak var manager: ExtensionManager?
     private weak var coordinator: ExtensionCoordinator?
     private let oauth = ExtensionOAuthSession()
+    let activeLaunchType: ExtensionLaunchType
 
     init(
         owner: InstalledExtension, storage: ExtensionStorage, manager: ExtensionManager,
-        coordinator: ExtensionCoordinator
+        coordinator: ExtensionCoordinator, launchType: ExtensionLaunchType = .userInitiated
     ) {
         self.owner = owner
         self.storage = storage
         self.manager = manager
         self.coordinator = coordinator
+        activeLaunchType = launchType
     }
 
     var activeExtensionName: String? { owner.manifest.name }
-    var activeLaunchType: ExtensionLaunchType { .userInitiated }
     var pasteTarget: NSRunningApplication? { NSWorkspace.shared.frontmostApplication }
     var applicationURLs: [URL] { coordinator?.applicationURLs ?? [] }
 

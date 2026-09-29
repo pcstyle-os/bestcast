@@ -82,7 +82,9 @@ struct ExtensionSearchConsentWarning: View {
 
     var body: some View {
         Label {
-            Text("Root search sends everything you type in the launcher to this extension.")
+            Text(
+                "Root search sends everything you type in the launcher to this extension, "
+                    + "and runs its code as you type.")
                 .fixedSize(horizontal: false, vertical: true)
         } icon: {
             Image(systemName: "exclamationmark.triangle.fill")
