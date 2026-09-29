@@ -695,20 +695,20 @@ struct DoubleTapDetectorTests {
             "Quick Press set to nothing reports nothing to fire")
     }
 
-    /// Right Option as Hyper while Tinycast and a dictation tool both inject a phrase.
+    /// Right Option as Hyper while Bestcast and a dictation tool both inject a phrase.
     static func hyperSynthetics() {
         var keys = HyperKeys(.rightOption, quickPress: .escape)
         _ = keys.modifier(flags: rightOptionDown, at: 0)
-        let tinycast = (0..<5).map { index in
+        let bestcast = (0..<5).map { index in
             keys.key(kVK_ANSI_A, flags: nonCoalesced, at: 10 + index, synthetic: true)
         }
         expect(
-            tinycast.allSatisfy { $0 == HyperKeyRewriter.Outcome(.pass) },
-            "Tinycast's own injected phrase passes with the flags it was posted with")
+            bestcast.allSatisfy { $0 == HyperKeyRewriter.Outcome(.pass) },
+            "Bestcast's own injected phrase passes with the flags it was posted with")
         expect(
             keys.modifier(flags: nonCoalesced, at: 120).quickPress
                 == HyperKeyRewriter.QuickPress(action: .escape, key: .rightOption),
-            "Tinycast's own keystrokes do not turn a lone press into a combo")
+            "Bestcast's own keystrokes do not turn a lone press into a combo")
 
         _ = keys.modifier(flags: rightOptionDown, at: 500)
         let dictated = (0..<3).map { index in

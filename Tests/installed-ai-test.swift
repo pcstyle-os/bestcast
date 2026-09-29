@@ -114,7 +114,7 @@ struct InstalledAITests {
         claudeDiscoveryReadsTheCLIsOwnModelList()
         await claudeRunsWithoutToolsOrHistory(fixture)
         await claudeSearchesOnlyWithTheWebTools(fixture)
-        await claudeSearchesBesideTinycastsServers(fixture)
+        await claudeSearchesBesideBestcastsServers(fixture)
         await grokRunsWithoutToolsAndDeletesItsSession(fixture)
         grokCatalogParsesListedModels()
         await grokDiscoveryRequiresLoginAndFiltersModels(fixture)
@@ -122,7 +122,7 @@ struct InstalledAITests {
         await cursorDiscoveryRequiresLoginAndListsModels(fixture)
         await oversizedCompleteFrameFailsTheTurn(fixture)
         claudeMCPConfigNamesNoServers(fixture)
-        await claudeRunsTinycastsServersAndAnswersTheirConsent(fixture)
+        await claudeRunsBestcastsServersAndAnswersTheirConsent(fixture)
         await aDeclinedCallComesBackAsAnErrorResult(fixture)
         await theRoundCapEndsTheTurnTheWayTheLoopDoes(fixture)
         await unlimitedPassesNoTurnCap(fixture)
@@ -296,7 +296,7 @@ struct InstalledAITests {
         expect(
             InstalledAIModel.claudeTitle(
                 #"{"type":"control_response","response":{"subtype":"success","#
-                    + #""request_id":"tinycast-title","response":{"title":"Weekend hiking trip plan"}}}"#)
+                    + #""request_id":"bestcast-title","response":{"title":"Weekend hiking trip plan"}}}"#)
                 == "Weekend hiking trip plan",
             "Claude's own session namer is read from its control response")
         expect(
@@ -433,7 +433,7 @@ struct InstalledAITests {
     }
 
     /// Search beside armed servers: both kinds of rows, each settled by its own result.
-    private static func claudeSearchesBesideTinycastsServers(_ fixture: Fixture) async {
+    private static func claudeSearchesBesideBestcastsServers(_ fixture: Fixture) async {
         let asked = Box()
         let events = await fixture.events(
             kind: .claude, model: "sonnet", effort: nil,
@@ -517,9 +517,9 @@ struct InstalledAITests {
                 [.modificationDate: Date().addingTimeInterval(-age)], ofItemAtPath: url.path)
             return url
         }
-        let config = file("tinycast-mcp-\(UUID().uuidString).json", age: 60)
-        let prompt = file("tinycast-prompt-\(UUID().uuidString).txt", age: 60)
-        let live = file("tinycast-mcp-\(UUID().uuidString).json", age: -60)
+        let config = file("bestcast-mcp-\(UUID().uuidString).json", age: 60)
+        let prompt = file("bestcast-prompt-\(UUID().uuidString).txt", age: 60)
+        let live = file("bestcast-mcp-\(UUID().uuidString).json", age: -60)
         let other = file("notes.txt", age: 60)
         _ = InstalledAIManager(supportDirectory: support)
         let removed = await fixture.awaitMissing(config)
@@ -558,8 +558,8 @@ struct InstalledAITests {
         if let index = argv.firstIndex(of: "--prompt-file"), index + 1 < argv.count {
             let name = URL(fileURLWithPath: argv[index + 1]).lastPathComponent
             expect(
-                name.hasPrefix("tinycast-prompt-") && name.hasSuffix(".txt")
-                    && name != "tinycast-prompt.txt",
+                name.hasPrefix("bestcast-prompt-") && name.hasSuffix(".txt")
+                    && name != "bestcast-prompt.txt",
                 "Grok prompt file is unique per turn")
         }
         expect(
@@ -589,8 +589,8 @@ struct InstalledAITests {
             "Claude's --mcp-config declares an empty mcpServers record")
     }
 
-    /// The whole route: Tinycast's servers go in, the CLI runs the loop, consent comes back here.
-    private static func claudeRunsTinycastsServersAndAnswersTheirConsent(_ fixture: Fixture) async {
+    /// The whole route: Bestcast's servers go in, the CLI runs the loop, consent comes back here.
+    private static func claudeRunsBestcastsServersAndAnswersTheirConsent(_ fixture: Fixture) async {
         let asked = Box()
         let events = await fixture.events(
             kind: .claude, model: "sonnet", effort: nil,
@@ -605,7 +605,7 @@ struct InstalledAITests {
         expect(events.last == .finished, "and the turn finishes on the CLI's own result frame")
         expect(
             asked.calls == [AIToolServerCall(handle: "probe", tool: "safe_echo")],
-            "consent was asked for the call the CLI named, addressed by Tinycast's own handle")
+            "consent was asked for the call the CLI named, addressed by Bestcast's own handle")
 
         let argv = fixture.lastArguments("claude-args.log")
         for flag in ["--strict-mcp-config", "--mcp-config", "--permission-prompt-tool", "stdio"] {
@@ -633,10 +633,10 @@ struct InstalledAITests {
         let configured = URL(fileURLWithPath: argv[index + 1])
         expect(
             configured.deletingLastPathComponent().path == fixture.workspace.path,
-            "the configuration lives inside Tinycast's own workspace, never a CLI's settings")
+            "the configuration lives inside Bestcast's own workspace, never a CLI's settings")
         expect(
-            configured.lastPathComponent.hasPrefix("tinycast-mcp-")
-                && configured.lastPathComponent != "tinycast-mcp-.json",
+            configured.lastPathComponent.hasPrefix("bestcast-mcp-")
+                && configured.lastPathComponent != "bestcast-mcp-.json",
             "under a name of its own, so a second turn never deletes a live turn's file")
         expect(
             await fixture.awaitMissing(configured),
@@ -674,7 +674,7 @@ struct InstalledAITests {
         expect(
             unknown.contains(#""subtype":"error""#)
                 && unknown.contains(#""request_id":"req_unknown""#),
-            "a control request Tinycast does not know is answered with an error, not left waiting")
+            "a control request Bestcast does not know is answered with an error, not left waiting")
     }
 
     /// The dialog shows one question at a time, and the second must see what the first granted.
@@ -726,7 +726,7 @@ struct InstalledAITests {
         expect(
             error?.contains("Claude could not finish the response.") == true
                 && error?.contains("Stopped after") == false,
-            "a max-turns result under no cap names no number, since Tinycast set none")
+            "a max-turns result under no cap names no number, since Bestcast set none")
 
         let nothingToCall = AIToolServerSession(rounds: nil) {
             []
@@ -764,7 +764,7 @@ struct InstalledAITests {
             "the Providers row says whose decision that is")
         expect(
             InstalledAIKind.claude.isolationCaveat(hasManagedMCPPolicy: false) == nil,
-            "and says nothing when it is Tinycast's")
+            "and says nothing when it is Bestcast's")
     }
 }
 
@@ -828,9 +828,9 @@ private final class Fixture {
             // The locator asks a login shell first; the user's rc files would put real CLIs ahead.
             setenv("ZDOTDIR", root.path, 1)
             // `/etc/zprofile`'s path_helper puts Homebrew's CLIs ahead of the stubs; undo that.
-            try #"export TINYCAST_SAVED_PATH="$PATH""#.write(
+            try #"export BESTCAST_SAVED_PATH="$PATH""#.write(
                 to: root.appending(path: ".zshenv"), atomically: true, encoding: .utf8)
-            try #"[ -n "$TINYCAST_SAVED_PATH" ] && export PATH="$TINYCAST_SAVED_PATH""#.write(
+            try #"[ -n "$BESTCAST_SAVED_PATH" ] && export PATH="$BESTCAST_SAVED_PATH""#.write(
                 to: root.appending(path: ".zprofile"), atomically: true, encoding: .utf8)
             setenv("TC_INSTALLED_STUB_ROOT", root.path, 1)
             setenv("TC_CURSOR_CHATS_ROOT", cursorChats.path, 1)

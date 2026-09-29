@@ -8,8 +8,8 @@ struct UninstallTests {
     static var passes = 0
 
     static let home = "/Users/tester"
-    static let ownBundleID = "com.tinycast.app"
-    static let ownBundleURL = URL(fileURLWithPath: "/Applications/Tinycast.app")
+    static let ownBundleID = "com.bestcast.app"
+    static let ownBundleURL = URL(fileURLWithPath: "/Applications/Bestcast.app")
 
     static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
         if condition() {
@@ -300,20 +300,20 @@ struct UninstallTests {
     static func testIdentityRefusal() {
         let byID = UninstallTarget(
             bundleURL: URL(fileURLWithPath: "/Applications/Somewhere Else.app"),
-            bundleID: "com.tinycast.app", displayName: "Tinycast", bundleName: nil)
+            bundleID: "com.bestcast.app", displayName: "Bestcast", bundleName: nil)
         expect(
             UninstallIdentity.make(
                 target: byID, otherAppNames: [], ownBundleID: ownBundleID,
                 ownBundleURL: ownBundleURL) == nil,
-            "Tinycast refuses to plan its own uninstall by bundle ID")
+            "Bestcast refuses to plan its own uninstall by bundle ID")
 
         let dev = UninstallTarget(
-            bundleURL: URL(fileURLWithPath: "/Applications/Tinycast Dev.app"),
-            bundleID: "com.tinycast.app.dev", displayName: "Tinycast Dev", bundleName: nil)
+            bundleURL: URL(fileURLWithPath: "/Applications/Bestcast Dev.app"),
+            bundleID: "com.bestcast.app.dev", displayName: "Bestcast Dev", bundleName: nil)
         expect(
             UninstallIdentity.make(
-                target: dev, otherAppNames: [], ownBundleID: "com.tinycast.app.dev",
-                ownBundleURL: URL(fileURLWithPath: "/Applications/Tinycast Dev.app")) == nil,
+                target: dev, otherAppNames: [], ownBundleID: "com.bestcast.app.dev",
+                ownBundleURL: URL(fileURLWithPath: "/Applications/Bestcast Dev.app")) == nil,
             "the Dev channel refuses itself too — the check is against the running identity")
         expect(
             UninstallIdentity.make(

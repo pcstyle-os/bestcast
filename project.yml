@@ -1,6 +1,6 @@
-name: Tinycast
+name: Bestcast
 options:
-  bundleIdPrefix: com.tinycast
+  bundleIdPrefix: com.bestcast
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
@@ -15,7 +15,7 @@ settings:
     CODE_SIGN_STYLE: Manual
     # Stable self-signed identity so macOS keeps the Accessibility grant across rebuilds.
     # Create it once — see docs/signing.md.
-    CODE_SIGN_IDENTITY: "Tinycast Self-Signed"
+    CODE_SIGN_IDENTITY: "Bestcast Self-Signed"
     SWIFT_STRICT_CONCURRENCY: complete
   configs:
     Release:
@@ -28,11 +28,11 @@ settings:
       DEAD_CODE_STRIPPING: YES
 
 targets:
-  Tinycast:
+  Bestcast:
     type: application
     platform: macOS
     sources:
-      - path: Tinycast
+      - path: Bestcast
         # The helper's own sources: compiling them in would link Vision and PDFKit into the app,
         # which is the whole thing running recognition out of process avoids.
         excludes:
@@ -51,10 +51,10 @@ targets:
           subpath: Contents/Helpers
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tinycast.app
-        INFOPLIST_FILE: Tinycast/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Tinycast/Tinycast.entitlements
-        ASSETCATALOG_COMPILER_APPICON_NAME: tinycast
+        PRODUCT_BUNDLE_IDENTIFIER: com.bestcast.app
+        INFOPLIST_FILE: Bestcast/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Bestcast/Bestcast.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: bestcast
         COMBINE_HIDPI_IMAGES: YES
         LD_RUNPATH_SEARCH_PATHS:
           - "$(inherited)"
@@ -64,15 +64,15 @@ targets:
         # locally-run build gets its own prefs, caches, TCC grants and login item instead of
         # inheriting — and corrupting — the installed app's state.
         Debug:
-          PRODUCT_NAME: Tinycast Dev
-          PRODUCT_BUNDLE_IDENTIFIER: com.tinycast.app.dev
+          PRODUCT_NAME: Bestcast Dev
+          PRODUCT_BUNDLE_IDENTIFIER: com.bestcast.app.dev
 
   ClipboardTextHelper:
     type: tool
     platform: macOS
     sources:
-      - Tinycast/Features/Clipboard/Service/ClipboardTextExtractor.swift
-      - Tinycast/Features/Clipboard/Service/ClipboardTextHelper.swift
+      - Bestcast/Features/Clipboard/Service/ClipboardTextExtractor.swift
+      - Bestcast/Features/Clipboard/Service/ClipboardTextHelper.swift
     settings:
       base:
         # release.yml passes PRODUCT_NAME on the xcodebuild line, which hits every target: without

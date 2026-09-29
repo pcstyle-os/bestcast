@@ -33,7 +33,7 @@ struct FrontmostAppTests {
             textEdit, "our non-activating panel holds focus over the app it covers")
         expect(
             FrontmostApplication.resolve(focused: own, workspace: own, own: own),
-            own, "Tinycast itself active: ours, which the palette then drops")
+            own, "Bestcast itself active: ours, which the palette then drops")
         expect(
             FrontmostApplication.resolve(focused: own, workspace: nil, own: own),
             own, "nothing else to fall back to")

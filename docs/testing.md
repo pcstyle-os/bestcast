@@ -1,6 +1,6 @@
 # Testing and verification
 
-How to check that a change holds up. Tinycast has no XCTest target and no UI tests: the automated half
+How to check that a change holds up. Bestcast has no XCTest target and no UI tests: the automated half
 is a set of standalone harnesses, and the manual half is the sweep at the bottom of this file.
 
 ## Definition of done
@@ -11,7 +11,7 @@ The mechanical bar, in one place so it cannot drift. All five pass before a chan
 | --- | --- |
 | The harnesses | `./Scripts/run-tests.sh` |
 | Lint | `./Scripts/lint.sh` |
-| Pure-layer purity | `grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Tinycast/Features/*/Model/` |
+| Pure-layer purity | `grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Bestcast/Features/*/Model/` |
 | A clean build | `xcodebuild … -configuration Debug CODE_SIGNING_ALLOWED=NO`, zero **new** warnings |
 | Docs still true | any doc your change made wrong, fixed in the same commit |
 
@@ -28,9 +28,9 @@ what you touched.
 ```
 
 The suite runs in parallel, `hw.ncpu` harnesses at a time, which is what takes it from about 140
-seconds to about 15. `TINYCAST_TEST_JOBS=1` forces it back to one at a time. Each result is numbered
+seconds to about 15. `BESTCAST_TEST_JOBS=1` forces it back to one at a time. Each result is numbered
 against the total and shows its run and compile time, a quiet stretch names the harnesses still running, and a harness that runs longer
-than `TINYCAST_TEST_TIMEOUT` seconds (default 300) is killed and reported as timed out. Parallelism is safe
+than `BESTCAST_TEST_TIMEOUT` seconds (default 300) is killed and reported as timed out. Parallelism is safe
 because each harness already roots its scratch state somewhere of its own — a UUID-suffixed
 `temporaryDirectory`, a `UserDefaults(suiteName:)`, or `NSPasteboard.withUniqueName()` — and a new
 harness must keep doing that rather than reach for a fixed path.
@@ -56,7 +56,7 @@ assertion, and it is the more important one.
 
 A harness also runs in your own login session against the real system, with no sandbox and no fixture
 world, so it must never mutate state the machine shares with the apps you use. `NSPasteboard.general`
-is the trap: a running Tinycast records every write to it as a genuine copy, so a fixture left there
+is the trap: a running Bestcast records every write to it as a genuine copy, so a fixture left there
 lands in clipboard history looking like something the user copied. `notes-editor-test` seeded one on
 every run from #232 onward by calling the native `copy:`/`cut:`/`paste:` actions; it now drives the
 `writeSelection(to:types:)` and `readSelection(from:)` primitives those actions delegate to, against
@@ -106,7 +106,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `hotkey-test` | `HotKeys/Model/DoubleTapModifier.swift`, `DoubleTapDetector.swift`, `GlobeTapDetector.swift`, `HotKeyBinding.swift`, `HotKeySpelling.swift`, `HyperKey.swift`, `HyperKeyRewriter.swift`, `HotKeyAction.swift`, `HotKeyRegistrationIssue.swift`, `Service/KeyShortcut.swift`, and the command→action mapping in `Launcher/Model/CommandID.swift` |
 | `fallback-test` | `Launcher/Model/Fallback.swift`, plus the `CommandID` and `Quicklink` ids it is built from |
 | `command-owner-test` | `SettingsTab.ownedCommands` and `CommandID.owner` in `Launcher/Model/CommandID.swift` — the pane ⌘K's Configure Command opens for a built-in |
-| `launcher-actions-test` | `Launcher/Model/LauncherDeepLink.swift` — the `tinycast://run/…` link Copy Deeplink writes and `AppCore` reads back — and `LauncherPins.swift`, the pinned-first order |
+| `launcher-actions-test` | `Launcher/Model/LauncherDeepLink.swift` — the `bestcast://run/…` link Copy Deeplink writes and `AppCore` reads back — and `LauncherPins.swift`, the pinned-first order |
 | `dictionary-test` | `Dictionary/Model/DictionaryEntry.swift`, `DictionaryMarkup.swift` — a real XHTML record and the plain-text fallback, read into page blocks |
 | `callout-test` | `DesignSystem/Theme.swift`, `HotKeys/UI/CalloutPlacement.swift` |
 | `system-action-test` | `SystemActions/Model/SystemAction.swift` |
@@ -139,7 +139,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `backup-archive-test` | all of `Backup/Model/`, plus `Backup/Service/BackupStaging.swift` |
 | `updates-test` | `Updates/Model/` — version precedence, channel filtering, install route, readiness |
 | `support-test` | `Support/Model/` — when the support reminder comes due, and a clock moved backwards |
-| `mcp-test` | `MCP/Model/` and `MCPSettingsStore` — JSON-RPC framing, handles, tool names, output flattening, trust, `@` addressing, handles reserved for integrations, the shape a vendor CLI is handed, and which servers Tinycast leaves to that CLI |
+| `mcp-test` | `MCP/Model/` and `MCPSettingsStore` — JSON-RPC framing, handles, tool names, output flattening, trust, `@` addressing, handles reserved for integrations, the shape a vendor CLI is handed, and which servers Bestcast leaves to that CLI |
 | `ai-tools-test` | `AI/Model/` built-in tools — catalog schemas, wire names, what a turn is offered, consent classification, argument checks, calendar spans, dialog text, file access, multi-handle `@` addressing and suggestions, and the loopback endpoint's HTTP and JSON-RPC |
 | `ext-tools-test` | `Extensions/Model/ExtensionToolPolicy.swift` — a manifest's tools, handles and wire names, `@`-scope, `ai.instructions`, when a call asks and what the dialog says, and the result text |
 | `mcp-stdio-test` | `MCP/Service/` against a stub server — handshake, listing, calling, and every way one can go away |
@@ -167,7 +167,7 @@ same commit with the reason in the message.
 The layering rule reduces to one grep, and it must return nothing:
 
 ```sh
-grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Tinycast/Features/*/Model/
+grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Bestcast/Features/*/Model/
 ```
 
 Beyond the imports, the injected-environment half is not mechanically checkable, so it is worth an eye
@@ -188,11 +188,11 @@ A clean build is part of the bar; nothing builds the app for you, so this is on 
 
 ```sh
 xcodegen generate                 # only after editing project.yml
-xcodebuild build -project Tinycast.xcodeproj -scheme Tinycast -configuration Debug \
+xcodebuild build -project Bestcast.xcodeproj -scheme Bestcast -configuration Debug \
   CODE_SIGNING_ALLOWED=NO
-xcodebuild build -project Tinycast.xcodeproj -scheme Tinycast -configuration Release \
+xcodebuild build -project Bestcast.xcodeproj -scheme Bestcast -configuration Release \
   CODE_SIGNING_ALLOWED=NO
-find ~/Library/Developer/Xcode/DerivedData -name "Tinycast*.app" -maxdepth 6 -print -quit
+find ~/Library/Developer/Xcode/DerivedData -name "Bestcast*.app" -maxdepth 6 -print -quit
 ```
 
 - Zero **new** warnings. Pre-existing ones are not your problem; new ones are.
@@ -219,7 +219,7 @@ search result that navigates and then sits there.
 
 ## Performance measurement
 
-`Platform/Signposts.swift` emits eight intervals on the `com.tinycast.perf` subsystem: `AppCore.start`,
+`Platform/Signposts.swift` emits eight intervals on the `com.bestcast.perf` subsystem: `AppCore.start`,
 `AppIndex.scan`, `AppIndex.rank`, `PaletteWindowController.show`, `UninstallScanner.discover` and
 `UninstallScanner.measure`, `FileSearchService.search`, and `Notes.search`. Open the Time Profiler or
 `os_signpost` instrument in Instruments and filter to that subsystem; nothing needs recompiling.
@@ -231,10 +231,10 @@ file resolves. Keep the entry's source list matching the command beside it.
 Run the real Spotlight-backed file-search benchmark separately from the deterministic harnesses:
 
 ```sh
-swiftc -O -swift-version 6 Tinycast/Platform/Signposts.swift \
-    Tinycast/Features/Launcher/Model/SearchRelevance.swift \
-    Tinycast/Features/FileSearch/Model/*.swift \
-    Tinycast/Features/FileSearch/Service/FileSearchService.swift \
+swiftc -O -swift-version 6 Bestcast/Platform/Signposts.swift \
+    Bestcast/Features/Launcher/Model/SearchRelevance.swift \
+    Bestcast/Features/FileSearch/Model/*.swift \
+    Bestcast/Features/FileSearch/Service/FileSearchService.swift \
     Tests/file-search-performance.swift -o /tmp/file-search-performance
 /tmp/file-search-performance
 ```
@@ -246,7 +246,7 @@ The calculator benchmark is deterministic — an injected clock, calendar and ra
 timing harness rather than an assertion one, and stays out of `run-tests.sh` for that reason:
 
 ```sh
-swiftc -O -swift-version 6 Tinycast/Features/Calculator/Model/*.swift \
+swiftc -O -swift-version 6 Bestcast/Features/Calculator/Model/*.swift \
     Tests/calc-performance.swift -o /tmp/calc-performance
 /tmp/calc-performance          # µs per query, by grammar
 /tmp/calc-performance --probe  # every answer as JSON, to diff two builds
@@ -264,9 +264,9 @@ the attachment path against the bounded reader it now delegates to. Compare thre
 per build with identical `-O` settings:
 
 ```sh
-swiftc -O -swift-version 6 Tinycast/Platform/PasteboardFiles.swift \
-    Tinycast/Features/Clipboard/Model/{ClipboardStore,ClipboardFilter,ClipboardFileKind,ColorValue,ColorFormat,ColorSpaces}.swift \
-    Tinycast/Features/Clipboard/Service/ClipboardManager.swift \
+swiftc -O -swift-version 6 Bestcast/Platform/PasteboardFiles.swift \
+    Bestcast/Features/Clipboard/Model/{ClipboardStore,ClipboardFilter,ClipboardFileKind,ColorValue,ColorFormat,ColorSpaces}.swift \
+    Bestcast/Features/Clipboard/Service/ClipboardManager.swift \
     Tests/clipboard-file-performance.swift -o /tmp/clipboard-file-performance
 /tmp/clipboard-file-performance
 ```
@@ -276,9 +276,9 @@ the loaded catalog, with process RSS and footprint as JSON; `--names` also lists
 missing from its own top five results:
 
 ```sh
-swiftc -O -swift-version 6 Tinycast/Features/Emoji/Model/{EmojiCatalog,EmojiData.generated}.swift \
-    Tinycast/Features/Emoji/Service/{EmojiIndex,FrequentEmojiStore}.swift \
-    Tinycast/Features/Launcher/Model/SearchRelevance.swift Tinycast/Platform/{AppPaths,Memo}.swift \
+swiftc -O -swift-version 6 Bestcast/Features/Emoji/Model/{EmojiCatalog,EmojiData.generated}.swift \
+    Bestcast/Features/Emoji/Service/{EmojiIndex,FrequentEmojiStore}.swift \
+    Bestcast/Features/Launcher/Model/SearchRelevance.swift Bestcast/Platform/{AppPaths,Memo}.swift \
     Tests/emoji-search-performance.swift -o /tmp/emoji-search-performance
 /tmp/emoji-search-performance --names
 ```
@@ -289,10 +289,10 @@ the end, middle and start, and a caret move between distant lines. The budget is
 middle) and 4 ms:
 
 ```sh
-N=Tinycast/Features/Notes
-swiftc -O -swift-version 6 Tinycast/Platform/{Signposts,Appearance,NotificationToken}.swift \
-    Tinycast/DesignSystem/{Theme,InterfaceMetrics}.swift \
-    Tinycast/Features/TextInjection/Service/InjectableTextView.swift \
+N=Bestcast/Features/Notes
+swiftc -O -swift-version 6 Bestcast/Platform/{Signposts,Appearance,NotificationToken}.swift \
+    Bestcast/DesignSystem/{Theme,InterfaceMetrics}.swift \
+    Bestcast/Features/TextInjection/Service/InjectableTextView.swift \
     $N/Model/{NoteDocument,NoteMarkdown,NoteMarkdownParser,NoteInlineScanner}.swift \
     $N/Model/{NoteEditPlan,NoteEditAction,NoteFormatting,NoteMarkdownEditing,NoteRevealPolicy}.swift \
     $N/UI/{NoteMarkdownTypography,NoteBlockDecoration,NoteMarkdownStyler,NoteMarkdownRenderer}.swift \
@@ -336,7 +336,7 @@ There is no UI test suite, so this is it. Run the core sweep for any change that
 run the scoped section for whatever feature you touched. Budget about five minutes plus three per
 section.
 
-Run against the **Debug channel** (`Tinycast Dev.app`, `com.tinycast.app.dev`). It has its own prefs,
+Run against the **Debug channel** (`Bestcast Dev.app`, `com.bestcast.app.dev`). It has its own prefs,
 caches, TCC grants and login item, so this cannot disturb an installed copy.
 
 ### Core
@@ -381,7 +381,7 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - Footer menus are about 30pt wider; their row hover keeps the shared 10pt menu-row corner
 - Tab toggles launcher ↔ clipboard; bare Backspace on an empty query backs out of a sub-screen
 - Launching an app focuses it; escaping the palette returns focus to the app you came from
-- Paste from clipboard history lands in that app, not in Tinycast
+- Paste from clipboard history lands in that app, not in Bestcast
 - No flash, flicker or reflow on open, and row metrics unchanged
 
 ### Clipboard
@@ -394,7 +394,7 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - With enough pins to fill the list, opening it — the first show after launch too — highlights the
   newest clip, centred with pins above; clearing a query or the filter lands there again
 - ⌃X deletes the selected entry and ⌃⇧X clears the history, from the list and from an open ⌘K menu
-- ⌃⇧X asks first, through Tinycast's own dialog; Cancel and Esc both leave every entry in place
+- ⌃⇧X asks first, through Bestcast's own dialog; Cancel and Esc both leave every entry in place
 - ↵ pastes into the previous app; ⌥↵ pastes without closing the palette
 - ⌃⌘↵ pastes as plain text: a text entry as typed, a file entry as its path rather than the file
 - Default action ▸ Paste as Plain Text: ↵ pastes plain, ⌃⌘↵ pastes, ⌘↵ still copies; an image
@@ -484,7 +484,7 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - A row's hotkey runs it with the palette closed; switching the feature off silences it
 - Unchecking a row hides it from search, and its hotkey still fires
 - Deleting a shortcut in Shortcuts frees its alias and hotkey on the next launcher open
-- A shortcut that fails shows Tinycast's dialog with the tool's error
+- A shortcut that fails shows Bestcast's dialog with the tool's error
 
 ### File Search
 
@@ -526,7 +526,7 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
   autosave — in the browse list; naming it replaces that, and clearing the name brings it back
 - Inline rename updates the Markdown filename without changing source, and starts from that filename
   even where the row shows a derived title; collisions receive a suffix
-- Delete confirms through Tinycast, moves the file to Trash, and selecting another note never loses an
+- Delete confirms through Bestcast, moves the file to Trash, and selecting another note never loses an
   unsaved edit
 - An existing `Floating Note.md` appears as an ordinary note without conversion
 - A note using every construct renders in Dark and Light: sized headings, emphasis, strikethrough,
@@ -592,7 +592,7 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - Dragging the title bar moves the window and dragging an edge resizes it; both survive relaunch
 - Clicking another app leaves the panel visible; Escape, Command-W, and the red light hide it
 - Command-Q does nothing anywhere; with Settings in front, Command-W closes Settings
-- Hiding restores the previous external app or Tinycast window
+- Hiding restores the previous external app or Bestcast window
 - Open Notes Folder opens Finder with the active Markdown file selected, or the folder with no note
 - Deleting every note closes the browse list and leaves one clean empty state with no character count;
   Command-N from there creates and selects one note
@@ -651,7 +651,7 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 - Adding or deleting an event in Calendar.app updates an open palette without a reopen
 - A meeting with no link is listed and searchable, and answers Open in Calendar rather than Join
 - Import a backup taken with Calendar on: it comes back **off**, and no calendar toggle travels
-- Calendar in Menu Bar on Disabled: the calendar item is gone and Tinycast's own item is unaffected;
+- Calendar in Menu Bar on Disabled: the calendar item is gone and Bestcast's own item is unaffected;
   turning `Show in menu bar` off leaves an enabled calendar item in place, and both off leaves neither
 - On Meeting Title with Show Upcoming Events at 5 minutes, the title and countdown appear at T-5 and
   step on the minute boundary, not on a keystroke
@@ -712,12 +712,12 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
 
 - Every pane renders and the sidebar switches without flicker
 - A feature switch takes effect in the launcher immediately; every setting survives relaunch
-- Export produces a `.tinycast`; import applies it and reports a per-category summary
+- Export produces a `.bestcast`; import applies it and reports a per-category summary
 - Untick a category on export, and the import picker greys that row out rather than offering it
 - Untick a category on **import** and confirm it did not arrive, while the ticked ones did
 - An image clip round-trips and still renders; the archive can then be deleted without breaking it
 - A file whose `manifest.json` `format` was hand-edited is refused **with a message naming it**
-- Cancelling the save panel leaves nothing in `~/Library/Caches/com.tinycast.app.dev/backup-staging/`
+- Cancelling the save panel leaves nothing in `~/Library/Caches/com.bestcast.app.dev/backup-staging/`
 - **`snippetsEnabled` is not in the exported file**, and importing does not enable snippets
 - Nothing in the extracted tree names a Keychain item, an extension, or an AI conversation
 
@@ -727,11 +727,11 @@ The realistic storage failure is a store that crashes on an absent file rather t
 Wipe the Dev channel and check that path directly:
 
 ```sh
-rm -rf ~/Library/Caches/com.tinycast.app.dev
-rm -rf "$HOME/Library/Application Support/com.tinycast.app.dev"
-rm -rf ~/.config/tinycast-dev
-defaults delete com.tinycast.app.dev 2>/dev/null || true
-tccutil reset Accessibility com.tinycast.app.dev 2>/dev/null || true
+rm -rf ~/Library/Caches/com.bestcast.app.dev
+rm -rf "$HOME/Library/Application Support/com.bestcast.app.dev"
+rm -rf ~/.config/bestcast-dev
+defaults delete com.bestcast.app.dev 2>/dev/null || true
+tccutil reset Accessibility com.bestcast.app.dev 2>/dev/null || true
 ```
 
 - Launches with every store directory absent — no crash, no hang; onboarding runs
@@ -741,5 +741,5 @@ tccutil reset Accessibility com.tinycast.app.dev 2>/dev/null || true
 - **Every setting shows its intended default.** Walk the panes: this is what catches a broken
   absence-versus-`false` read
 - Quit and relaunch: everything created above persisted
-- Nothing was written outside `com.tinycast.app.dev/`. Channel isolation is not negotiable — a Dev build
+- Nothing was written outside `com.bestcast.app.dev/`. Channel isolation is not negotiable — a Dev build
   writing into the stable app's directory is a defect even though the data is disposable

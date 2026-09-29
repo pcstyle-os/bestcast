@@ -1,6 +1,6 @@
 # Signing
 
-Tinycast is signed with a **stable self-signed identity** called `Tinycast Self-Signed`. Keeping the
+Bestcast is signed with a **stable self-signed identity** called `Bestcast Self-Signed`. Keeping the
 _same_ identity on every build is what makes macOS remember the Accessibility permission across
 rebuilds and updates — ad-hoc signing changes every build and macOS forgets the grant.
 
@@ -12,7 +12,7 @@ You create this identity **once**. The same identity is used for:
 - **local dev builds** — so Accessibility persists while you develop (the Xcode project signs with it), and
 - **CI releases** — exported into two GitHub secrets the release workflow imports.
 
-## 1. Create the `Tinycast Self-Signed` identity (once)
+## 1. Create the `Bestcast Self-Signed` identity (once)
 
 Run these in a terminal. They generate a self-signed code-signing certificate and import it into your
 login keychain:
@@ -21,7 +21,7 @@ login keychain:
 # Generate a self-signed code-signing cert (10-year, codeSigning use).
 openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
   -keyout /tmp/tc-key.pem -out /tmp/tc-cert.pem \
-  -subj "/CN=Tinycast Self-Signed" \
+  -subj "/CN=Bestcast Self-Signed" \
   -addext "basicConstraints=critical,CA:false" \
   -addext "keyUsage=critical,digitalSignature" \
   -addext "extendedKeyUsage=critical,codeSigning"
@@ -30,11 +30,11 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
 # algorithms matter on OpenSSL 3: `security` cannot verify its default AES/SHA-256 MAC.
 openssl pkcs12 -export -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
   -inkey /tmp/tc-key.pem -in /tmp/tc-cert.pem \
-  -name "Tinycast Self-Signed" -out /tmp/tc.p12 -passout pass:tinycast
+  -name "Bestcast Self-Signed" -out /tmp/tc.p12 -passout pass:bestcast
 
 # Import into the login keychain so codesign can use it without prompting.
 security import /tmp/tc.p12 -k ~/Library/Keychains/login.keychain-db \
-  -P tinycast -A -T /usr/bin/codesign
+  -P bestcast -A -T /usr/bin/codesign
 
 rm -f /tmp/tc-key.pem /tmp/tc-cert.pem /tmp/tc.p12
 ```
@@ -42,7 +42,7 @@ rm -f /tmp/tc-key.pem /tmp/tc-cert.pem /tmp/tc.p12
 Verify it's there:
 
 ```sh
-security find-identity -p codesigning | grep "Tinycast Self-Signed"
+security find-identity -p codesigning | grep "Bestcast Self-Signed"
 ```
 
 Now local builds (Xcode, VS Code F5, `xcodebuild`) sign with it, and you grant Accessibility once.
@@ -68,12 +68,12 @@ Then set the two secrets on the repo (via `gh`, authed as the repo owner, or pas
 UI under **Settings → Secrets and variables → Actions**):
 
 ```sh
-gh secret set SIGNING_P12_BASE64   --repo abue-ammar/tinycast < /tmp/signing.p12.base64
-gh secret set SIGNING_P12_PASSWORD --repo abue-ammar/tinycast --body "$P12_PASSWORD"
+gh secret set SIGNING_P12_BASE64   --repo pcstyle-os/bestcast < /tmp/signing.p12.base64
+gh secret set SIGNING_P12_PASSWORD --repo pcstyle-os/bestcast --body "$P12_PASSWORD"
 rm -f /tmp/signing.p12.base64   # holds your private key — delete it
 ```
 
-If you ever lose the secrets, just re-run this section — as long as the `Tinycast Self-Signed`
+If you ever lose the secrets, just re-run this section — as long as the `Bestcast Self-Signed`
 identity is still in your keychain, the exported identity is the same, so users are unaffected. If you
 lose the identity entirely, recreate it (step 1) and re-do this; existing users will re-grant
 Accessibility once on their next update, then it's stable again.
@@ -82,9 +82,9 @@ Accessibility once on their next update, then it's stable again.
 
 **Release only**, on both targets: `ENABLE_HARDENED_RUNTIME: YES`, which notarization requires. Debug
 must stay without it — hardened runtime turns on library validation, and Xcode's
-`Tinycast Dev.debug.dylib` is refused at launch because a self-signed identity carries no Team ID for
+`Bestcast Dev.debug.dylib` is refused at launch because a self-signed identity carries no Team ID for
 the loader to match. The flag is not part of the designated requirement, so turning it on costs no
-Accessibility grant. Each entitlement in `Tinycast/Tinycast.entitlements` earns its place:
+Accessibility grant. Each entitlement in `Bestcast/Bestcast.entitlements` earns its place:
 
 | Entitlement | Without it |
 | --- | --- |
@@ -92,7 +92,7 @@ Accessibility grant. Each entitlement in `Tinycast/Tinycast.entitlements` earns 
 | `com.apple.security.automation.apple-events` | Every Apple event is refused with `-1743` and no prompt — Get Info, the Finder selection an extension reads, and the System Events–driven system actions all die silently |
 | `com.apple.security.device.camera` | The camera prompt never appears and access resolves as denied |
 | `com.apple.security.device.audio-input` | The microphone prompt never appears, and dictation into AI resolves as denied |
-| `com.apple.security.personal-information.calendars` | `requestFullAccessToEvents()` returns `false` in milliseconds with no dialog, and Tinycast never appears under System Settings › Calendars |
+| `com.apple.security.personal-information.calendars` | `requestFullAccessToEvents()` returns `false` in milliseconds with no dialog, and Bestcast never appears under System Settings › Calendars |
 
 **A usage string is not enough under the hardened runtime.** `tccd` checks the matching entitlement
 *before* it prompts, and without it logs "requires entitlement … but it is missing" and denies on the
@@ -101,8 +101,8 @@ arrived keeps working, since `tccd` does not re-check it, which is why this surf
 installs. Adding a protected resource therefore means adding its usage string *and* its entitlement.
 
 `RESOURCE_ENTITLEMENTS` in `Scripts/verify-signature.sh` maps every protected resource's usage string
-to its entitlement, including resources Tinycast does not use. That grants nothing — only
-`Tinycast.entitlements` does, and a row whose usage string `Info.plist` doesn't declare is skipped. It
+to its entitlement, including resources Bestcast does not use. That grants nothing — only
+`Bestcast.entitlements` does, and a row whose usage string `Info.plist` doesn't declare is skipped. It
 is there so a future feature that adds the usage string but forgets the entitlement fails the release
 instead of shipping a prompt that can never appear.
 
@@ -118,8 +118,8 @@ missing its entitlement ships a permission that can never be granted.
 
 ## The Developer ID migration
 
-`BundleSignature` already accepts a bundle signed by the Tinycast team under Apple's Developer ID
-chain, even though releases are still signed with `Tinycast Self-Signed`. That is deliberate and
+`BundleSignature` already accepts a bundle signed by the Bestcast team under Apple's Developer ID
+chain, even though releases are still signed with `Bestcast Self-Signed`. That is deliberate and
 staged: the updater compares signatures before it installs, so the code that trusts the new identity
 has to reach users *before* the first build carrying it. Until the switch it also accepts the running
 app's own leaf, which is the only thing a copy installed earlier knows how to check.
@@ -131,10 +131,10 @@ Mac would refuse a bundle the chain already proves is ours.
 
 **The Developer ID identity stays a CI-only fact.** When the switch happens it is named on the
 release workflow's `xcodebuild` line and nowhere else: `project.yml` keeps signing with
-`Tinycast Self-Signed`, so a contributor keeps building with the one they created in §1 — same name,
+`Bestcast Self-Signed`, so a contributor keeps building with the one they created in §1 — same name,
 their own key, never shared. Nothing about local development changes.
 
-**Keep `Tinycast Self-Signed` in the login keychain after the switch.** It is the only way to ship a
+**Keep `Bestcast Self-Signed` in the login keychain after the switch.** It is the only way to ship a
 build that a copy predating the migration could still install.
 
 ## Quarantine (separate from signing)

@@ -345,8 +345,8 @@ struct AIToolsTests {
             "an unknown @ followed by words is text")
 
         let sources = [
-            ChatToolSource(handle: "clipboard", title: "Clipboard", symbol: "", kind: .tinycast),
-            ChatToolSource(handle: "calendar", title: "Calendar", symbol: "", kind: .tinycast),
+            ChatToolSource(handle: "clipboard", title: "Clipboard", symbol: "", kind: .bestcast),
+            ChatToolSource(handle: "calendar", title: "Calendar", symbol: "", kind: .bestcast),
             ChatToolSource(handle: "gh", title: "Calculator Hub", symbol: "", kind: .mcpServer)
         ]
         expect(
@@ -419,7 +419,7 @@ struct AIToolsTests {
         let fallback = LoopbackMCP.initializeResult(version: "1999-01-01", title: "Clipboard")
         expect(
             fallback.objectValue?["protocolVersion"]?.stringValue == LoopbackMCP.version,
-            "an unknown one is answered with Tinycast's own")
+            "an unknown one is answered with Bestcast's own")
 
         let listed = LoopbackMCP.toolList(BuiltInToolCatalog.tools(for: .clipboard).map(\.loopbackTool))
         let entries = listed.objectValue?["tools"]?.arrayValue ?? []

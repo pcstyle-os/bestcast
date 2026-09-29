@@ -167,7 +167,7 @@ struct AIChatTests {
     /// Created live, stored and reloaded: the order has to come through all three.
     static func arrivalOrderSurvivesTheReplyAndReload() async {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tinycast-ai-order-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("bestcast-ai-order-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let chat = AIChatState(history: ChatHistoryStore(directory: directory))
@@ -645,7 +645,7 @@ struct AIChatTests {
 
     static func historyRoundTripsAndRepairsInterruptedReplies() {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tinycast-ai-chat-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("bestcast-ai-chat-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let id = UUID()
@@ -695,7 +695,7 @@ struct AIChatTests {
 
     static func savesRewriteOnlyTheStoredTail() {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tinycast-ai-tail-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("bestcast-ai-tail-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let id = UUID()
@@ -759,7 +759,7 @@ struct AIChatTests {
 
     static func crashRepairSurvivesTailSaves() {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tinycast-ai-repair-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("bestcast-ai-repair-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let id = UUID()
@@ -793,7 +793,7 @@ struct AIChatTests {
 
     static func retentionPrunesByAgeAndCascades() {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tinycast-ai-prune-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("bestcast-ai-prune-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = ChatHistoryStore(directory: directory)
 
@@ -1002,7 +1002,7 @@ struct AIChatTests {
     /// Leaving a conversation drops its staged images and disowns a decode in flight.
     static func leavingAConversationDropsItsStagedImages() {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tinycast-ai-staging-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("bestcast-ai-staging-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let store = ChatHistoryStore(directory: directory)
@@ -1079,7 +1079,7 @@ struct AIChatTests {
 extension AIChatTests {
     static func temporaryStore(_ name: String) -> (ChatHistoryStore, URL) {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tinycast-ai-\(name)-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("bestcast-ai-\(name)-\(UUID().uuidString)", isDirectory: true)
         return (ChatHistoryStore(directory: directory), directory)
     }
 
@@ -1807,7 +1807,7 @@ final class StalledProvider: AIProvider, @unchecked Sendable {
 extension AIChatTests {
     static func libraryFolder(_ name: String) -> URL {
         let folder = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tinycast-library-\(name)-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("bestcast-library-\(name)-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let files = [
             "falcon.md": "Project Falcon notes. The launch code for Falcon is seven four two. "

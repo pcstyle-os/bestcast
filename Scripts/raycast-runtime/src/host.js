@@ -1,8 +1,8 @@
-// The single seam between the JS runtime and Swift. Swift installs `__tinycastHost` on the global
+// The single seam between the JS runtime and Swift. Swift installs `__bestcastHost` on the global
 // before evaluating the bundle; everything else in here goes through these helpers.
 
-const raw = globalThis.__tinycastHost;
-if (!raw) throw new Error("__tinycastHost missing — the runtime was evaluated outside Tinycast.");
+const raw = globalThis.__bestcastHost;
+if (!raw) throw new Error("__bestcastHost missing — the runtime was evaluated outside Bestcast.");
 
 export const hostRaw = raw;
 
@@ -10,7 +10,7 @@ let nextCallId = 1;
 const pending = new Map();
 
 /// Every Raycast API that touches the system is an async host call: Swift answers later via
-/// `__tinycast.settle`, so the JS thread never blocks waiting on the main actor.
+/// `__bestcast.settle`, so the JS thread never blocks waiting on the main actor.
 export function hostCall(api, method, args) {
   return new Promise((resolve, reject) => {
     const callId = nextCallId++;

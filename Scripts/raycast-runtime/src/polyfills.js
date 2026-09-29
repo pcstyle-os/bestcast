@@ -114,10 +114,10 @@ export function reportUncaught(error) {
 // Backed by URLSession on the Swift side. Bodies cross the bridge base64-encoded so binary
 // responses survive; text/JSON go through the same path.
 
-class TinycastHeaders {
+class BestcastHeaders {
   constructor(init) {
     this._map = new Map();
-    if (init instanceof TinycastHeaders) {
+    if (init instanceof BestcastHeaders) {
       for (const [key, value] of init._map) this._map.set(key, value);
     } else if (Array.isArray(init)) {
       for (const [key, value] of init) this.append(key, value);
@@ -168,7 +168,7 @@ class TinycastHeaders {
 
 const EMPTY_BYTES = new Uint8Array(0);
 
-class TinycastBlob {
+class BestcastBlob {
   constructor(parts = [], options = {}) {
     this._bytes = concatBytes((parts ?? []).map(blobPartToBytes));
     const type = String(options?.type ?? "");
@@ -195,12 +195,12 @@ class TinycastBlob {
   slice(start = 0, end = this.size, contentType = "") {
     const from = normalizeBlobIndex(start, this.size);
     const to = normalizeBlobIndex(end, this.size);
-    return new TinycastBlob([this._bytes.subarray(Math.min(from, to), to)], { type: contentType });
+    return new BestcastBlob([this._bytes.subarray(Math.min(from, to), to)], { type: contentType });
   }
 }
 
 function blobPartToBytes(part) {
-  if (part instanceof TinycastBlob) return part._bytes;
+  if (part instanceof BestcastBlob) return part._bytes;
   if (typeof part === "string") return utf8Encode(part);
   if (part instanceof ArrayBuffer) return new Uint8Array(part);
   if (ArrayBuffer.isView(part)) return new Uint8Array(part.buffer, part.byteOffset, part.byteLength);
@@ -225,7 +225,7 @@ function normalizeBlobIndex(value, size) {
   return Math.min(Math.max(index < 0 ? size + Math.ceil(index) : Math.floor(index), 0), size);
 }
 
-class TinycastFile extends TinycastBlob {
+class BestcastFile extends BestcastBlob {
   constructor(parts = [], name = "", options = {}) {
     super(parts, options);
     this.name = String(name);
@@ -233,11 +233,11 @@ class TinycastFile extends TinycastBlob {
   }
 }
 
-class TinycastFormData {
+class BestcastFormData {
   constructor() {
     this._entries = [];
     // Header and body must carry the same boundary, so it lives on the instance, not the encoder.
-    this._boundary = `----TinycastFormBoundary${Math.random().toString(36).slice(2, 18)}`;
+    this._boundary = `----BestcastFormBoundary${Math.random().toString(36).slice(2, 18)}`;
   }
   append(name, value, filename) {
     this._entries.push([String(name), formDataValue(value, filename)]);
@@ -280,21 +280,21 @@ class TinycastFormData {
 
 // A Blob entry becomes a File named "blob" unless the caller passed a filename, per the spec.
 function formDataValue(value, filename) {
-  if (!(value instanceof TinycastBlob)) return String(value);
-  if (value instanceof TinycastFile && filename === undefined) return value;
-  return new TinycastFile([value], filename ?? "blob", { type: value.type });
+  if (!(value instanceof BestcastBlob)) return String(value);
+  if (value instanceof BestcastFile && filename === undefined) return value;
+  return new BestcastFile([value], filename ?? "blob", { type: value.type });
 }
 
 function formDataToBytes(form) {
   const chunks = [];
   for (const [name, value] of form._entries) {
     const disposition =
-      value instanceof TinycastBlob
+      value instanceof BestcastBlob
         ? `; name="${escapeFormName(name)}"; filename="${escapeFormName(value.name)}"`
         : `; name="${escapeFormName(name)}"`;
-    const type = value instanceof TinycastBlob ? `Content-Type: ${value.type || "application/octet-stream"}\r\n` : "";
+    const type = value instanceof BestcastBlob ? `Content-Type: ${value.type || "application/octet-stream"}\r\n` : "";
     chunks.push(utf8Encode(`--${form._boundary}\r\nContent-Disposition: form-data${disposition}\r\n${type}\r\n`));
-    chunks.push(value instanceof TinycastBlob ? value._bytes : utf8Encode(value));
+    chunks.push(value instanceof BestcastBlob ? value._bytes : utf8Encode(value));
     chunks.push(utf8Encode("\r\n"));
   }
   chunks.push(utf8Encode(`--${form._boundary}--\r\n`));
@@ -305,16 +305,16 @@ function escapeFormName(value) {
   return String(value).replace(/\n/g, "%0A").replace(/\r/g, "%0D").replace(/"/g, "%22");
 }
 
-if (!g.Blob) g.Blob = TinycastBlob;
-if (!g.File) g.File = TinycastFile;
-if (!g.FormData) g.FormData = TinycastFormData;
+if (!g.Blob) g.Blob = BestcastBlob;
+if (!g.File) g.File = BestcastFile;
+if (!g.FormData) g.FormData = BestcastFormData;
 
-class TinycastResponse {
+class BestcastResponse {
   // Spec shape: axios and friends construct a Response at module scope to probe the platform.
   constructor(body = null, init = {}, url = "") {
     this.status = init.status ?? 200;
     this.statusText = init.statusText ?? "";
-    this.headers = new TinycastHeaders(init.headers);
+    this.headers = new BestcastHeaders(init.headers);
     this.url = url;
     this.ok = this.status >= 200 && this.status < 300;
     this.redirected = false;
@@ -333,7 +333,7 @@ class TinycastResponse {
   }
   clone() {
     const { status, statusText, headers } = this;
-    return new TinycastResponse(this._bytes ?? this._stream, { status, statusText, headers }, this.url);
+    return new BestcastResponse(this._bytes ?? this._stream, { status, statusText, headers }, this.url);
   }
   async arrayBuffer() {
     this.bodyUsed = true;
@@ -354,21 +354,21 @@ class TinycastResponse {
     return JSON.parse(await this.text());
   }
   async blob() {
-    return new TinycastBlob([await this.bytes()], { type: this.headers.get("content-type") ?? "" });
+    return new BestcastBlob([await this.bytes()], { type: this.headers.get("content-type") ?? "" });
   }
 }
 
-class TinycastRequest {
+class BestcastRequest {
   constructor(input, init = {}) {
-    if (input instanceof TinycastRequest) {
+    if (input instanceof BestcastRequest) {
       this.url = input.url;
       this.method = init.method || input.method;
-      this.headers = new TinycastHeaders(init.headers || input.headers);
+      this.headers = new BestcastHeaders(init.headers || input.headers);
       this.body = init.body !== undefined ? init.body : input.body;
     } else {
       this.url = String(input);
       this.method = (init.method || "GET").toUpperCase();
-      this.headers = new TinycastHeaders(init.headers);
+      this.headers = new BestcastHeaders(init.headers);
       this.body = init.body;
     }
     const implied = bodyContentType(this.body);
@@ -377,8 +377,8 @@ class TinycastRequest {
   }
 }
 
-async function tinycastFetch(input, init = {}) {
-  const request = input instanceof TinycastRequest ? input : new TinycastRequest(input, init);
+async function bestcastFetch(input, init = {}) {
+  const request = input instanceof BestcastRequest ? input : new BestcastRequest(input, init);
   const signal = init.signal || request.signal;
   if (signal?.aborted) throw abortError();
 
@@ -391,7 +391,7 @@ async function tinycastFetch(input, init = {}) {
     },
   ]);
   if (signal?.aborted) throw abortError();
-  return new TinycastResponse(
+  return new BestcastResponse(
     base64ToBytes(raw.bodyBase64 || ""),
     { status: raw.status, statusText: raw.statusText, headers: raw.headers },
     raw.url || "",
@@ -399,14 +399,14 @@ async function tinycastFetch(input, init = {}) {
 }
 
 // gaxios builds every error with `instanceof DOMException`, so a non-2xx response threw without it.
-class TinycastDOMException extends Error {
+class BestcastDOMException extends Error {
   constructor(message = "", name = "Error") {
     super(String(message));
     this.name = String(name);
   }
 }
 
-if (!g.DOMException) g.DOMException = TinycastDOMException;
+if (!g.DOMException) g.DOMException = BestcastDOMException;
 
 function abortError() {
   const error = new Error("The operation was aborted.");
@@ -424,8 +424,8 @@ function timeoutError() {
 function bodyToBytes(body) {
   if (body === undefined || body === null) return null;
   if (typeof body === "string") return utf8Encode(body);
-  if (body instanceof TinycastBlob) return body._bytes;
-  if (body instanceof TinycastFormData) return formDataToBytes(body);
+  if (body instanceof BestcastBlob) return body._bytes;
+  if (body instanceof BestcastFormData) return formDataToBytes(body);
   if (body instanceof Uint8Array) return body;
   if (body instanceof ArrayBuffer) return new Uint8Array(body);
   if (ArrayBuffer.isView(body)) return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
@@ -437,8 +437,8 @@ function bodyToBytes(body) {
 function bodyContentType(body) {
   if (typeof body === "string") return "text/plain;charset=UTF-8";
   if (body instanceof URLSearchParams) return "application/x-www-form-urlencoded;charset=UTF-8";
-  if (body instanceof TinycastFormData) return `multipart/form-data; boundary=${body._boundary}`;
-  if (body instanceof TinycastBlob) return body.type || null;
+  if (body instanceof BestcastFormData) return `multipart/form-data; boundary=${body._boundary}`;
+  if (body instanceof BestcastBlob) return body.type || null;
   return null;
 }
 
@@ -454,10 +454,10 @@ if (!g.ReadableStream) {
 }
 
 if (!g.fetch) {
-  g.fetch = tinycastFetch;
-  g.Headers = TinycastHeaders;
-  g.Response = TinycastResponse;
-  g.Request = TinycastRequest;
+  g.fetch = bestcastFetch;
+  g.Headers = BestcastHeaders;
+  g.Response = BestcastResponse;
+  g.Request = BestcastRequest;
 }
 
 // ─── AbortController ────────────────────────────────────────────────
@@ -536,7 +536,7 @@ if (!g.AbortController) {
 // ─── Event / EventTarget / MessageChannel ───────────────────────────
 // WebCore APIs, like TextEncoder: undici extends Event and EventTarget at module scope.
 
-class TinycastEvent {
+class BestcastEvent {
   constructor(type, init = {}) {
     if (arguments.length === 0) throw new TypeError("Event constructor requires a type argument.");
     this.type = String(type);
@@ -571,7 +571,7 @@ function listenersOf(target, type) {
   return list;
 }
 
-class TinycastEventTarget {
+class BestcastEventTarget {
   addEventListener(type, callback, options) {
     if (callback == null) return;
     const { capture = false, once = false, signal } = typeof options === "boolean" ? { capture: options } : (options ?? {});
@@ -590,7 +590,7 @@ class TinycastEventTarget {
     list.splice(index, 1);
   }
   dispatchEvent(event) {
-    if (!(event instanceof TinycastEvent)) throw new TypeError("dispatchEvent requires an Event.");
+    if (!(event instanceof BestcastEvent)) throw new TypeError("dispatchEvent requires an Event.");
     event.target = this;
     event.currentTarget = this;
     event.eventPhase = 2;
@@ -611,7 +611,7 @@ class TinycastEventTarget {
   }
 }
 
-class TinycastMessageEvent extends TinycastEvent {
+class BestcastMessageEvent extends BestcastEvent {
   constructor(data) {
     super("message");
     this.data = data;
@@ -620,7 +620,7 @@ class TinycastMessageEvent extends TinycastEvent {
 }
 
 // Node's port starts on its first "message" listener, not only on `start()` as a browser's does.
-class TinycastMessagePort extends TinycastEventTarget {
+class BestcastMessagePort extends BestcastEventTarget {
   _peer = null;
   _queue = [];
   _started = false;
@@ -659,27 +659,27 @@ class TinycastMessagePort extends TinycastEventTarget {
   }
   _schedule(data) {
     setTimeout(() => {
-      if (!this._closed) this.dispatchEvent(new TinycastMessageEvent(data));
+      if (!this._closed) this.dispatchEvent(new BestcastMessageEvent(data));
     }, 0);
   }
 }
 
-class TinycastMessageChannel {
+class BestcastMessageChannel {
   constructor() {
-    this.port1 = new TinycastMessagePort();
-    this.port2 = new TinycastMessagePort();
+    this.port1 = new BestcastMessagePort();
+    this.port2 = new BestcastMessagePort();
     this.port1._peer = this.port2;
     this.port2._peer = this.port1;
   }
 }
 
 if (!g.EventTarget) {
-  g.Event = TinycastEvent;
-  g.EventTarget = TinycastEventTarget;
+  g.Event = BestcastEvent;
+  g.EventTarget = BestcastEventTarget;
 }
 if (!g.MessageChannel) {
-  g.MessagePort = TinycastMessagePort;
-  g.MessageChannel = TinycastMessageChannel;
+  g.MessagePort = BestcastMessagePort;
+  g.MessageChannel = BestcastMessageChannel;
 }
 
 // ─── Text encoding / base64 ─────────────────────────────────────────

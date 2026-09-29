@@ -77,7 +77,7 @@ struct MCPTests {
             case .request(let id, let method) = MCPProtocol.parse(
                 Data(#"{"jsonrpc":"2.0","id":"a1","method":"sampling/createMessage"}"#.utf8))
         else {
-            expect(false, "a method with an id is a request Tinycast must answer")
+            expect(false, "a method with an id is a request Bestcast must answer")
             return
         }
         expect(
@@ -259,7 +259,7 @@ struct MCPTests {
                 == .url(
                     "https://mcp.linear.app/mcp", headerName: "Authorization",
                     headerValue: "Bearer tok-9"),
-            "an OAuth server lends the session's token as the header Tinycast itself would send")
+            "an OAuth server lends the session's token as the header Bestcast itself would send")
         expect(
             remote.toolServer(headerValue: "", environment: [:], bearerToken: nil) == nil,
             "and an OAuth server nobody is signed into is not offered at all")
@@ -316,7 +316,7 @@ struct MCPTests {
             "a server with no command is nothing a CLI could start")
     }
 
-    /// Codex and Claude start their own copy of a local server; Tinycast's would be the second.
+    /// Codex and Claude start their own copy of a local server; Bestcast's would be the second.
     static func onlyOneCopyOfALocalServerRuns() {
         let local = MCPServer(
             name: "Files", slug: "files",
@@ -325,13 +325,13 @@ struct MCPTests {
             name: "Linear", slug: "linear",
             transport: .http(url: "https://mcp.linear.app/mcp", headerName: "Authorization"))
         expect(
-            local.runsInTinycast(whileCLIRouteSelected: false),
-            "on an API route Tinycast runs a local server, since it is the one calling it")
+            local.runsInBestcast(whileCLIRouteSelected: false),
+            "on an API route Bestcast runs a local server, since it is the one calling it")
         expect(
-            !local.runsInTinycast(whileCLIRouteSelected: true),
+            !local.runsInBestcast(whileCLIRouteSelected: true),
             "on Codex or Claude it leaves the local server to the CLI's own copy")
         expect(
-            remote.runsInTinycast(whileCLIRouteSelected: true),
+            remote.runsInBestcast(whileCLIRouteSelected: true),
             "while a remote one stays connected: a session, no process, and a live status row")
     }
 }

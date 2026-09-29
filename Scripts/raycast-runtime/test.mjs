@@ -26,9 +26,9 @@ import * as fs from "node:fs";
 import * as zlib from "node:zlib";
 
 const runtimePath = [
-  resolve("Tinycast/Resources/RaycastRuntime.generated.js"),
-  resolve("../../Tinycast/Resources/RaycastRuntime.generated.js"),
-  fileURLToPath(new URL("../../Tinycast/Resources/RaycastRuntime.generated.js", import.meta.url)),
+  resolve("Bestcast/Resources/RaycastRuntime.generated.js"),
+  resolve("../../Bestcast/Resources/RaycastRuntime.generated.js"),
+  fileURLToPath(new URL("../../Bestcast/Resources/RaycastRuntime.generated.js", import.meta.url)),
 ].find(existsSync);
 
 const runtime = readFileSync(runtimePath, "utf8");
@@ -63,7 +63,7 @@ export function createHarness({ onRender, onFail, verbose = false, stubs = {} } 
     },
     fieldCommand() {},
     startTimer(id, ms, repeats) {
-      const fire = () => runInContext(`__tinycast.fireTimer(${JSON.stringify(id)})`, context);
+      const fire = () => runInContext(`__bestcast.fireTimer(${JSON.stringify(id)})`, context);
       timers.set(id, repeats ? setInterval(fire, Math.max(ms, 1)) : setTimeout(fire, ms));
     },
     clearTimer(id) {
@@ -96,14 +96,14 @@ export function createHarness({ onRender, onFail, verbose = false, stubs = {} } 
 
   function settle(callId, ok, value) {
     runInContext(
-      `__tinycast.settle(${JSON.stringify(String(callId))}, ${ok}, ${JSON.stringify(value === undefined ? "" : JSON.stringify(value))})`,
+      `__bestcast.settle(${JSON.stringify(String(callId))}, ${ok}, ${JSON.stringify(value === undefined ? "" : JSON.stringify(value))})`,
       context,
     );
   }
 
-  context.__tinycastHost = host;
+  context.__bestcastHost = host;
   // Mirrors what Swift installs: compile the extension's CJS body in global scope.
-  context.__tinycastCompile = (code, filename) =>
+  context.__bestcastCompile = (code, filename) =>
     runInContext(
       `(function (exports, require, module, __filename, __dirname) {\n${code}\n})`,
       context,
@@ -119,34 +119,34 @@ export function createHarness({ onRender, onFail, verbose = false, stubs = {} } 
       return runInContext(expression, context);
     },
     boot(config) {
-      return runInContext(`__tinycast.boot(${JSON.stringify(JSON.stringify(config))})`, context);
+      return runInContext(`__bestcast.boot(${JSON.stringify(JSON.stringify(config))})`, context);
     },
     start(sessionId, code, filename, dirname, mode, ctx) {
       return runInContext(
-        `__tinycast.start(${JSON.stringify(sessionId)}, ${JSON.stringify(code)}, ${JSON.stringify(filename)}, ${JSON.stringify(dirname)}, ${JSON.stringify(mode)}, ${JSON.stringify(JSON.stringify(ctx))})`,
+        `__bestcast.start(${JSON.stringify(sessionId)}, ${JSON.stringify(code)}, ${JSON.stringify(filename)}, ${JSON.stringify(dirname)}, ${JSON.stringify(mode)}, ${JSON.stringify(JSON.stringify(ctx))})`,
         context,
       );
     },
     loadTool(sessionId, code, filename, dirname, ctx) {
       return runInContext(
-        `__tinycast.loadTool(${JSON.stringify(sessionId)}, ${JSON.stringify(code)}, ${JSON.stringify(filename)}, ${JSON.stringify(dirname)}, ${JSON.stringify(JSON.stringify(ctx))})`,
+        `__bestcast.loadTool(${JSON.stringify(sessionId)}, ${JSON.stringify(code)}, ${JSON.stringify(filename)}, ${JSON.stringify(dirname)}, ${JSON.stringify(JSON.stringify(ctx))})`,
         context,
       );
     },
     callTool(sessionId, member, input) {
       return runInContext(
-        `__tinycast.callTool(${JSON.stringify(sessionId)}, ${JSON.stringify(member)}, ${JSON.stringify(JSON.stringify(input))})`,
+        `__bestcast.callTool(${JSON.stringify(sessionId)}, ${JSON.stringify(member)}, ${JSON.stringify(JSON.stringify(input))})`,
         context,
       );
     },
     dispatch(sessionId, handlerId, args = []) {
       return runInContext(
-        `__tinycast.dispatch(${JSON.stringify(sessionId)}, ${JSON.stringify(handlerId)}, ${JSON.stringify(JSON.stringify(args))})`,
+        `__bestcast.dispatch(${JSON.stringify(sessionId)}, ${JSON.stringify(handlerId)}, ${JSON.stringify(JSON.stringify(args))})`,
         context,
       );
     },
     stop(sessionId) {
-      runInContext(`__tinycast.stop(${JSON.stringify(sessionId)})`, context);
+      runInContext(`__bestcast.stop(${JSON.stringify(sessionId)})`, context);
       for (const id of [...timers.keys()]) host.clearTimer(id);
     },
   };

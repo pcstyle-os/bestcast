@@ -60,7 +60,7 @@ System Settings panes use `boundPaneBundleIDs`; custom commands, quicklinks, win
 and custom window sizes use their stable UUIDs in `boundCustomCommandIDs`, `boundQuicklinkIDs`,
 `boundWindowLayoutIDs`, `boundWindowRoomIDs` and `boundCustomWindowSizeIDs`. Those five are the per-item case — unlike a fixed catalog, there is no `allCases` to walk — so each needs an index for `start()`
 to re-register from
-and to prune bindings whose record was deleted while Tinycast wasn't running. That prune is why
+and to prune bindings whose record was deleted while Bestcast wasn't running. That prune is why
 `QuicklinkStore` loads at launch even when the feature is off
 (see [quicklinks.md](quicklinks.md#hotkeys)).
 Apple Shortcuts keep the same kind of index in `boundAppleShortcutIDs`, pruned not at launch but after
@@ -172,7 +172,7 @@ order instead of racing as independent detached tasks and leaving the wrong fina
 
 Because the remap is asynchronous, there is a fallback for the window before it takes hold: the key
 still arrives as Caps Lock, so the tap rides the modifier path instead. The LED toggles during that
-window — that is un-remapped HID behaviour, not something Tinycast can stop.
+window — that is un-remapped HID behaviour, not something Bestcast can stop.
 
 Once remapped, Caps Lock arrives as **keyDown/keyUp** rather than `flagsChanged`. Both ends are
 converted into Left Control `flagsChanged` transitions, so everything downstream sees the Hyper chord
@@ -213,15 +213,15 @@ bits** (`NX_DEVICE…KEYMASK`, from `IOLLEvent.h`). Some consumers distinguish s
 flags do not always read as fully pressed. The Hyper key's own residue is scrubbed in the same pass:
 Caps Lock's alpha-shift bit, or — for a key modifier outside the Hyper set — its generic mask and both
 device bits. Events the tap posts carry a `"TYCT"` marker in `.eventSourceUserData`, the same FourCC
-`HotKeyCenter` uses, so the tap never reacts to its own synthetics. Events the rest of Tinycast
-posts — a paste's ⌘V or ⌘C, a snippet's backspaces and typed text — carry `Paster.tinycastEventTag`
+`HotKeyCenter` uses, so the tap never reacts to its own synthetics. Events the rest of Bestcast
+posts — a paste's ⌘V or ⌘C, a snippet's backspaces and typed text — carry `Paster.bestcastEventTag`
 and pass through untouched as well: each sets its own flags, and a held Hyper would otherwise turn
 ⌘V into ⌃⌥⇧⌘V. Another process's synthetic events are rewritten like real ones while Hyper is held:
 a dictation or autocomplete tool's phrase typed under a held Hyper arrives as chords, and counts as a
 combo, so the release fires no Quick Press.
 
 **The two tags stay separate on purpose.** The snippet keyword listener skips only
-`Paster.tinycastEventTag`, which marks delivery Tinycast performs on its own. A Quick Press Escape is
+`Paster.bestcastEventTag`, which marks delivery Bestcast performs on its own. A Quick Press Escape is
 the reader's own Escape by other means, so under `"TYCT"` it resets the keyword buffer and cancels a
 pending automatic expansion exactly as the physical key would; under the shared tag, `ab`⎋`c` would
 expand an `abc` keyword. `snippets-test` pins that difference.
@@ -260,7 +260,7 @@ A modifying tap holds each keystroke until its callback answers, system-wide. On
 any main-actor stall — a heavy view update, a synchronous IO path — therefore delayed every key the
 reader typed in any app while a Hyper key was configured, and a long enough stall got the tap disabled
 by timeout. So `HyperKeyTap` creates the port on main and hands its run loop source to a dedicated
-`Thread` (`com.tinycast.hyper-key-tap`, user-interactive QoS) that runs its own `CFRunLoop`. It is a
+`Thread` (`com.bestcast.hyper-key-tap`, user-interactive QoS) that runs its own `CFRunLoop`. It is a
 thread, not an actor: the callback shares two things with the main actor, each behind a `Mutex` — the
 `HyperKeyRewriter`, locked only for the pure decision, and the tap's CF handles, which both sides
 enable, query and tear down through thread-safe tap calls. Settings reach it as a whole
@@ -322,6 +322,6 @@ shape as the modifier-only Accessibility warning. Its tooltip is the reason; cli
 
 A retry re-reads the system shortcuts and registers again. It runs on a click, whenever a recorder
 for a failing action appears (opening Settings retries it), and implicitly on every re-record, since
-`setBinding` re-registers. Success is not proof the chord reaches Tinycast: an app that registered
+`setBinding` re-registers. Success is not proof the chord reaches Bestcast: an app that registered
 the same chord *non*-exclusively leaves Carbon nothing to refuse, and which of the two receives it is
 up to macOS, so quitting the other app is still the dependable fix.

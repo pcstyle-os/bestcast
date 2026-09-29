@@ -30,13 +30,13 @@ selectable Markdown renderer with AI Chat.
   backups — an import must never arm it.
 - **One funnel, whichever way an action started.** A shortcut and a launcher row both land on
   `QuickActionCoordinator.run(_:)`, which reads `paletteCoordinator.targetApp` **before** hiding the
-  palette — once the palette is gone, the frontmost app is Tinycast, and the action would read its
+  palette — once the palette is gone, the frontmost app is Bestcast, and the action would read its
   own window. Hiding there rather than at each caller is what keeps the two paths identical.
 - **Enabling is consent, and it is the only place Accessibility is requested.** The toggle confirms
   through `DialogController` first and then calls `Permissions.ensureAccessibility()`, the pattern
   `SnippetCoordinator.setSnippetsEnabled` established. Everything else — a shortcut press, a
   delivery — uses `isAccessibilityTrusted()` and degrades to a HUD.
-- **Tinycast is never an event target.** `QuickActionRunner.selection(in:using:)` refuses our own
+- **Bestcast is never an event target.** `QuickActionRunner.selection(in:using:)` refuses our own
   bundle identifier, and `TextInjector.targetAcceptsInjection` refuses it again before every event post,
   along with anything raised while Secure Event Input is up. A shortcut pressed with Settings
   frontmost, or in a password field, does nothing and says so.
@@ -86,11 +86,11 @@ selectable Markdown renderer with AI Chat.
 - **The browser is asked, never scraped.** `{browser-tab}` asks the frontmost Safari, Chrome, Arc
   or Brave for its front tab's title and URL through `NSAppleScript`. It runs off-main,
   and only after the reader runs a command that names the placeholder. A refused Automation grant
-  (`-1743`/`-1744`) opens a Tinycast dialog that names the browser and offers System Settings →
+  (`-1743`/`-1744`) opens a Bestcast dialog that names the browser and offers System Settings →
   Privacy & Security → Automation. It never falls back to a guess. Any other frontmost app is
   refused with a HUD. Only the title and URL are read, never the page's content.
 - **A command that types checks for a target before it asks the model.** A Replace or Paste command
-  refuses at once if the displaced app is Tinycast, is gone, or no app is frontmost. It also refuses
+  refuses at once if the displaced app is Bestcast, is gone, or no app is frontmost. It also refuses
   when Accessibility is missing. None of those runs spends a call whose answer could not land.
   `TextInjector` still refuses our own bundle and Secure Event Input before every event post.
 - **Each model action owns its instructions and its route.** The pencil on Fix Grammar, Rewrite and
@@ -135,7 +135,7 @@ started.
 | an AI Command | provider | its own output, **Show in Panel** when new | no |
 
 An AI Command shows its answer in the panel unless the reader picks another output in its editor or
-in the pane's per-row popup. Tinycast cannot know whether an arbitrary prompt transforms the text or
+in the pane's per-row popup. Bestcast cannot know whether an arbitrary prompt transforms the text or
 answers a question about it, and only the first is safe to write over what was selected. There is no
 diff, for the same reason.
 
@@ -234,9 +234,9 @@ An AI Command can run with nobody there. The editor's **Run by itself** block st
 
 `AIInboxCoordinator` owns the runs. Its loop asks `AICommandSchedulePolicy.plan` what is due, runs
 it, then sleeps until the next slot or `maxWait` (15 minutes), whichever is sooner. A wake from sleep
-and every edit to the commands cut that sleep short. A slot missed while the Mac slept or Tinycast was
+and every edit to the commands cut that sleep short. A slot missed while the Mac slept or Bestcast was
 quit runs **once** on return, never once per missed slot. **At login** means once per launch of
-Tinycast, which is at login when it is a login item. Scheduled and clipboard runs share one queue and
+Bestcast, which is at login when it is a login item. Scheduled and clipboard runs share one queue and
 go one at a time, each on the command's own
 route through `AppCore.quickActionProvider`, with `QuickActionRunner.run`. The output choice does not
 apply: every reply, and every failure, lands in the **AI Inbox**.
@@ -256,7 +256,7 @@ carries a concealed type.
 
 The **AI Inbox** (`CommandID.aiInbox`, palette mode `.aiInbox`) lists replies newest first, bucketed
 by day and searchable by command, reply and failure text. ↵ copies a reply, ⌘J continues it in AI
-Chat on the command's route, ⌃X deletes one and ⌃⇧X deletes all after a Tinycast dialog.
+Chat on the command's route, ⌃X deletes one and ⌃⇧X deletes all after a Bestcast dialog.
 `AIInboxStore` keeps the newest 200 in `ai-inbox.json`, outside settings backups like chat history.
 
 A banner is `AIInboxNotifier` on `UNUserNotificationCenter`. Permission is asked only when the reader
@@ -293,7 +293,7 @@ Only the reader's own commands are exported. The four built-ins are not theirs t
 `VisibilityStore.allowsHotKey` because `quickActionsEnabled` is the master switch. The four keep their
 `CommandID`s, so no shortcut or preference key moved. A custom action binds
 `HotKeyAction.quickAction(id:)` under `hotkey.quickAction.<uuid>`, indexed in `boundQuickActionIDs` so
-`HotKeyManager.start` can prune a binding whose action was deleted while Tinycast was off.
+`HotKeyManager.start` can prune a binding whose action was deleted while Bestcast was off.
 
 **The pane draws its own `AliasField`.** The four are named in `SettingsTab.ownedCommands`, so
 Settings → Commands no longer draws theirs. Without it, `deleteCustomQuickAction` would be clearing an
@@ -342,7 +342,7 @@ the panel. System Settings has no anchor for the sheet itself, so the last click
 
 ## The panel
 
-`QuickActionPanel` is Tinycast's **fourth borderless surface**, beside the dialog, the notes panel
+`QuickActionPanel` is Bestcast's **fourth borderless surface**, beside the dialog, the notes panel
 and the join preview. It takes the same recipe — `panelScrim`, then `GlassEffectView`, then the
 clip — and sits at `.floating` like the join preview, so a failure report still lands on top of it.
 Its footer speaks the same button language as a dialog's — `ModalActionButtonStyle`, with Replace
@@ -416,7 +416,7 @@ The Accessibility tier replaces the live selection atomically, under the five-ru
 in [snippets.md](snippets.md#text-delivery-and-pasteboard-safety) — Quick Actions simply enter it with
 no keyword, so rule 2 never applies. The event tiers behind it type or paste over the selection, which
 every app treats as replacing it — but that is the target app's behaviour rather than something
-Tinycast asserts, so it is the part worth checking by hand.
+Bestcast asserts, so it is the part worth checking by hand.
 
 **A replacement that never lands says so, and keeps the reply.** Every tier can decline, and a shortcut
 that quietly did nothing is indistinguishable from a shortcut that is not bound. `DeliveryCompletion`
@@ -433,7 +433,7 @@ failure handler, so automatic expansion stays silent as before.
 - Replace mode, with a slow route selected: the message pill says `Fixing Grammar…` with a blue
   spinner while the model works, and the result message takes its place.
 - Run one from the launcher (⌘Space → "Fix Grammar") with text selected behind it: the palette
-  closes and the selection in the displaced app is what gets acted on, not Tinycast's own field.
+  closes and the selection in the displaced app is what gets acted on, not Bestcast's own field.
 - Uncheck an action's launcher checkbox: the row leaves ⌘Space, and its shortcut still works.
 - Add a custom action, bind a shortcut, run it from the shortcut and from ⌘Space, then rename it and
   confirm the shortcut, the Replace choice and the checkbox all survived.
@@ -441,7 +441,7 @@ failure handler, so automatic expansion stays silent as before.
   and ⌘Space, and the chord is free for something else to take.
 - Type "quick actions" in ⌘Space: the section lists the shipped four beside the custom ones.
 - Give Fix Grammar and a custom action an alias in the pane, then type each alias in ⌘Space.
-- Press a shortcut with Tinycast's own Settings window frontmost: refused, with a HUD.
+- Press a shortcut with Bestcast's own Settings window frontmost: refused, with a HUD.
 - Press one in a password field: refused.
 - Summarize a long selection: the panel streams, grows without the title drifting, and scrolls past
   `quickActionPanelBody`.
@@ -458,7 +458,7 @@ failure handler, so automatic expansion stays silent as before.
   "Translate", fill in the language field and run it over a selection. Then bind a shortcut to it
   and press it: the palette opens on the command with its field focused.
 - Run Summarize Web Page with Safari frontmost the first time: macOS asks about Automation. Deny it
-  and run again: Tinycast's own dialog names Safari and opens the Automation pane. Run it with
+  and run again: Bestcast's own dialog names Safari and opens the Automation pane. Run it with
   Finder frontmost: refused with a HUD.
 - Give a command the Paste output and run it from ⌘Space with nothing selected in a text field:
   the answer is inserted. Run a `{clipboard}` command with an empty clipboard: refused.

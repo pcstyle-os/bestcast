@@ -47,7 +47,7 @@ jobs:
             | sed 's/\x1b\[[0-9;]*m//g')"
           [ -n "$FAILED" ] || exit 1
           for NAME in $FAILED; do
-            TINYCAST_TEST_JOBS=1 ./Scripts/run-tests.sh "$NAME" || exit 1
+            BESTCAST_TEST_JOBS=1 ./Scripts/run-tests.sh "$NAME" || exit 1
             echo "::warning::$NAME failed in the parallel run and passed alone: flaky"
           done
 
@@ -56,7 +56,7 @@ jobs:
 
       - name: Pure-layer purity
         run: |
-          if grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Tinycast/Features/*/Model/; then
+          if grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Bestcast/Features/*/Model/; then
             echo "::error::AppKit or SwiftUI imported under Features/*/Model/"
             exit 1
           fi
@@ -64,7 +64,7 @@ jobs:
       - name: Debug build
         run: |
           set -o pipefail
-          xcodebuild build -project Tinycast.xcodeproj -scheme Tinycast -configuration Debug \
+          xcodebuild build -project Bestcast.xcodeproj -scheme Bestcast -configuration Debug \
             -derivedDataPath "$RUNNER_TEMP/DebugData" CODE_SIGNING_ALLOWED=NO 2>&1 \
             | tee "$RUNNER_TEMP/debug.log" | grep -E 'warning:|error:|BUILD' || true
           grep -q 'BUILD SUCCEEDED' "$RUNNER_TEMP/debug.log"
@@ -72,15 +72,15 @@ jobs:
           echo "Debug build: $WARNINGS unique warnings" >> "$GITHUB_STEP_SUMMARY"
 
       # Release-optimised, but on the dev channel's name and bundle id, so it runs beside an
-      # installed Tinycast without sharing its prefs, data, TCC grants or login item.
+      # installed Bestcast without sharing its prefs, data, TCC grants or login item.
       - name: Release build (dev channel)
         run: |
           set -o pipefail
-          xcodebuild build -project Tinycast.xcodeproj -scheme Tinycast -configuration Release \
+          xcodebuild build -project Bestcast.xcodeproj -scheme Bestcast -configuration Release \
             -derivedDataPath "$RUNNER_TEMP/ReleaseData" \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- OTHER_CODE_SIGN_FLAGS="--timestamp=none" \
-            PRODUCT_NAME="Tinycast Dev" PRODUCT_BUNDLE_IDENTIFIER=com.tinycast.app.dev \
+            PRODUCT_NAME="Bestcast Dev" PRODUCT_BUNDLE_IDENTIFIER=com.bestcast.app.dev \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" 2>&1 \
             | tee "$RUNNER_TEMP/release.log" | grep -E 'error:|BUILD' || true
           grep -q 'BUILD SUCCEEDED' "$RUNNER_TEMP/release.log"
@@ -88,18 +88,18 @@ jobs:
       - name: Package
         id: package
         run: |
-          APP="$RUNNER_TEMP/ReleaseData/Build/Products/Release/Tinycast Dev.app"
+          APP="$RUNNER_TEMP/ReleaseData/Build/Products/Release/Bestcast Dev.app"
           codesign --verify --deep --strict "$APP"
           SHORT="${GITHUB_SHA::7}"
           mkdir -p dist
           printf 'commit %s\nref %s\nrun %s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$GITHUB_RUN_ID" \
             > dist/BUILD_INFO.txt
-          ditto -c -k --keepParent --sequesterRsrc "$APP" "dist/Tinycast-Dev-${SHORT}.zip"
-          du -h "dist/Tinycast-Dev-${SHORT}.zip" >> "$GITHUB_STEP_SUMMARY"
+          ditto -c -k --keepParent --sequesterRsrc "$APP" "dist/Bestcast-Dev-${SHORT}.zip"
+          du -h "dist/Bestcast-Dev-${SHORT}.zip" >> "$GITHUB_STEP_SUMMARY"
           echo "short=$SHORT" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: Tinycast-Dev-${{ steps.package.outputs.short }}
+          name: Bestcast-Dev-${{ steps.package.outputs.short }}
           path: dist/
           retention-days: 90

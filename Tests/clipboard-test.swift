@@ -1166,7 +1166,7 @@ struct ClipboardTests {
     static func scratchDirectory() -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(
-                "tinycast-clipboard-test-\(UUID().uuidString)", isDirectory: true)
+                "bestcast-clipboard-test-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

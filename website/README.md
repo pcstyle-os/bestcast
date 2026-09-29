@@ -1,6 +1,6 @@
-# Tinycast website
+# Bestcast website
 
-The marketing page and documentation for Tinycast, at <https://tinycast.dev>.
+The marketing page and documentation for Bestcast, at <https://bestcast.dev>.
 
 Next.js (App Router) with a static export, Tailwind v4 for styling, and
 [Fumadocs](https://fumadocs.dev) for the documentation section. A small Worker in `worker/` serves

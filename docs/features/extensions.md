@@ -1,6 +1,6 @@
 # Raycast extensions
 
-Tinycast runs Raycast extensions: the same `package.json` + prebuilt CommonJS bundles Raycast itself
+Bestcast runs Raycast extensions: the same `package.json` + prebuilt CommonJS bundles Raycast itself
 produces, rendered natively into the palette. No Electron, no browser, no Node.js.
 
 - [How it works](#how-it-works) · [The JS runtime](#the-js-runtime) ·
@@ -46,7 +46,7 @@ produces, rendered natively into the palette. No Electron, no browser, no Node.j
 ## How it works
 
 A Raycast extension command is a **single prebuilt CommonJS file** that keeps `react`,
-`react/jsx-runtime`, `@raycast/api` and the Node built-ins external. Tinycast supplies exactly those,
+`react/jsx-runtime`, `@raycast/api` and the Node built-ins external. Bestcast supplies exactly those,
 runs the bundle, and renders the React tree it produces:
 
 ```
@@ -89,13 +89,13 @@ timers, `fetch`, `URL`, `URLSearchParams`, `Blob`/`File`/`FormData`, `DOMExcepti
 
 ## The JS runtime
 
-`Tinycast/Resources/RaycastRuntime.generated.js` (~200 KB minified) is **generated and committed**, the
-same arrangement as `EmojiData.generated.swift`: building Tinycast never needs Node. Sources live in
+`Bestcast/Resources/RaycastRuntime.generated.js` (~200 KB minified) is **generated and committed**, the
+same arrangement as `EmojiData.generated.swift`: building Bestcast never needs Node. Sources live in
 [`Scripts/raycast-runtime/`](../../Scripts/raycast-runtime):
 
 | File | What it is |
 | --- | --- |
-| `src/index.js` | the `__tinycast` object Swift calls into (`boot`, `start`, `dispatch`, `popNavigation`, `settle`, `fireTimer`, `stop`) |
+| `src/index.js` | the `__bestcast` object Swift calls into (`boot`, `start`, `dispatch`, `popNavigation`, `settle`, `fireTimer`, `stop`) |
 | `src/host.js` | the JS→Swift seam: async `hostCall`, blocking `hostCallSync`, logging |
 | `src/reconciler.js` | `react-reconciler` host config that commits into a JSON tree |
 | `src/api/components.js` | every `@raycast/api` component |
@@ -110,7 +110,7 @@ same arrangement as `EmojiData.generated.swift`: building Tinycast never needs N
 Two host-call flavours:
 
 - **Async** (`invoke`) for anything that needs the main actor — clipboard, toasts, window control,
-  `fetch`, `exec`, `oauth`. Swift answers later through `__tinycast.settle`, so the JS thread never blocks on the
+  `fetch`, `exec`, `oauth`. Swift answers later through `__bestcast.settle`, so the JS thread never blocks on the
   UI.
 - **Blocking** (`invokeSync`) for the synchronous Node shims only — `fs.readFileSync`,
   `execSync`, `createHash`, `gunzipSync`. Safe because Swift services these entirely on the JS queue;
@@ -118,7 +118,7 @@ Two host-call flavours:
 
 ## The Swift host
 
-`Tinycast/Features/Extensions/`, split the same way as every other feature:
+`Bestcast/Features/Extensions/`, split the same way as every other feature:
 
 | File | Role |
 | --- | --- |
@@ -257,7 +257,7 @@ screens hold (see [palette.md](palette.md)).
   `ExtensionSearchAccessoryButton` at the header's trailing edge and drop `ExtensionPickerList` as one
   of the palette's `OpenMenu` cases, so the arrows, ↵, Escape and the click-away come from the one menu
   path and no second key handler exists to disagree with it. `PaletteFilterAction` routes ⌘P, so a
-  command's own dropdown answers before Tinycast's clipboard filter can. The list is
+  command's own dropdown answers before Bestcast's clipboard filter can. The list is
   `listWidth` (240) rather than a form picker's 360: it hangs off a chip, not a field.
   Its native search field sits above the choices and uses the palette menu's fuzzy matcher.
   **Swift owns the selection** — the runtime keeps `makeSearchDropdown` hook-free so an extension may
@@ -305,7 +305,7 @@ screens hold (see [palette.md](palette.md)).
   its `.task` on `ExtensionImage.LoadKey`, since the URL alone no longer says what will be drawn.
   The feature's own fills live in `ExtensionColors` — never in `Theme`.
 - **Form** — label-left/control-right rows. Field values live in the extension (React owns them); every
-  edit dispatches `onTinycastChange` and the resulting re-render is what updates the control, so
+  edit dispatches `onBestcastChange` and the resulting re-render is what updates the control, so
   `defaultValue`, a controlled `value`, and `ref.reset()` all behave. **A form takes the whole
   keyboard**: its fields *are* the palette's rows, so the search field is hidden and the header left
   empty. `ExtensionFormField` says what each `Form.*` node is —
@@ -467,7 +467,7 @@ Settings → Extensions offers three routes, under **Install New**:
 1. **Search Registries…** — searches every enabled registry and installs from any of them. See below.
 2. **Import from Raycast** — copies the already-built bundles out of a local Raycast. Nothing is
    compiled, so no Node, npm or network is involved. The pane also scans whenever it opens, and says
-   so when Raycast has something Tinycast doesn't — installing in Raycast otherwise leaves no trace
+   so when Raycast has something Bestcast doesn't — installing in Raycast otherwise leaves no trace
    here. **Both channels are searched**: `~/.config/raycast` and `~/.config/raycast-x`, the latter
    being Raycast Beta v2. Checking only the first reported "no Raycast install" to every Beta user,
    whose stable directory is present but empty. The same extension in both is offered once.
@@ -571,16 +571,16 @@ global Show in launcher switch, or this extension's — because the ranker never
 ## Deeplinks
 
 `raycast://extensions/<owner>/<extension>/<command>` runs an installed command from outside the app —
-a browser link, another app, a Shortcut — and `tinycast://` mirrors it so our own links never depend
+a browser link, another app, a Shortcut — and `bestcast://` mirrors it so our own links never depend
 on Raycast winning the scheme. Both accept Raycast's query parameters: `arguments` as URL-encoded
 JSON, `fallbackText`, and `launchType=background`, which only a no-view command receives — a view
 command always takes over the palette, so it launches as `userInitiated`. The owner is a hint: a
 scoped install matches by `owner/extension` first and falls back to the bare slug, so short links
-keep working. `tinycast://run/…` is the launcher's own link and is read first
+keep working. `bestcast://run/…` is the launcher's own link and is read first
 ([launcher.md](launcher.md#the-k-menu)). A command ⌘K disabled refuses its link with a HUD. Anything
 else on a claimed scheme just reopens the palette, and an unknown command says so rather than failing
 silently. `ExtensionDeepLink` owns the claimed schemes and the parsing,
-and `url(manifestName:author:commandName:)` builds the `tinycast://` link ⌘K's **Copy Deeplink** copies,
+and `url(manifestName:author:commandName:)` builds the `bestcast://` link ⌘K's **Copy Deeplink** copies,
 covered by `Tests/ext-test.swift`; an extension's own `open("raycast://…")` resolves through the same
 `ExtensionManager.resolve(_:)` instead of launching Raycast.
 
@@ -640,27 +640,27 @@ interval floor instead of sixty.
 `useNavigation`, `OAuth`, `Icon`, `Color`, `Image.Mask`, `Keyboard.Shortcut.Common`, `LaunchType`.
 
 **OAuth 2.0 PKCE** — `OAuth.PKCEClient`, `OAuth.TokenSet`, `OAuth.RedirectMethod`, with S256 challenges and
-tokens in the login Keychain (service `com.tinycast.extensions.oauth`, `kSecAttrAccessibleWhenUnlocked`),
+tokens in the login Keychain (service `com.bestcast.extensions.oauth`, `kSecAttrAccessibleWhenUnlocked`),
 scoped per extension and dropped on uninstall.
 
-The redirect address belongs to the extension author's OAuth app registration, so Tinycast cannot choose
-it — it can only be there to catch it. **Tinycast therefore claims `raycast`, `com.raycast` and `tinycast`
+The redirect address belongs to the extension author's OAuth app registration, so Bestcast cannot choose
+it — it can only be there to catch it. **Bestcast therefore claims `raycast`, `com.raycast` and `bestcast`
 as URL schemes**, which is what makes all three of Raycast's redirect methods land back in the app:
 
 | `RedirectMethod` | Registered address | How it returns |
 | --- | --- | --- |
-| `App` | `raycast://oauth?package_name=Extension` | straight to Tinycast, no server |
-| `AppURI` | `com.raycast:/oauth?package_name=Extension` | straight to Tinycast, no server |
+| `App` | `raycast://oauth?package_name=Extension` | straight to Bestcast, no server |
+| `AppURI` | `com.raycast:/oauth?package_name=Extension` | straight to Bestcast, no server |
 | `Web` | `https://raycast.com/redirect?packageName=Extension` | through Raycast's page, which reopens a claimed scheme |
 
-Claiming `raycast` means an installed Raycast competes with Tinycast for those links and macOS picks the
+Claiming `raycast` means an installed Raycast competes with Bestcast for those links and macOS picks the
 winner. That is a deliberate trade: without it, `App` redirects have nowhere to land. `Web` additionally
 depends on a page Raycast can change at any time — `ExtensionOAuthSession` times out after five minutes so
 a redirect that never arrives cannot wedge the palette.
 
 **`raycast://` URLs** — extensions address Raycast by scheme; the most common is a bare
 `open("raycast://")` to bring the window back after something stole focus (1Password's auth flow does
-this). `ExtensionHostBridge` keeps those inside Tinycast: `raycast://extensions/<author>/<extension>/<command>`
+this). `ExtensionHostBridge` keeps those inside Bestcast: `raycast://extensions/<author>/<extension>/<command>`
 runs that command when it's installed, anything else reopens the palette. Handing them to the workspace
 would launch Raycast itself.
 
@@ -698,7 +698,7 @@ than waiting for room on its readable side, so only a transform nobody reads fro
 
 `url.fileURLToPath` decodes percent-escapes the way Node does on darwin, so an asset path carrying a
 space resolves to a file the image loader can open, and it rejects an encoded separator or a non-local
-host rather than returning a wrong path. Node's `windows` override is absent: Tinycast only runs on
+host rather than returning a wrong path. Node's `windows` override is absent: Bestcast only runs on
 macOS, so drive-letter and UNC output would be unreachable. `url.pathToFileURL` escapes `?` and `#`
 so a filename holding either survives the round trip.
 
@@ -766,12 +766,12 @@ OAuth extensions it excluded are not counted yet — re-measure before quoting t
 `AI.ask(prompt, { model, creativity, signal })` returns a Promise for the complete answer and
 accepts `.on("data", listener)` for text chunks. `AI.Model` comes from the bundled Raycast API
 version; `AI.Creativity` exposes None, Low, Medium, High and Maximum string values. Numeric creativity
-is clamped to 0–2. Tinycast's public provider request has no temperature field, so creativity is
+is clamped to 0–2. Bestcast's public provider request has no temperature field, so creativity is
 expressed as an instruction rather than a provider sampling parameter.
 
 Requests use Quick AI's default model. An explicit Raycast model first matches that default, then the
-available Tinycast model catalog, stripping Raycast's vendor prefix and normalizing dotted versions
-and Claude Haiku's name ordering. A matching route keeps its Tinycast provider; an unknown or
+available Bestcast model catalog, stripping Raycast's vendor prefix and normalizing dotted versions
+and Claude Haiku's name ordering. A matching route keeps its Bestcast provider; an unknown or
 unavailable model falls back to the default. No default produces a rejected Promise with a settings
 hint. No tools or web search are requested, and no chat history or user chat instructions are attached.
 
@@ -779,7 +779,7 @@ hint. No tools or web search are requested, and no chat history or user chat ins
 it does not promise that credentials or the provider are healthy. Abort signals cancel the native
 stream, as does ending the extension session. Reasoning and tool events are not emitted as text.
 Extensions bundle their own `@raycast/utils`; its `useAI` hook uses this streaming `AI.ask` API.
-Tinycast does not bundle a separate copy of that hook.
+Bestcast does not bundle a separate copy of that hook.
 
 ### AI tools
 
@@ -801,7 +801,7 @@ A call runs `tools/<name>.js`, which install copies alongside `assets`:
 1. `ExtensionManager.openToolSession` checks the extension is on and its required preferences are
    set, then boots a fresh runtime and evaluates the bundle with `LaunchType.UserInitiated`.
 2. If the bundle exports `confirmation`, it runs with the input. A `{ message, info, style }` answer
-   is shown in Tinycast's dialog, with each `info` entry as a `Name: value` line and a destructive
+   is shown in Bestcast's dialog, with each `info` entry as a `Name: value` line and a destructive
    style kept; `undefined` runs the tool unasked. With no `confirmation` export, a tool whose name
    does not start with a read verb (`get`, `list`, `search`, `find`, `read`, …) asks anyway, showing
    the input.
@@ -831,7 +831,7 @@ consent goes through. The call and its result appear as ordinary tool rows in th
 cd Scripts/raycast-runtime
 pnpm install
 node gen-enums.mjs        # only after bumping the @raycast/api devDependency
-node build.mjs            # → Tinycast/Resources/RaycastRuntime.generated.js (commit it)
+node build.mjs            # → Bestcast/Resources/RaycastRuntime.generated.js (commit it)
 node build.mjs --dev       # unminified, React in development mode (better error messages)
 ```
 
@@ -846,7 +846,7 @@ node test.mjs ~/.config/raycast/extensions/<uuid> [command]
 
 # 3. the real Swift engine, against JavaScriptCore
 Scripts/run-tests.sh ext-test
-"${TMPDIR:-/tmp}"/tinycast-harness/ext-test ~/Library/Application\ Support/com.tinycast.app.dev/extensions/<name> [command]
+"${TMPDIR:-/tmp}"/bestcast-harness/ext-test ~/Library/Application\ Support/com.bestcast.app.dev/extensions/<name> [command]
 ```
 
 `ext-test` compiles the real engine sources — there is no copy to keep in sync. `EXT_TEST_VERBOSE=1`
@@ -860,8 +860,8 @@ round-trips and the Provider Usage action, with live fetches but a recorded `lau
 status items stay hidden so a test run cannot interfere with the running app's menus:
 
 ```sh
-EXT_TEST_MENU_BAR=1 "${TMPDIR:-/tmp}/tinycast-harness/ext-test" \
-  "$HOME/Library/Application Support/com.tinycast.app.dev/extensions/opencodex-usage" usage-menu-bar
+EXT_TEST_MENU_BAR=1 "${TMPDIR:-/tmp}/bestcast-harness/ext-test" \
+  "$HOME/Library/Application Support/com.bestcast.app.dev/extensions/opencodex-usage" usage-menu-bar
 ```
 
 ### Debugging a failing extension
@@ -887,7 +887,7 @@ never shares with an installed copy.
 | `LocalStorage`, `Cache`, preferences | `extension-data/<safe name>.json` | yes |
 | Command subtitle, refresh state | `extension-commands.json` | yes |
 | `environment.supportPath` | `extension-support/<safe name>/` | yes |
-| OAuth tokens | macOS Keychain (`com.tinycast.extensions.oauth`) | yes |
+| OAuth tokens | macOS Keychain (`com.bestcast.extensions.oauth`) | yes |
 | Menu-bar activation and snapshot | `extension-commands.json` | yes |
 | Icon override | `UserDefaults` → `extensionAppearances` | yes |
 | Command shortcuts | `UserDefaults` → `hotkey.extensionCommand.<entry id>` | yes |
@@ -903,7 +903,7 @@ The last four rows are pruned by `ExtensionCoordinator.removeExtensionReferences
 bundle id, so `extension:<name>/<command>` is what those stores are keyed by. `CustomCommandCoordinator`
 and `QuicklinkCoordinator` prune the same stores the same way; extensions are not a special case.
 
-**Builds happen in `$TMPDIR/tinycast-install-<UUID>/`**, named by `ExtensionCleanup.workspace` so the
+**Builds happen in `$TMPDIR/bestcast-install-<UUID>/`**, named by `ExtensionCleanup.workspace` so the
 sweep below cannot disagree about what a workspace is called. A `defer` removes it on every exit an
 install can take. A crash mid-build is the one it cannot cover, so `ExtensionManager.start` sweeps
 strays once at launch — deliberately not gated on `extensionsEnabled`, because a stranded

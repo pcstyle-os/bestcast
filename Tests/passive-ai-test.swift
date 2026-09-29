@@ -60,7 +60,7 @@ struct PassiveAITests {
     static func kind(_ text: String) -> PassiveContentKind { PassiveAIHeuristics.kind(of: text) }
 
     static func contentKinds() {
-        check("json object", kind(#"{"name": "tinycast", "version": 2}"#) == .json)
+        check("json object", kind(#"{"name": "bestcast", "version": 2}"#) == .json)
         check("json array of objects", kind(#"[{"a": 1}, {"a": 2}]"#) == .json)
         check("braces that do not parse are not json", kind("{ not json }") != .json)
         check("https url", kind("https://example.com/path?q=1") == .url)

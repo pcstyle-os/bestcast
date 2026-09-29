@@ -15,7 +15,7 @@ export function configureSystem(info) {
 
 export function unsupported(what) {
   return Promise.reject(
-    new Error(`${what} is not supported in Tinycast extensions yet. See docs/extensions.md.`),
+    new Error(`${what} is not supported in Bestcast extensions yet. See docs/extensions.md.`),
   );
 }
 

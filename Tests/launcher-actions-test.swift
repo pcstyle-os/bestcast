@@ -37,27 +37,27 @@ struct LauncherActionsTest {
         check("reserved query characters round-trip", roundTrips("a&b=c?d#e+f%g"))
         check("non-Latin text round-trips", roundTrips("コマンド:ü"))
         check(
-            "the link is tinycast://run/ plus one segment",
+            "the link is bestcast://run/ plus one segment",
             LauncherDeepLink.url(forKey: "command:ai-chat")?.absoluteString
-                == "tinycast://run/command%3Aai-chat")
+                == "bestcast://run/command%3Aai-chat")
         check("an empty key has no link", LauncherDeepLink.url(forKey: "") == nil)
         check(
             "a trailing slash is tolerated",
-            LauncherDeepLink.key(from: URL(string: "tinycast://run/com.apple.Safari/")!)
+            LauncherDeepLink.key(from: URL(string: "bestcast://run/com.apple.Safari/")!)
                 == "com.apple.Safari")
         check(
             "scheme and host compare case-insensitively",
-            LauncherDeepLink.key(from: URL(string: "TinyCast://RUN/com.apple.Safari")!)
+            LauncherDeepLink.key(from: URL(string: "BestCast://RUN/com.apple.Safari")!)
                 == "com.apple.Safari")
     }
 
     private static func testDeepLinkRejects() {
         let rejected = [
-            "tinycast://extensions/raycast/clipboard/history",
+            "bestcast://extensions/raycast/clipboard/history",
             "raycast://run/com.apple.Safari",
-            "tinycast://run",
-            "tinycast://run/",
-            "tinycast://run/a/b",
+            "bestcast://run",
+            "bestcast://run/",
+            "bestcast://run/a/b",
             "https://run/com.apple.Safari",
         ]
         for link in rejected {
