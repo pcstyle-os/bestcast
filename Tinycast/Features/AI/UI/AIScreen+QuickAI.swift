@@ -77,16 +77,18 @@ extension AIScreen {
         ]
     }
 
-    /// ↑ on an empty composer takes the last question back; otherwise the list keeps the arrow.
+    /// ↑ on an empty composer takes the last question back; an open `@` picker comes first.
     func move(_ delta: Int, axis: PaletteAxis, from selection: Int) -> Int? {
+        if axis == .vertical, moveMention(delta) { return selection }
         guard axis == .vertical, delta < 0, vm.query.isEmpty, coordinator.editLastMessage() else {
             return nil
         }
         return selection
     }
 
-    /// ⇥ walks the follow-ups into the composer, so Return asks the one landed on.
+    /// ⇥ finishes an `@`, or walks the follow-ups into the composer for Return to ask.
     func tab(at selection: Int, backwards: Bool) -> Bool {
+        if completeMention() { return true }
         let choices = coordinator.followUps
         guard vm.query.isEmpty || choices.contains(vm.query),
             let next = QuickAIInstructions.nextChoice(

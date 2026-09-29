@@ -283,12 +283,13 @@ final class AIChatCoordinator {
         guard settings.aiEnabled else { return false }
         askedAloud.remove(chat.session.id)
         do {
-            let address = MCPComposerAddress.parse(input, slugs: core.mcpCoordinator.slugs)
+            let address = ChatToolAddress.parse(input, handles: toolHandles)
+            let scope = ChatToolAddress.scope(address.handles)
             let sent = chat.send(
-                address.rest, using: try provider(for: chat, scopedTo: address.slug),
+                address.rest, using: try provider(for: chat, scopedTo: scope),
                 model: model(for: chat), webSearch: webSearch(for: chat),
                 instructions: instructions(for: chat), contextBudget: contextBudget(for: chat),
-                toolScope: address.slug)
+                toolScope: scope)
             // Named while the answer streams, so the sidebar has a title before the reply ends.
             if sent { nameIfNeeded(chat) }
             dropStaleInlineComparison(in: chat)
@@ -314,7 +315,7 @@ final class AIChatCoordinator {
         speaker.toggle(reply.id, text: reply.text)
     }
 
-    /// The same question, asked of whichever model is selected now, of the server it named.
+    /// The same question, asked of whichever model is selected now, of the sources it named.
     func regenerate(in chat: AIChatState, reply: UUID? = nil) {
         guard settings.aiEnabled else { return }
         let messages = chat.session.messages
@@ -346,52 +347,80 @@ final class AIChatCoordinator {
     }
 
     /// A turn's route and its tools: a CLI with its own client is handed servers, others the loop.
-    private func provider(for chat: AIChatState, scopedTo slug: String?) throws -> any AIProvider {
+    private func provider(for chat: AIChatState, scopedTo scope: String?) throws -> any AIProvider {
         guard model(for: chat)?.runsItsOwnTools == true else {
-            return toolAware(try provider(for: chat), scopedTo: slug, in: chat)
+            return toolAware(try provider(for: chat), scopedTo: scope, in: chat)
         }
-        return try provider(for: chat, toolServers: toolServers(for: chat, scopedTo: slug))
+        return try provider(for: chat, toolServers: toolServers(for: chat, scopedTo: scope))
     }
 
     /// The same narrowing as `tools(for:scopedTo:)`, for a client that starts its own servers.
-    private func toolServers(for chat: AIChatState, scopedTo slug: String?) -> AIToolServerSession? {
+    private func toolServers(for chat: AIChatState, scopedTo scope: String?) -> AIToolServerSession? {
         guard capabilities(for: chat).tools, chat.toolScope.isEnabled else { return nil }
         let excluded = chat.toolScope.excluded
+        let handles = ChatToolAddress.handles(inScope: scope)
         let chatID = chat.session.id
         let mcp = core.mcpCoordinator
+        let builtIn = core.builtInTools
         return AIToolServerSession(rounds: core.aiSettings.toolRounds.limit) {
-            await mcp.toolServers(scopedTo: slug).filter { !excluded.contains($0.handle) }
+            let servers = await mcp.toolServers(scopedTo: handles).filter {
+                !excluded.contains($0.handle)
+            }
+            return servers + (await builtIn.toolServers(scopedTo: handles, excluded: excluded))
         } consent: { call in
-            await mcp.permit(call, in: chatID)
+            // A server saved under an integration's name shadows it, so its own policy applies.
+            guard await mcp.server(slug: call.handle) == nil else {
+                return await mcp.permit(call, in: chatID)
+            }
+            return await builtIn.permit(call)
         }
     }
 
     /// Only chat wraps a route in the tool loop; a text rewrite has nothing to call.
     private func toolAware(
-        _ provider: any AIProvider, scopedTo slug: String?, in chat: AIChatState
+        _ provider: any AIProvider, scopedTo scope: String?, in chat: AIChatState
     ) -> any AIProvider {
-        let tools = tools(for: chat, scopedTo: slug)
+        let tools = tools(for: chat, scopedTo: scope)
         guard capabilities(for: chat).tools, !tools.isEmpty else { return provider }
         let chatID = chat.session.id
         return AIToolLoopProvider(
             base: provider, tools: tools, maxRounds: core.aiSettings.toolRounds.limit
-        ) { [mcp = core.mcpCoordinator] call in
-            await mcp.invoke(call, in: chatID)
+        ) { [mcp = core.mcpCoordinator, builtIn = core.builtInTools] call in
+            guard BuiltInToolCatalog.tool(wireName: call.name) == nil else {
+                return await builtIn.invoke(call)
+            }
+            return await mcp.invoke(call, in: chatID)
         }
     }
 
-    /// `@server` narrows a turn further, but never past what the chat's tools menu switched off.
-    private func tools(for chat: AIChatState, scopedTo slug: String?) -> [AITool] {
+    /// `@source` narrows a turn further, but never past what the chat's tools menu switched off.
+    private func tools(for chat: AIChatState, scopedTo scope: String?) -> [AITool] {
         guard chat.toolScope.isEnabled else { return [] }
         let excluded = chat.toolScope.excluded
-        return core.mcpCoordinator.tools(scopedTo: slug).filter { tool in
+        let handles = ChatToolAddress.handles(inScope: scope)
+        let servers = core.mcpCoordinator.tools(scopedTo: handles).filter { tool in
             guard let route = MCPToolName.parse(tool.name) else { return true }
             return !excluded.contains(route.slug)
         }
+        return core.builtInTools.tools(scopedTo: handles, excluded: excluded) + servers
     }
 
     /// The servers a chat's tools menu offers; empty when MCP is off or nothing is set up.
     var mcpServers: [MCPServer] { core.mcpCoordinator.servers }
+
+    /// What `@` can name: the integrations switched on, then the MCP servers.
+    var toolSources: [ChatToolSource] {
+        core.builtInTools.sources
+            + mcpServers.map {
+                ChatToolSource(
+                    handle: $0.slug, title: $0.title, symbol: "wrench.and.screwdriver",
+                    isBuiltIn: false)
+            }
+    }
+
+    private var toolHandles: Set<String> {
+        core.builtInTools.handles.union(core.mcpCoordinator.slugs)
+    }
 
     func setToolsEnabled(_ enabled: Bool, in chat: AIChatState) {
         chat.toolScope.isEnabled = enabled
@@ -405,10 +434,20 @@ final class AIChatCoordinator {
         settingsCoordinator.showSettings(tab: .ai)
     }
 
-    /// The server a draft is addressed to, so the composer can show it as a chip while typing.
-    func addressedServer(in draft: String) -> MCPServer? {
-        MCPComposerAddress.parse(draft, slugs: core.mcpCoordinator.slugs).slug
-            .flatMap { core.mcpCoordinator.server(slug: $0) }
+    /// The sources a draft is addressed to, so the composer can show them as chips while typing.
+    func addressedSources(in draft: String) -> [ChatToolSource] {
+        let sources = toolSources
+        return ChatToolAddress.parse(draft, handles: toolHandles).handles.compactMap { handle in
+            sources.first { $0.handle == handle }
+        }
+    }
+
+    /// What the `@` being typed could become; `nil` when no `@` is being typed.
+    func mentionSuggestions(in draft: String) -> [ChatToolSource]? {
+        guard let partial = ChatToolAddress.pendingMention(in: draft, handles: toolHandles) else {
+            return nil
+        }
+        return ChatToolAddress.suggestions(for: partial, among: toolSources)
     }
 
     func stopResponse(in chat: AIChatState) {
@@ -467,7 +506,7 @@ final class AIChatCoordinator {
                 || chat.session.instructions != nil,
             webSearch: webSearch(for: chat),
             toolServers: can.tools && scope.isEnabled
-                ? mcpServers.count { scope.allows($0.slug) } : 0)
+                ? toolSources.count { scope.allows($0.handle) } : 0)
     }
 
     // MARK: - Attachments

@@ -67,6 +67,14 @@ final class AISettingsStore {
                 scheduledCommandsEnabled, forKey: AppSettingsKey.aiScheduledCommands.rawValue)
         }
     }
+    /// Every one starts off: each lets a model read or act on part of this Mac.
+    var integrations: Set<BuiltInIntegration> {
+        didSet {
+            defaults.set(
+                integrations.map(\.rawValue).sorted(),
+                forKey: AppSettingsKey.aiIntegrations.rawValue)
+        }
+    }
     var quickAIPresets: [QuickAIPreset] {
         didSet {
             guard let data = try? JSONEncoder().encode(quickAIPresets) else { return }
@@ -129,6 +137,9 @@ final class AISettingsStore {
             defaults.object(forKey: AppSettingsKey.aiVoiceSpeaksReplies.rawValue) as? Bool ?? false
         scheduledCommandsEnabled =
             defaults.object(forKey: AppSettingsKey.aiScheduledCommands.rawValue) as? Bool ?? true
+        integrations = Set(
+            (defaults.stringArray(forKey: AppSettingsKey.aiIntegrations.rawValue) ?? [])
+                .compactMap(BuiltInIntegration.init(rawValue:)))
         quickAIPresets =
             defaults.data(forKey: AppSettingsKey.aiQuickAIPresets.rawValue)
             .flatMap { try? JSONDecoder().decode([QuickAIPreset].self, from: $0) } ?? []

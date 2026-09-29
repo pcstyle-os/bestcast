@@ -185,24 +185,25 @@ struct MCPTests {
 
     static func addressingTakesOnlyAKnownHandle() {
         let slugs: Set<String> = ["github", "files"]
-        let addressed = MCPComposerAddress.parse("@github list my issues", slugs: slugs)
+        let addressed = ChatToolAddress.parse("@github list my issues", handles: slugs)
         expect(
-            addressed.slug == "github" && addressed.rest == "list my issues",
+            addressed.handles == ["github"] && addressed.rest == "list my issues",
             "a handle scopes the turn and leaves the composer's text behind")
         expect(
-            MCPComposerAddress.parse("@GitHub hello", slugs: slugs).slug == "github",
+            ChatToolAddress.parse("@GitHub hello", handles: slugs).handles == ["github"],
             "a handle is matched however it was capitalised")
 
-        let unknown = MCPComposerAddress.parse("@nosuch hello", slugs: slugs)
+        let unknown = ChatToolAddress.parse("@nosuch hello", handles: slugs)
         expect(
-            unknown.slug == nil && unknown.rest == "@nosuch hello",
+            unknown.handles.isEmpty && unknown.rest == "@nosuch hello",
             "an unknown handle is text, and is sent exactly as typed")
         expect(
-            MCPComposerAddress.parse("email me @github", slugs: slugs).slug == nil,
+            ChatToolAddress.parse("email me @github", handles: slugs).handles.isEmpty,
             "only a leading handle addresses a server")
-        expect(MCPComposerAddress.parse("@", slugs: slugs).slug == nil, "a bare @ addresses nothing")
         expect(
-            MCPComposerAddress.parse("@files", slugs: slugs).rest.isEmpty,
+            ChatToolAddress.parse("@", handles: slugs).handles.isEmpty, "a bare @ addresses nothing")
+        expect(
+            ChatToolAddress.parse("@files", handles: slugs).rest.isEmpty,
             "a handle with nothing after it leaves an empty turn rather than its own text")
     }
 
@@ -223,6 +224,13 @@ struct MCPTests {
         expect(
             Set(store.servers.map(\.slug)).count == 2,
             "but never a handle, or `@slug` would name both")
+        store.save(
+            MCPServer(name: "Clipboard", transport: .http(url: "https://c/mcp", headerName: "")))
+        let clipboard = store.servers.first { $0.name == "Clipboard" }
+        expect(
+            clipboard.map { !BuiltInIntegration.handles.contains($0.slug) } == true,
+            "a new server never takes a built-in integration's handle")
+        if let clipboard { store.remove(id: clipboard.id) }
 
         var edited = store.servers[0]
         edited.trust = .always

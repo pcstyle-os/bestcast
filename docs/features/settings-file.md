@@ -16,7 +16,8 @@ in `Features/WindowManagement/`.
 - **A capability grant never has a key.** Snippets, Extensions, Calendar access, Auto Join, Camera
   Preview, Quick Actions, MCP, clipboard text recognition and snippet AI placeholders are switched on
   only in the app, which asks first. Passive AI's route and its selection and clipboard switches join
-  them; only its root search answers switch has a key. Scheduled AI Commands' switch has none either.
+  them; only its root search answers switch has a key. Scheduled AI Commands' switch has none either,
+  and neither do AI integrations, each of which lets a model read or act on part of the Mac.
   `settings-file-test` checks those paths stay absent.
 - **`SettingsFileSchema`'s switch is exhaustive.** A new `SettingsFileKey` case fails to build until it
   is bound to a property.

@@ -76,7 +76,9 @@ nothing about MCP. `AIChatCoordinator.send` is the one place the two meet.
   setting.
 - **A server's handle is derived, never typed.** `MCPSlug` makes it from the name and uniques it, so
   `@slug` can never name two servers or nothing at all. An unknown handle is not an address: the text
-  is sent exactly as it was typed.
+  is sent exactly as it was typed. Several leading handles address one turn to several servers and
+  [integrations](ai.md#built-in-tools) at once. A new server never takes an integration's handle;
+  one saved before integrations existed keeps its slug, and the integration steps aside.
 - **Servers start with chat and stop after ten idle minutes**, and at `prepareForTermination()`.
   A stdio server is a resident process of someone else's making, and the 100 MB budget is the reason
   this is not "start at launch".
@@ -225,7 +227,7 @@ hand-off — a server shaped for someone else to start — exactly as `AITool` i
 Tinycast runs itself, and `MCPServer.toolServer` is the one place the mapping happens.
 `AIToolServerSession` carries the three things the route needs: what to run, who to ask, and how
 many rounds it may spend. `MCPCoordinator.toolServers` builds the list from `enabledServers`
-honouring `@slug` and dropping `.never`; `MCPCoordinator.permit` answers with `MCPTrustPolicy` and
+honouring the turn's `@` handles and dropping `.never`; `MCPCoordinator.permit` answers with `MCPTrustPolicy` and
 the same three-way dialog. The session asks one question at a time: a CLI can hold two calls
 open at once, where the API loop never does, and `DialogController` shows one dialog and refuses
 the next, which read as the reader declining a call nobody showed them. So a second question waits

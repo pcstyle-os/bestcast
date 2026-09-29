@@ -327,6 +327,12 @@ enum SettingsSearchCatalog {
             .aiScheduledCommands, "Run AI Commands by themselves",
             keywords: ["schedule", "automation", "inbox", "trigger", "background", "kill switch"]),
         .init(
+            group: .aiIntegrations, "AI integrations",
+            keywords: [
+                "tools", "clipboard", "snippets", "notes", "calendar", "apps", "windows", "files",
+                "quicklinks", "calculator", "selected text", "mention",
+            ]),
+        .init(
             .aiMCPServers, "Enable MCP servers",
             keywords: ["tools", "model context protocol"]),
         .init(

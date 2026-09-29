@@ -100,10 +100,11 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
   escape its own closing bracket and unmake the link. `ChatReferences` accepts escaped characters
   inside a link's text, reads the title back unescaped for its chip, and never lets an escaped
   backtick open the inline code it skips.
-- **Tools are chosen per chat.** The composer's tools menu switches MCP off for the chat or turns
-  single servers off (`ChatToolScope`, held on `AIChatState`, not stored); `@server` still narrows
-  one turn inside that. The scope binds both shapes alike: Tinycast's loop is offered only the
-  allowed servers' tools, and a Codex or Claude turn is handed only the allowed servers. A route that
+- **Tools are chosen per chat.** The composer's tools menu switches tools off for the chat or turns
+  single integrations and servers off (`ChatToolScope`, held on `AIChatState`, not stored);
+  leading `@handle`s still narrow one turn inside that. The scope binds both shapes alike:
+  Tinycast's loop is offered only the allowed tools, and a Codex or Claude turn is handed only the
+  allowed servers — [built-in tools](#built-in-tools) included. A route that
   cannot call tools shows the menu disabled and says why.
 - **A reply can end on choices, and a choice is only ever a message.** The preamble lets the model
   close a reply with a fenced `choices` block, one option per line. `ChatChoices.split` lifts the
@@ -258,7 +259,7 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
   rewrites that summary, so a rename stored there would be undone by the next turn. A blank rename
   hands the title back. The same row holds the harness's title and the chat's model, each column
   upserted on its own so no write clobbers another; `message_details` is its per-message twin, for a
-  question's `@server` scope and a reply's usage. A chat's own instructions live in
+  question's `@` scope — its handles, space-joined — and a reply's usage. A chat's own instructions live in
   `conversation_instructions`, one row per chat that has them; a blank prompt deletes the row. All
   three are `CREATE TABLE IF NOT EXISTS` with `ON DELETE CASCADE`, so they needed no migration and a
   deleted chat takes its facts with it.
@@ -516,7 +517,7 @@ its first message.
   - A question offers Edit, Copy and Branch.
   - A reply offers Copy, Regenerate, a Retry With menu of every model, a Compare With menu,
     Branch, Speak and its own token count and cost.
-  - **Edit** loads the question, `@server` included, into the composer. It dims that message and
+  - **Edit** loads the question, its `@` handles included, into the composer. It dims that message and
     everything after it, and shows a banner saying so. Sending the edit truncates from the question
     and asks again, carrying over the question's pictures and documents. Escape or the banner's
     Cancel gives back the draft that was being typed before.
@@ -725,7 +726,7 @@ the twenty-second and `DictationCoordinator` — voice input for both composers 
 ### Manual sweep
 
 - The selected model appears at the right of the composer and truncates without crowding typed text.
-- An `@server` chip — the tools glyph alone, since the handle is still in the text — or a staged
+- An `@` chip per addressed tool — its glyph alone, since the handle is still in the text — or a staged
   pill follows the typed text with a clear gap, and a long draft stops it right before the model
   name, the same gap with a reasoning menu and without.
 - Clicking it opens the same anchored menu shape as Clipboard's type filter; arrows, Return and Escape
@@ -1212,6 +1213,71 @@ this Mac rather than by the chat's own model. A Claude chat still asks Claude's 
 Notes are deliberately left alone: a note's title *is* its file name, and renaming a file behind
 the reader's back would break links and the external-edit handling in [notes.md](notes.md).
 
+## Built-in tools
+
+Tinycast's own features are tools a model can call, as Raycast's AI Extensions are. Each
+**integration** — Clipboard, Snippets, Notes, Calendar, Apps & Windows, Files, Quicklinks,
+Calculator and System — is switched on in Settings → AI → Integrations, all off out of the box.
+
+| Integration | Reads | Writes (ask every call) |
+| --- | --- | --- |
+| Clipboard | search text entries, read one by id — never image bytes | copy text |
+| Snippets | list and search | create |
+| Notes | read the open note | append Markdown to it |
+| Calendar | events for today or a span of up to 31 days | — |
+| Apps & Windows | running apps, frontmost marked | open or activate an app; a window action on the frontmost window |
+| Files | find by name; read a UTF-8 file under 64 KB in home | — |
+| Quicklinks | list, with each one's arguments | open one with an argument |
+| Calculator | evaluate with `CalcEngine` | — |
+| System | frontmost app, selected text | — |
+
+### Invariants
+
+- **One mechanism, not two.** A built-in tool is an `AITool` in the same catalog MCP tools join,
+  its call an `AIToolCall`, its result an `AIToolResult`, and its row a `ChatToolUse` named after
+  the integration. On an API route `AIToolLoopProvider` runs it; on Codex or Claude it is an
+  `AIToolServer` in the same `AIToolServerSession`, bounded by the same `AIToolRounds`.
+- **A write asks on every call, and nothing is remembered.** `BuiltInToolPolicy` allows a read once
+  its integration is on and returns `.ask` for anything that copies, creates, appends, opens or
+  moves; `BuiltInToolPrompt` shows exactly what will happen — the text, the note's title, the
+  quicklink's resolved address — through `core.confirm`, one dialog at a time. There is no "always"
+  for a built-in, unlike an MCP server's `MCPTrust`.
+- **The model is described in `Model/`; the Mac is touched in `Service/`.** `BuiltInTool` holds the
+  name, schema and read/write effect, `BuiltInToolRequest.parse` checks every argument before
+  anything runs, and only `BuiltInToolRunner` reaches AppKit, the stores and the permissions.
+- **A tool never asks for a permission.** Calendar without access, selected text or a window
+  action without Accessibility, and a feature switched off in its own pane all answer with a
+  sentence the model can relay; none of them raises a system prompt.
+- **Files stay in home and out of sight.** `BuiltInFileAccess` refuses anything outside home, under
+  `~/Library` or with a hidden component, checks again after resolving symlinks, and reads only a
+  regular UTF-8 file under 64 KB.
+- **An integration's switch is a capability grant**, so `aiIntegrations` has no `settings.json` key
+  and is excluded from backups. `aiEnabled` off withdraws every one.
+- **A handle belongs to one thing.** A built-in's wire name is `handle_name`, with no `__`, so it
+  never parses as an MCP tool. A new MCP server cannot take an integration's handle; one saved
+  before integrations existed keeps its slug, and the integration of that name steps aside.
+
+### Addressing
+
+Typing `@` in AI Chat's composer or Quick AI's field opens a picker of the integrations that are on
+and the connected MCP servers. ↑/↓ move through it, Return or ⇥ completes the handle and a trailing
+space, and Escape closes it in AI Chat until the text changes. Each row carries an accessibility
+label with the title and handle and marks the highlighted one selected. Leading `@handle`s scope the
+next turn to those sources and each shows as a chip; an unknown handle is text. `ChatToolAddress`
+parses, stores and completes them.
+
+### CLI routes
+
+Codex and Claude are their own MCP clients, so `BuiltInToolEndpoint` serves the integrations over
+streamable HTTP on `127.0.0.1` at a random port, one path per integration (`/mcp/<handle>`), behind
+a bearer token generated per launch. It starts on the first CLI turn that needs it and stops when
+no integration is left on. The Network framework's `NetworkListener` accepts the connections;
+`LoopbackMCP` is the pure half — HTTP parsing with a 256 KB cap, the token check and the JSON-RPC
+answers. A CLI's own permission question for a built-in is answered yes when the integration is on,
+and the write dialog comes from the endpoint's `tools/call`, where the arguments are; so the same
+dialog asks on every route. Codex waits 60 seconds for a tool call by default, so a dialog left
+open longer fails that call.
+
 ## Notes and snippets
 
 A note's [AI menu](notes.md#ai-actions) and a snippet's [`{ai}` placeholder and Generate with
@@ -1256,7 +1322,8 @@ turn supplies — plus, on a Claude turn the reader opted into search for, `WebS
 `WebFetch`. That is a sandbox boundary on a local CLI, not Tinycast describing itself, and a user
 switch must not be able to lift it.
 
-`mcpEnabled` and `mcpServers` are excluded for the reasons in [mcp.md](mcp.md), and
+`mcpEnabled` and `mcpServers` are excluded for the reasons in [mcp.md](mcp.md), `aiIntegrations`
+for those in [Built-in tools](#built-in-tools), and
 `snippetAIPlaceholders` for the reasons in [snippets.md](snippets.md#ai-placeholders-and-drafts).
 `aiConnections`, `aiDefaultModel`, `aiSystemPrompt` and `aiSystemPromptEnabled` are deliberately
 excluded from settings backups. The first is meaningless without machine-local Keychain items; the

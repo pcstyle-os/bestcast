@@ -97,6 +97,11 @@ final class FileSearchSession {
         state = .idle
     }
 
+    /// One search under the same scopes and ignores, that publishes nothing to the palette.
+    func results(for query: String) async throws -> [FileSearchResult] {
+        try await searchOperation(query, .all, policy)
+    }
+
     /// A trashed row names a file that is gone, so it leaves the published results with it.
     func remove(_ result: FileSearchResult) {
         results.removeAll { $0.id == result.id }

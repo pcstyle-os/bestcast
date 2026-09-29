@@ -493,6 +493,7 @@ run backup-archive-test    Tinycast/Platform/AppPaths.swift \
                            Tinycast/Features/Backup/Model/BackupManifest.swift \
                            Tinycast/Features/Backup/Service/BackupStaging.swift
 E=Tinycast/Features/Extensions
+W=Tinycast/Features/WindowManagement/Model/WindowCommand.swift
 run symbols-test           $E/Service/SymbolCatalog.swift
 run ext-cleanup-test       $E/Service/ExtensionCleanup.swift \
                            $E/Service/ExtensionCatalog.swift \
@@ -576,17 +577,17 @@ run settings-history-test  Tinycast/Features/Settings/SettingsTab.swift \
 run updates-test           Tinycast/Features/Updates/Model/*.swift \
                            Tinycast/Features/Updates/Service/BundleSignature.swift
 run support-test           Tinycast/Features/Support/Model/*.swift
-run ext-ai-test            Tinycast/Features/AI/Model/*.swift \
+run ext-ai-test            Tinycast/Features/AI/Model/*.swift $W \
                            Tinycast/Features/AI/Service/AIProvider.swift \
                            $E/Model/RenderNode.swift \
                            $E/Model/ExtensionAIModelRouting.swift \
                            $E/Service/ExtensionAIBridge.swift
 run ai-provider-test       Tinycast/Features/Settings/AppSettingsKey.swift \
-                           Tinycast/Features/AI/Model/*.swift \
+                           Tinycast/Features/AI/Model/*.swift $W \
                            Tinycast/Features/AI/Settings/AISettingsStore.swift \
                            Tinycast/Features/AI/Settings/PassiveAISettingsStore.swift
 run quick-ai-test          Tinycast/Features/Settings/AppSettingsKey.swift \
-                           Tinycast/Features/AI/Model/*.swift \
+                           Tinycast/Features/AI/Model/*.swift $W \
                            Tinycast/Features/AI/Settings/AISettingsStore.swift \
                            Tinycast/Features/AI/Settings/PassiveAISettingsStore.swift
 run passive-ai-test        Tinycast/Features/AI/Model/PassiveAIHeuristics.swift
@@ -608,6 +609,7 @@ run ai-chat-test           Tinycast/Features/AI/Model/AIRequest.swift \
                            Tinycast/Features/AI/Model/ChatSearchSnippet.swift \
                            Tinycast/Features/AI/Model/ChatCitations.swift \
                            Tinycast/Features/AI/Model/ChatToolScope.swift \
+                           Tinycast/Features/AI/Model/ChatToolAddress.swift \
                            Tinycast/Features/AI/Model/MarkdownBlock.swift \
                            Tinycast/Features/AI/Model/ChatLibraryIndex.swift \
                            Tinycast/Features/AI/Model/ChatLibraryChunkEngine.swift \
@@ -669,9 +671,12 @@ run mcp-test               Tinycast/Features/Settings/AppSettingsKey.swift \
                            Tinycast/Features/AI/Model/AITool.swift \
                            Tinycast/Features/AI/Model/AIToolServer.swift \
                            Tinycast/Features/AI/Model/JSONValue.swift \
+                           Tinycast/Features/AI/Model/BuiltInIntegration.swift \
+                           Tinycast/Features/AI/Model/ChatToolAddress.swift \
                            Tinycast/Features/MCP/Model/*.swift \
                            Tinycast/Features/MCP/Settings/MCPSettingsStore.swift
-run -O text-diff-test      Tinycast/Features/QuickActions/Model/TextDiffEngine.swift
+run ai-tools-test          Tinycast/Features/AI/Model/*.swift $W
+run -O text-diff-test     Tinycast/Features/QuickActions/Model/TextDiffEngine.swift
 run index text-diff-performance Tinycast/Features/QuickActions/Model/TextDiffEngine.swift
 run quick-action-test      Tinycast/Features/Settings/AppSettingsKey.swift \
                            Tinycast/Features/AI/Model/AIConnection.swift \
@@ -702,7 +707,7 @@ run ai-schedule-test       Tinycast/Features/Settings/AppSettingsKey.swift \
                            Tinycast/Features/QuickActions/Model/*.swift \
                            Tinycast/Features/QuickActions/Settings/QuickActionSettingsStore.swift
 run apple-intelligence-test Tinycast/Features/Settings/AppSettingsKey.swift \
-                           Tinycast/Features/AI/Model/*.swift \
+                           Tinycast/Features/AI/Model/*.swift $W \
                            Tinycast/Features/AI/Service/AIProvider.swift \
                            Tinycast/Features/AI/Service/AppleIntelligenceProvider.swift
 run mcp-oauth-test         Tinycast/Platform/ExecutableLocator.swift \
@@ -732,7 +737,7 @@ run slow mcp-stdio-test    Tinycast/Platform/ExecutableLocator.swift \
                            Tinycast/Features/MCP/Model/*.swift \
                            Tinycast/Features/MCP/Service/*.swift
 run slow codex-turn-test   Tinycast/Platform/AppPaths.swift \
-                           Tinycast/Features/AI/Model/*.swift \
+                           Tinycast/Features/AI/Model/*.swift $W \
                            Tinycast/Features/AI/Service/AIProvider.swift \
                            Tinycast/Features/AI/Service/ChatGPTSubscriptionManager.swift \
                            Tinycast/Features/AI/Service/CodexAppServerClient.swift \
@@ -740,7 +745,7 @@ run slow codex-turn-test   Tinycast/Platform/AppPaths.swift \
                            Tinycast/Platform/ExecutableLocator.swift \
                            Tinycast/Platform/ProcessExit.swift \
                            Tinycast/Features/AI/Service/CodexTurnRunner.swift
-run installed-ai-test     Tinycast/Features/AI/Model/*.swift \
+run installed-ai-test     Tinycast/Features/AI/Model/*.swift $W \
                           Tinycast/Features/AI/Service/AIProvider.swift \
                           Tinycast/Platform/AppPaths.swift \
                           Tinycast/Platform/ExecutableLocator.swift \

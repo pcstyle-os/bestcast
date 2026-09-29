@@ -46,6 +46,7 @@ extension SettingsAnchor {
     static let aiSystemPrompt = Self(tab: .ai, title: "System prompt")
     static let aiInstalledAI = Self(tab: .ai, title: "Installed AI")
     static let aiAPIConnections = Self(tab: .ai, title: "API Connections")
+    static let aiIntegrations = Self(tab: .ai, title: "Integrations")
     static let aiMCPServers = Self(tab: .ai, title: "MCP Servers")
     static let aiCommands = Self(tab: .ai, title: "Commands")
     static let aiPassive = Self(tab: .ai, title: "Passive AI")

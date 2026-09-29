@@ -14,6 +14,8 @@ final class AIChatState: ChatAttachmentStaging {
     var draft = ""
     /// This chat's tools menu; a new chat starts with every connected server on.
     var toolScope = ChatToolScope()
+    /// Quick AI's lit `@` suggestion; a palette screen is a value, so the index lives here.
+    var mentionSelection = 0
     /// Quick AI's preset for this conversation; it goes with the chat, never into history.
     var preset: QuickAIPreset?
     /// Never written to history; the next new chat or opened one is an ordinary chat again.
@@ -239,7 +241,7 @@ final class AIChatState: ChatAttachmentStaging {
         else { return false }
         if editingMessageID == nil { draftBeforeEdit = draft }
         editingMessageID = id
-        draft = message.toolScope.map { "@\($0) \(message.text)" } ?? message.text
+        draft = ChatToolAddress.prefix(forScope: message.toolScope) + message.text
         return true
     }
 

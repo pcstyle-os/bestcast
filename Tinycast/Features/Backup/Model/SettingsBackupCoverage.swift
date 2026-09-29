@@ -157,6 +157,9 @@ enum SettingsBackupCoverage {
         AppSettingsKey.aiScheduledCommands.rawValue:
             "Arms AI Commands to run unattended and send what they read to a model; an import "
             + "must not switch that on.",
+        AppSettingsKey.aiIntegrations.rawValue:
+            "Each one lets a model read or act on part of this Mac, and a flag that grants a "
+            + "capability is never carried by a backup.",
         AppSettingsKey.mcpEnabled.rawValue:
             "Doubles as consent to run third-party MCP servers, one of which is a local process; a "
             + "flag that grants a capability is never carried by a backup.",

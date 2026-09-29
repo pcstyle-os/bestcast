@@ -36,10 +36,10 @@ final class MCPCoordinator {
     }
 
     /// The Codex helper keeps what it was launched with, so a server taken away is taken from it.
-    private func dropWithdrawnServers(besides withdrawn: UUID? = nil) {
+    func dropWithdrawnServers(besides withdrawn: UUID? = nil) {
         let offered = store.enabledServers.filter { $0.trust != .never && $0.id != withdrawn }
         core.chatGPTSubscription.dropWithdrawnServers(
-            keeping: isActive ? Set(offered.map(\.slug)) : [])
+            keeping: (isActive ? Set(offered.map(\.slug)) : []).union(core.builtInTools.handles))
     }
 
     /// Connecting on the way into chat, so the first send does not wait on every handshake.
@@ -70,24 +70,24 @@ final class MCPCoordinator {
         return store.enabledServers.first { $0.slug == slug }
     }
 
-    /// What this turn may reach: everything enabled, or one server when `@slug` named it.
-    func tools(scopedTo slug: String?) -> [AITool] {
+    /// What this turn may reach: everything enabled, or only the servers its `@`s named.
+    func tools(scopedTo scope: Set<String>?) -> [AITool] {
         guard isActive else { return [] }
         return manager.tools
             .filter { tool in
-                guard slug == nil || tool.serverSlug == slug else { return false }
+                guard scope?.contains(tool.serverSlug) ?? true else { return false }
                 return store.server(id: tool.serverID)?.trust != .never
             }
             .map(\.aiTool)
     }
 
     /// The same list for a CLI route; it starts its own copies, so Tinycast's need not be ready.
-    func toolServers(scopedTo slug: String?) async -> [AIToolServer] {
+    func toolServers(scopedTo scope: Set<String>?) async -> [AIToolServer] {
         guard isActive else { return [] }
         let secrets = MCPSecretStore()
         var result: [AIToolServer] = []
         for server in store.enabledServers
-        where server.trust != .never && (slug == nil || server.slug == slug) {
+        where server.trust != .never && scope?.contains(server.slug) ?? true {
             let stored = secrets.secrets(for: server.id)
             var bearer: String?
             if server.oauth == true { bearer = try? await core.mcpOAuth.lentToken(for: server) }

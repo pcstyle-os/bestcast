@@ -95,7 +95,9 @@ struct AIScreen: PaletteScreen {
 
     /// Return and the pill are the same action; an empty composer sends nothing.
     func activate(at selection: Int) {
-        if dictation.submit(in: .quickAI) {
+        if completeMention() {
+            return
+        } else if dictation.submit(in: .quickAI) {
             return
         } else if chat.isStreaming {
             coordinator.stopResponse()
@@ -126,6 +128,29 @@ struct AIScreen: PaletteScreen {
         return true
     }
 
+    /// What the `@` being typed could become; empty when no `@` is being typed.
+    var mentions: [ChatToolSource] {
+        chatCoordinator.mentionSuggestions(in: vm.query) ?? []
+    }
+
+    func completeMention() -> Bool {
+        let mentions = mentions
+        guard !mentions.isEmpty else { return false }
+        let source = mentions[min(chat.mentionSelection, mentions.count - 1)]
+        vm.query = ChatToolAddress.complete(vm.query, with: source.handle)
+        chat.mentionSelection = 0
+        return true
+    }
+
+    /// ↑/↓ walk the `@` picker while it shows; false when there is no picker to walk.
+    func moveMention(_ delta: Int) -> Bool {
+        let count = mentions.count
+        guard count > 0 else { return false }
+        let current = min(chat.mentionSelection, count - 1)
+        chat.mentionSelection = (current + delta % count + count) % count
+        return true
+    }
+
     private var canRegenerate: Bool {
         !chat.isStreaming && chat.session.messages.last?.role == .assistant
     }
@@ -134,11 +159,11 @@ struct AIScreen: PaletteScreen {
         at selection: Int, focus: FocusState<String?>.Binding
     ) -> PaletteHeaderAccessory? {
         let attachments = chat.pendingAttachments
-        let addressed = chatCoordinator.addressedServer(in: vm.query)
+        let addressed = chatCoordinator.addressedSources(in: vm.query)
         let gap = metrics.spacing.sm
         let width =
             (attachments.isEmpty ? 0 : AttachmentsPill.width(for: attachments, metrics) + gap)
-            + (addressed == nil ? 0 : ComposerChip.width(metrics) + gap)
+            + CGFloat(addressed.count) * (ComposerChip.width(metrics) + gap)
             + ComposerChip.width(metrics)
         let dictating = dictation.isActive(in: .quickAI)
         return PaletteHeaderAccessory(
@@ -146,8 +171,8 @@ struct AIScreen: PaletteScreen {
             fieldNames: [], firstIncompleteField: nil,
             view: AnyView(
                 HStack(spacing: metrics.spacing.sm) {
-                    if let addressed {
-                        ComposerChip(symbol: "wrench.and.screwdriver", label: "@\(addressed.slug)")
+                    ForEach(addressed) { source in
+                        ComposerChip(symbol: source.symbol, label: "@\(source.handle)")
                     }
                     // Absent, not empty: an empty stack would still take a gap after the `@` chip.
                     if !attachments.isEmpty {
@@ -160,7 +185,8 @@ struct AIScreen: PaletteScreen {
     }
 
     func body(selection: Int, scroll: ScrollIntent) -> AnyView {
-        AnyView(
+        let mentions = mentions
+        return AnyView(
             AIChatView(
                 chat: chat,
                 availability: { chatCoordinator.availability(for: chat) },
@@ -169,7 +195,20 @@ struct AIScreen: PaletteScreen {
                 onChoose: { coordinator.send($0) },
                 onStopReading: { chatCoordinator.stopReadingFiles(in: chat) },
                 onReindexFiles: { chatCoordinator.reindexFiles(in: chat) },
-                onRemoveFiles: { chatCoordinator.removeFiles(in: chat) }))
+                onRemoveFiles: { chatCoordinator.removeFiles(in: chat) }
+            )
+            .overlay(alignment: .top) {
+                if !mentions.isEmpty {
+                    ChatMentionList(
+                        sources: mentions,
+                        selected: min(chat.mentionSelection, mentions.count - 1)
+                    ) { source in
+                        vm.query = ChatToolAddress.complete(vm.query, with: source.handle)
+                        chat.mentionSelection = 0
+                    }
+                    .padding(metrics.spacing.md)
+                }
+            })
     }
 }
 

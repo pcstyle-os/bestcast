@@ -46,6 +46,7 @@ struct AISettingsView: View {
                 systemPromptSection
                 PassiveAISettingsSection()
                 scheduledCommandsSection
+                AIIntegrationsSection()
                 MCPSettingsSection()
             }
             .settingsEnabled(appSettings.aiEnabled)

@@ -134,6 +134,14 @@ private struct AIChatComposer: View {
     let coordinator: AIChatCoordinator
     let settings: AISettingsStore
     @Binding var showsContext: Bool
+    @State private var mentionIndex = 0
+    /// Escape closes the picker for this exact text; typing on brings it back.
+    @State private var dismissedDraft: String?
+
+    private var mentions: [ChatToolSource] {
+        guard chat.draft != dismissedDraft else { return [] }
+        return coordinator.mentionSuggestions(in: chat.draft) ?? []
+    }
 
     private var canSend: Bool {
         !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -151,6 +159,12 @@ private struct AIChatComposer: View {
             if chat.editingMessageID != nil {
                 ChatEditingBanner { coordinator.cancelEdit(in: chat) }
             }
+            let mentions = mentions
+            if !mentions.isEmpty {
+                ChatMentionList(
+                    sources: mentions, selected: min(mentionIndex, mentions.count - 1),
+                    onPick: complete)
+            }
             chips
             if !chat.library.isEmpty {
                 ChatLibraryBar(
@@ -164,7 +178,9 @@ private struct AIChatComposer: View {
                         .foregroundStyle(.tertiary)
                         .allowsHitTesting(false)
                 }
-                ChatComposerTextView(text: $chat.draft, focusKey: chat.session.id, onSubmit: submit)
+                ChatComposerTextView(
+                    text: $chat.draft, focusKey: chat.session.id, onSubmit: submit,
+                    onPickerKey: pickerKey)
             }
             controls
         }
@@ -176,12 +192,12 @@ private struct AIChatComposer: View {
     }
 
     @ViewBuilder private var chips: some View {
-        let addressed = coordinator.addressedServer(in: chat.draft)
-        if !chat.pendingAttachments.isEmpty || addressed != nil {
+        let addressed = coordinator.addressedSources(in: chat.draft)
+        if !chat.pendingAttachments.isEmpty || !addressed.isEmpty {
             ScrollView(.horizontal) {
                 HStack(spacing: Theme.Spacing.sm) {
-                    if let addressed {
-                        ComposerChip(symbol: "wrench.and.screwdriver", label: "@\(addressed.slug)")
+                    ForEach(addressed) { source in
+                        ComposerChip(symbol: source.symbol, label: "@\(source.handle)")
                     }
                     ForEach(chat.pendingAttachments) { attachment in
                         AttachmentChip(attachment: attachment) {
@@ -237,6 +253,24 @@ private struct AIChatComposer: View {
         .disabled(!chat.isStreaming && !canSend)
         .help(chat.isStreaming ? "Stop Response" : "Send  ↵")
         .accessibilityLabel(chat.isStreaming ? "Stop Response" : "Send")
+    }
+
+    private func pickerKey(_ key: ChatComposerTextView.PickerKey) -> Bool {
+        let mentions = mentions
+        guard !mentions.isEmpty else { return false }
+        let current = min(mentionIndex, mentions.count - 1)
+        switch key {
+        case .up: mentionIndex = (current + mentions.count - 1) % mentions.count
+        case .down: mentionIndex = (current + 1) % mentions.count
+        case .accept: complete(mentions[current])
+        case .dismiss: dismissedDraft = chat.draft
+        }
+        return true
+    }
+
+    private func complete(_ source: ChatToolSource) {
+        chat.draft = ChatToolAddress.complete(chat.draft, with: source.handle)
+        mentionIndex = 0
     }
 
     /// Return and the button are one action: Send, or Stop while a reply streams.
@@ -358,42 +392,33 @@ private struct AIReasoningPicker: View {
     }
 }
 
-/// This chat's MCP servers: all of them, some, or none; the model must be one that calls tools.
+/// This chat's integrations and MCP servers: all, some, or none; the model must call tools.
 private struct AIToolsPicker: View {
     let chat: AIChatState
     let coordinator: AIChatCoordinator
 
     var body: some View {
-        let servers = coordinator.mcpServers
+        let sources = coordinator.toolSources
         let scope = chat.toolScope
         let takesTools = coordinator.capabilities(for: chat).tools
-        let active = servers.filter { scope.allows($0.slug) }.count
+        let active = sources.count { scope.allows($0.handle) }
         Menu {
-            if servers.isEmpty {
-                Text("No MCP servers are connected")
+            if sources.isEmpty {
+                Text("No integrations or MCP servers are on")
             } else {
                 Toggle(
                     "Use Tools",
                     isOn: Binding(
                         get: { scope.isEnabled },
                         set: { coordinator.setToolsEnabled($0, in: chat) }))
-                Section("Servers") {
-                    ForEach(servers) { server in
-                        Toggle(
-                            server.name.isEmpty ? server.slug : server.name,
-                            isOn: Binding(
-                                get: { scope.allows(server.slug) },
-                                set: { _ in coordinator.toggleToolServer(server.slug, in: chat) })
-                        )
-                        .disabled(!scope.isEnabled)
-                    }
-                }
+                section("Tinycast", sources.filter(\.isBuiltIn), scope: scope)
+                section("Servers", sources.filter { !$0.isBuiltIn }, scope: scope)
             }
             Divider()
-            Button("MCP Settings…", action: coordinator.showMCPSettings)
+            Button("AI Settings…", action: coordinator.showMCPSettings)
         } label: {
             Label(
-                servers.isEmpty || !scope.isEnabled ? "Tools" : "\(active) of \(servers.count)",
+                sources.isEmpty || !scope.isEnabled ? "Tools" : "\(active) of \(sources.count)",
                 systemImage: "wrench.and.screwdriver"
             )
             .labelStyle(.titleAndIcon)
@@ -404,6 +429,24 @@ private struct AIToolsPicker: View {
             takesTools
                 ? "Choose the tools this chat may call"
                 : "This model can't call tools")
+    }
+
+    @ViewBuilder
+    private func section(
+        _ title: String, _ sources: [ChatToolSource], scope: ChatToolScope
+    ) -> some View {
+        if !sources.isEmpty {
+            Section(title) {
+                ForEach(sources) { source in
+                    Toggle(
+                        source.title,
+                        isOn: Binding(
+                            get: { scope.allows(source.handle) },
+                            set: { _ in coordinator.toggleToolServer(source.handle, in: chat) }))
+                    .disabled(!scope.isEnabled)
+                }
+            }
+        }
     }
 }
 

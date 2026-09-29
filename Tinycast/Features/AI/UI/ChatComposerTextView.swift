@@ -7,13 +7,35 @@ struct ChatComposerTextView: NSViewRepresentable {
     /// A new value pulls focus into the field: a switched chat is one you are about to type into.
     let focusKey: UUID
     let onSubmit: () -> Void
+    /// Offered the keys an open `@` picker takes; false leaves the key to the text view.
+    var onPickerKey: (PickerKey) -> Bool = { _ in false }
+
+    enum PickerKey {
+        case up
+        case down
+        case accept
+        case dismiss
+
+        init?(_ selector: Selector) {
+            switch selector {
+            case #selector(NSResponder.moveUp(_:)): self = .up
+            case #selector(NSResponder.moveDown(_:)): self = .down
+            case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
+                self = .accept
+            case #selector(NSResponder.cancelOperation(_:)): self = .dismiss
+            default: return nil
+            }
+        }
+    }
 
     /// How the window's key monitor tells its composer from the find and rename fields.
     static let identifier = NSUserInterfaceItemIdentifier("AIChatComposer")
 
     private static var font: NSFont { .preferredFont(forTextStyle: .body) }
 
-    func makeCoordinator() -> Coordinator { Coordinator(text: $text, onSubmit: onSubmit) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, onSubmit: onSubmit, onPickerKey: onPickerKey)
+    }
 
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSTextView.scrollableTextView()
@@ -42,6 +64,7 @@ struct ChatComposerTextView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.text = $text
         context.coordinator.onSubmit = onSubmit
+        context.coordinator.onPickerKey = onPickerKey
         guard let textView = scroll.documentView as? NSTextView else { return }
         // Only an outside write lands here; echoing the view's own text back would reset the caret.
         if textView.string != text { textView.string = text }
@@ -76,11 +99,16 @@ struct ChatComposerTextView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var onSubmit: () -> Void
+        var onPickerKey: (PickerKey) -> Bool
         var focusedKey: UUID?
 
-        init(text: Binding<String>, onSubmit: @escaping () -> Void) {
+        init(
+            text: Binding<String>, onSubmit: @escaping () -> Void,
+            onPickerKey: @escaping (PickerKey) -> Bool
+        ) {
             self.text = text
             self.onSubmit = onSubmit
+            self.onPickerKey = onPickerKey
         }
 
         func textDidChange(_ notification: Notification) {
@@ -90,6 +118,7 @@ struct ChatComposerTextView: NSViewRepresentable {
 
         /// Never called mid-composition, so Return confirming an input method's text stays its own.
         func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            if let key = PickerKey(selector), onPickerKey(key) { return true }
             guard selector == #selector(NSResponder.insertNewline(_:)) else { return false }
             if NSApp.currentEvent?.modifierFlags.contains(.shift) == true {
                 textView.insertNewlineIgnoringFieldEditor(nil)

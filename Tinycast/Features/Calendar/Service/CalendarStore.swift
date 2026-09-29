@@ -198,6 +198,21 @@ final class CalendarStore {
         events.first { $0.id == id }
     }
 
+    /// Any span, outside the snapshot; `nil` without access, which this never asks for.
+    func events(in interval: DateInterval) -> [MeetingEvent]? {
+        refreshAccess()
+        guard access == .granted else { return nil }
+        let store = eventStore ?? EKEventStore()
+        eventStore = store
+        let selected = store.calendars(for: .event)
+            .filter { !hiddenCalendarIDs.contains($0.calendarIdentifier) }
+        guard !selected.isEmpty else { return [] }
+        let predicate = store.predicateForEvents(
+            withStart: interval.start, end: interval.end, calendars: selected)
+        return store.events(matching: predicate).compactMap(Self.meeting(from:))
+            .sorted { $0.start < $1.start }
+    }
+
     /// False means there is no such calendar, which is a report, not a silent no-op.
     func createEvent(_ draft: EventDraft, now: Date) -> Bool {
         let store = eventStore ?? EKEventStore()
