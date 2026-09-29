@@ -19,6 +19,7 @@ final class AppCore {
     let roomSession = RoomSession()
     let clipboardStore = ClipboardStore()
     @ObservationIgnored private var clipboardTextIndexer: ClipboardTextIndexer?
+    @ObservationIgnored private var clipboardInsightIndexer: ClipboardInsightIndexer?
     let clipboardManager: ClipboardManager
     let snippetsStore: SnippetsStore
     let snippetListener = SnippetKeywordListener(
@@ -211,6 +212,7 @@ final class AppCore {
     @ObservationIgnored private(set) lazy var quickAICoordinator = QuickAICoordinator(
         chats: aiChats, settings: settings, palette: palette,
         paletteCoordinator: paletteCoordinator, core: self)
+    @ObservationIgnored private(set) lazy var passiveAICoordinator = PassiveAICoordinator(core: self)
 
     @ObservationIgnored private lazy var windowController = PaletteWindowController(core: self)
     @ObservationIgnored private lazy var messageHUD = MessageHUDController(settings: settings)
@@ -305,6 +307,7 @@ final class AppCore {
             appleShortcutCoordinator.applyPresence()
             paletteCoordinator.onLauncherShown = { [weak self] in
                 self?.appleShortcutCoordinator.refresh()
+                self?.passiveAICoordinator.launcherShown()
             }
             paletteCoordinator.onScreenOpening = { [weak self] mode in
                 switch mode {
@@ -505,9 +508,30 @@ final class AppCore {
         indexer.start()
     }
 
+    /// Passive AI's clipboard half; only its summaries wait on Apple Intelligence.
+    func applyClipboardInsights() {
+        guard settings.clipboardEnabled, settings.aiEnabled, aiSettings.passive.clipboardIntelligence,
+            clipboardStore.setInsightsEnabled(true)
+        else {
+            clipboardStore.onTextCaptured = nil
+            clipboardStore.setInsightsEnabled(false)
+            clipboardInsightIndexer?.stop()
+            return
+        }
+        let indexer =
+            clipboardInsightIndexer
+            ?? ClipboardInsightIndexer(
+                store: clipboardStore,
+                summarize: { [weak self] in await self?.passiveAICoordinator.summarize($0) })
+        clipboardInsightIndexer = indexer
+        clipboardStore.onTextCaptured = { [weak indexer] in indexer?.enqueue($0) }
+        indexer.start()
+    }
+
     func prepareForTermination() {
         settingsFile?.flush()
         clipboardTextIndexer?.stop()
+        clipboardInsightIndexer?.stop()
         // Caps Lock first: its remap is the one teardown that outlives the process.
         hyperKeyTap.prepareForTermination()
         windowLayoutCoordinator.prepareForTermination()
@@ -594,6 +618,17 @@ final class AppCore {
             { _ = $0.clipboardEnabled }, reproject: { $0.clipboardCoordinator.applyEnabled() })
         track(
             { _ = $0.clipboardTextSearchEnabled }, reproject: { $0.applyClipboardTextSearch() })
+        track({ _ = $0.aiEnabled }, reproject: { $0.applyClipboardInsights() })
+        track(
+            aiSettings.passive, { _ = $0.clipboardIntelligence },
+            reproject: { $0.applyClipboardInsights() })
+        track(
+            palette,
+            {
+                _ = $0.query
+                _ = $0.mode
+                _ = $0.isVisible
+            }, reproject: { $0.passiveAICoordinator.paletteChanged() })
         track({ _ = $0.fileSearchEnabled }, reproject: { $0.fileSearchCoordinator.applyEnabled() })
         // Two features, one switch: each coordinator gates only its own command and mode.
         track(

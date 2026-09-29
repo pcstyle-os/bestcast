@@ -128,6 +128,17 @@ enum SettingsBackupCoverage {
         AppSettingsKey.aiToolRounds.rawValue:
             "Decides how much a tool-driven reply may spend on this Mac's own connections; no other "
             + "AI setting travels, and an import must not raise a spending limit unasked.",
+        AppSettingsKey.aiPassiveModel.rawValue:
+            "Passive AI runs on this Mac unless its owner names a provider here; an import must "
+            + "never send typed queries somewhere new.",
+        AppSettingsKey.aiPassiveInlineAnswers.rawValue:
+            "No other AI setting travels, and an answer offered unasked is a choice each Mac makes.",
+        AppSettingsKey.aiPassiveSelectionSuggestions.rawValue:
+            "Reads the selection in other apps each time the palette opens; an import must not "
+            + "switch that on.",
+        AppSettingsKey.aiPassiveClipboard.rawValue:
+            "Hands copied text to the on-device model in the background; an import must not start "
+            + "that on another Mac.",
         AppSettingsKey.mcpEnabled.rawValue:
             "Doubles as consent to run third-party MCP servers, one of which is a local process; a "
             + "flag that grants a capability is never carried by a backup.",

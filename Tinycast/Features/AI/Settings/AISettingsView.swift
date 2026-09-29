@@ -42,6 +42,7 @@ struct AISettingsView: View {
                 chatSection
                 conversationsSection
                 systemPromptSection
+                PassiveAISettingsSection()
                 MCPSettingsSection()
             }
             .settingsEnabled(appSettings.aiEnabled)

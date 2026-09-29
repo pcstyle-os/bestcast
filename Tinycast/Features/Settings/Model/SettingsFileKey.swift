@@ -37,6 +37,7 @@ enum SettingsFileKey: String, CaseIterable, Sendable {
     case aiOpensTo = "ai.opensTo"
     case aiNewChatAfter = "ai.newChatAfterMinutes"
     case aiToolRounds = "ai.toolRounds"
+    case aiPassiveInlineAnswers = "ai.passiveInlineAnswers"
     case quickActionLanguage = "quickActions.targetLanguage"
     case fileSearchEnabled = "fileSearch.enabled"
     case fileSearchScopes = "fileSearch.scopes"

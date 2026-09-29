@@ -33,6 +33,10 @@ struct LauncherScreen: PaletteScreen {
     private let suggestionCount: Int
     /// The `Use "…" with` section, below every result; empty unless something is typed.
     private let fallbacks: [(fallback: Fallback, entry: AppEntry)]
+    /// Passive AI's rows above everything: selection suggestions, or the query's answer.
+    private let passiveSelection: PassiveSelection?
+    private let passiveAnswer: PassiveAnswer?
+    private let leadingCount: Int
     /// Resolved in `init`: the palette indexes this several times per event, so it can't recompute.
     let rows: [Row]
 
@@ -80,6 +84,18 @@ struct LauncherScreen: PaletteScreen {
         // At most one of them leads, so the flat index keeps a single-row offset.
         let meeting = pinsFavorites ? meeting : nil
         self.meeting = meeting
+        let passive = core.passiveAICoordinator
+        let answer = passive.answer.flatMap {
+            $0.query == vm.query.trimmingCharacters(in: .whitespacesAndNewlines) ? $0 : nil
+        }
+        let passiveSelection = pinsFavorites && pinned == nil ? passive.selection : nil
+        let passiveAnswer = pinned == nil ? answer : nil
+        self.passiveSelection = passiveSelection
+        self.passiveAnswer = passiveAnswer
+        let leading =
+            passiveSelection.map { $0.items.map(Row.selection) }
+            ?? passiveAnswer.map { [Row.answer($0.query)] } ?? []
+        self.leadingCount = leading.count
         self.results = results
         self.calc = calc
         self.fallbacks = fallbacks
@@ -89,13 +105,13 @@ struct LauncherScreen: PaletteScreen {
         self.favoriteCount = pinsFavorites ? ordered.favoriteCount : 0
         self.suggestionCount = pinsFavorites ? ordered.suggestionCount : 0
         if let calc {
-            self.rows = [.calc(calc)] + entries
+            self.rows = leading + [.calc(calc)] + entries
         } else if let color {
-            self.rows = [.color(color)] + entries
+            self.rows = leading + [.color(color)] + entries
         } else if let meeting {
-            self.rows = [.meeting(meeting)] + entries
+            self.rows = leading + [.meeting(meeting)] + entries
         } else {
-            self.rows = entries
+            self.rows = leading + entries
         }
     }
 
@@ -107,6 +123,8 @@ struct LauncherScreen: PaletteScreen {
         case entry(AppEntry)
         /// Prefixed, because the same command can also be a ranked hit above its own fallback row.
         case fallback(Fallback, AppEntry)
+        case selection(PassiveSelectionItem)
+        case answer(String)
 
         var id: String {
             switch self {
@@ -115,6 +133,8 @@ struct LauncherScreen: PaletteScreen {
             case .color: return "color-card"
             case .entry(let app): return app.id
             case .fallback(let fallback, _): return "fallback-" + fallback.id
+            case .selection(let item): return item.id
+            case .answer: return "passive-answer"
             }
         }
     }
@@ -133,6 +153,8 @@ struct LauncherScreen: PaletteScreen {
             return meeting.link == nil ? "Open in Calendar" : "Join Meeting"
         case .entry(let app): return app.kind.descriptor.openVerb
         case .fallback(let fallback, _): return fallback.openVerb
+        case .selection(let item): return item == .ask ? "Ask AI" : item.title
+        case .answer: return "Open in Quick AI"
         case nil: return "Open Application"
         }
     }
@@ -203,7 +225,7 @@ struct LauncherScreen: PaletteScreen {
     private func isCardSelected(_ selection: Int) -> Bool {
         switch row(at: selection) {
         case .calc, .meeting, .color: return true
-        case .entry, .fallback, nil: return false
+        case .entry, .fallback, .selection, .answer, nil: return false
         }
     }
 
@@ -213,6 +235,9 @@ struct LauncherScreen: PaletteScreen {
         if let color { return .color(color) }
         return meeting.map { .meeting($0, now: now) }
     }
+
+    /// Past the passive rows, so an open still lands where it did before they arrived.
+    var landingSelection: Int { leadingCount }
 
     /// An error card is selectable but has no action: it must drive neither the pill nor ⌘K.
     func hasPrimaryAction(at selection: Int) -> Bool {
@@ -242,6 +267,10 @@ struct LauncherScreen: PaletteScreen {
         case .fallback(let fallback, let app):
             return FallbackActionsMenu.content(
                 fallback: fallback, entry: app, query: vm.query, core: core)
+        case .selection:
+            return passiveSelection.map { PassiveAIActionsMenu.content(selection: $0, core: core) }
+        case .answer:
+            return passiveAnswer.map { PassiveAIActionsMenu.content(answer: $0, core: core) }
         case nil:
             return nil
         }
@@ -254,6 +283,8 @@ struct LauncherScreen: PaletteScreen {
         case .color(let color): return ColorFormat.primary(for: color).string(for: color)
         case .meeting(let meeting): return meeting.title
         case .entry(let app), .fallback(_, let app): return app.name
+        case .selection(let item): return item.title
+        case .answer(let query): return "AI answer to \(query)"
         case nil: return nil
         }
     }
@@ -270,6 +301,8 @@ struct LauncherScreen: PaletteScreen {
                 app, searchQuery: vm.query, arguments: argumentValues(for: app))
         case .fallback(let fallback, _):
             core.fallbackCoordinator.run(fallback, query: vm.query)
+        case .selection(let item): core.passiveAICoordinator.run(item)
+        case .answer: core.passiveAICoordinator.openAnswerInQuickAI()
         case nil: break
         }
     }
@@ -290,6 +323,10 @@ struct LauncherScreen: PaletteScreen {
     }
 
     func perform(_ shortcut: PaletteShortcut, at selection: Int) -> Bool {
+        // ⇧⌘C: a bare ⌘C belongs to the search field, which may hold its own selection.
+        if case .answer = row(at: selection), case .copyFile = shortcut {
+            return core.passiveAICoordinator.copyAnswer()
+        }
         switch shortcut {
         case .toggleFavorite: return toggleFavorite(at: selection)
         case .hideFromSearch: return hideFromSearch(at: selection)
@@ -432,7 +469,7 @@ struct LauncherScreen: PaletteScreen {
     }
 
     private func select(row index: Int) {
-        vm.selection = index + (leadCard == nil ? 0 : 1)
+        vm.selection = index + leadingCount + (leadCard == nil ? 0 : 1)
         scrollToFollow()
     }
 
@@ -464,12 +501,12 @@ struct LauncherScreen: PaletteScreen {
             card: leadCard,
             cardSelected: isCardSelected(selection),
             onActivateCard: {
-                vm.selection = 0
-                activate(at: 0)
+                vm.selection = leadingCount
+                activate(at: leadingCount)
             },
             onCardActions: {
-                guard hasPrimaryAction(at: 0) else { return }
-                vm.selection = 0
+                guard hasPrimaryAction(at: leadingCount) else { return }
+                vm.selection = leadingCount
                 openActions()
             },
             onActivate: {
@@ -481,8 +518,40 @@ struct LauncherScreen: PaletteScreen {
                 openActions()
             },
             onDropped: { core.paletteCoordinator.dragLanded() },
-            fallbacks: fallbackSection
+            fallbacks: fallbackSection,
+            leading: leadingSection
         )
+    }
+
+    private var leadingSection: LauncherList.LeadingSection? {
+        let leading = Array(rows.prefix(leadingCount))
+        guard !leading.isEmpty else { return nil }
+        let selection = passiveSelection
+        let answer = passiveAnswer
+        return LauncherList.LeadingSection(
+            title: answer == nil ? "Selected Text" : "AI",
+            rowIDs: leading.map(\.id),
+            row: { index, selected in
+                switch leading[index] {
+                case .selection(let item):
+                    guard let selection else { return AnyView(EmptyView()) }
+                    return AnyView(
+                        PassiveSelectionRow(item: item, selection: selection, selected: selected))
+                case .answer:
+                    guard let answer else { return AnyView(EmptyView()) }
+                    return AnyView(PassiveAnswerRow(answer: answer, selected: selected))
+                default:
+                    return AnyView(EmptyView())
+                }
+            },
+            onActivate: {
+                vm.selection = $0
+                activate(at: $0)
+            },
+            onActions: {
+                vm.selection = $0
+                openActions()
+            })
     }
 
     /// Nil when nothing is typed, which is the one state the section has no input for.

@@ -72,8 +72,10 @@ bottom with the model picker. ⌘J hands a Quick AI conversation to the window.
 - **A chat is named by its harness.** As soon as a chat's first question is sent — so the title
   lands while the answer streams — again after an answer if that failed, and never over a rename,
   `AIChatCoordinator.nameIfNeeded` asks for a title: Claude's CLI through its own
-  `generate_session_title` control request (`persist: false`, so nothing enters its history), every
-  other route with one side request to the chat's own model (`ChatTitle.instructions`). The Claude
+  `generate_session_title` control request (`persist: false`, so nothing enters its history), then
+  the on-device model when [Passive AI](#passive-ai)'s route is this Mac's own and Apple
+  Intelligence is available, and otherwise one side request to the chat's own model
+  (`ChatTitle.instructions`). The Claude
   request holds stdin open and reads with `availableData` until the answering line is whole: a
   `read(upToCount:)` waits for a full chunk or EOF, which left every title waiting on the watchdog.
   `ChatTitle.sanitize` strips labels, quotes and full stops; `conversation_details` keeps the
@@ -515,7 +517,8 @@ Seven more `@MainActor @Observable` types join the shared state: `AISettingsStor
 `ChatGPTSubscriptionManager`, `InstalledAIManager`, `ChatHistoryStore`, `AIChatSurfacesState` (which
 owns every live `AIChatState`), `MCPSettingsStore` and `MCPServerManager`. `AIChatCoordinator` — the
 window, and every chat action either surface sends — is the nineteenth feature coordinator,
-`MCPCoordinator` the twentieth and `QuickAICoordinator` the twenty-first.
+`MCPCoordinator` the twentieth, `QuickAICoordinator` the twenty-first and `PassiveAICoordinator`
+the twenty-second.
 
 ### Manual sweep
 
@@ -808,6 +811,69 @@ The model switcher is `fixedSize` with its title shortened in `AIChatCoordinator
 middle ellipsis) rather than truncated by layout: a flexible label claimed the row up to its max
 width and clipped the search field well short of the button.
 
+## Passive AI
+
+AI that helps without being asked: an answer in root search, suggestions for selected text, and a
+kind and summary for copied text. Settings → AI → **Passive AI** holds one switch per helper, all
+on by default, and all of them sit under `aiEnabled` — with AI off none of them reads, schedules or
+sends anything. `PassiveAISettingsStore` (`aiSettings.passive`) holds the switches and the route;
+`PassiveAICoordinator` on `AppCore` does the work; `PassiveAIHeuristics` is the pure half, a
+`Model/` file the `passive-ai-test` harness compiles.
+
+### Invariants
+
+- **On-device unless the reader picks a provider.** `aiPassiveModel` is nil out of the box, which
+  means Apple Intelligence; with it unavailable, answers simply do not appear. A network route is
+  only ever an explicit pick in the **Passive AI model** picker, confirmed through `DialogController`
+  because it sends what is typed before Return. It reaches **root search answers only**: clipboard
+  summaries always use `AppleIntelligenceProvider` and never run otherwise, and a selection is
+  never sent anywhere until the reader runs one of its actions.
+- **Cheap, cancellable, off the main actor.** Every palette query change goes through
+  `PassiveInlineSchedule`: a keystroke retires the pending answer and the one on screen, and only a
+  query left alone for 600 ms is answered. Kind detection, language recognition and the eligibility
+  checks run in `Task.detached`, over at most `detectionLimit` characters.
+- **An answer never hides a better row.** `PassiveAIHeuristics.shouldOfferInlineAnswer` wants a
+  question or instruction (`isQuestionOrInstruction`) and refuses math (`looksLikeMath`), anything
+  the calculator, a colour or a URL already answers, an argument entry, and a query whose name
+  exactly matches one of the top launcher results.
+- **The rows arrive above the selection, not under it.** Passive rows lead the launcher's list, and
+  publishing them moves `palette.selection` down by as many rows, so Return keeps running whatever
+  was highlighted — never a Quick Action on text the reader did not mean to change.
+
+### Root search answer
+
+Once the schedule fires, one **AI** row appears at the top of root search and streams an answer of
+at most two sentences (`answerInstructions`, 160 output tokens) into its subtitle. Return saves the
+exchange as a conversation and opens it in Quick AI, so a follow-up continues it; before the answer
+has finished, Return asks the question in Quick AI instead. **⇧⌘C** copies the finished answer and
+closes the palette. It is ⇧⌘C rather than ⌘C because a bare ⌘C belongs to the search field, which
+can hold a text selection of its own — `PaletteShortcut.resolve` pins that down in its harness.
+
+### Selected text suggestions
+
+When the launcher opens with an empty query, Quick Actions on and Accessibility already trusted,
+`launcherShown` reads the frontmost app's selection with the same `AccessibilityText.selection`
+Quick Actions uses, capped at `QuickActionRunner.maxSelectionBytes`. It never prompts for
+Accessibility; Quick Actions' own switch is the consent. A **Selected Text** section then offers the
+top three actions for its kind — explain and find bugs for code or an error, translate for a
+foreign language, summarize for a long passage, improve writing and rewrite for prose — plus **Ask
+AI about Selection**, which opens a new Quick AI chat seeded with the quoted text. Rewrites run as
+the matching built-in Quick Action, on Quick Actions' own route. Typing clears the section.
+
+### Clipboard intelligence
+
+Each new text clip is tagged with a kind — code, link, email, address, phone, JSON, error or
+prose — and a clip over 400 characters also gets a one-line on-device summary. See
+[clipboard.md](clipboard.md#passive-ai-insights) for storage and search.
+
+### Chat titles
+
+When the route is on-device and Apple Intelligence is available, a new chat's title is written on
+this Mac rather than by the chat's own model. A Claude chat still asks Claude's CLI first.
+
+Notes are deliberately left alone: a note's title *is* its file name, and renaming a file behind
+the reader's back would break links and the external-edit handling in [notes.md](notes.md).
+
 ## Settings and backup boundary
 
 Settings → AI is a normal grouped `Form` inside Tinycast's existing Settings window. Its top AI
@@ -852,3 +918,8 @@ answer and must not arrive on another Mac unread. `aiRetention`, `aiOpensTo` and
 join them: all three are decisions about conversations that never leave the Mac that had them, and
 an import must not arrive carrying an instruction to delete them. `aiToolRounds` stays behind too: it
 limits what a tool-driven reply may spend, and an import must not raise that unasked.
+The four Passive AI settings stay behind as well: each switch starts reading or sending something
+unasked, and the route can move typed questions off the Mac. Only `ai.passiveInlineAnswers` rides in
+the opt-in `settings.json` mirror: the route names a destination, and selection suggestions and
+clipboard intelligence read other apps' text as `clipboard.textSearchEnabled` reads images, so all
+three are capability grants with no key.

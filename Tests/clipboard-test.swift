@@ -45,6 +45,7 @@ struct ClipboardTests {
         quickPressesPasteEachEntryOnce()
         aHeldKeyNeverRunsAhead()
         itemLookupReachesPastTheWindow()
+        insightsAreDerivedMetadata()
         await reCopiedImagesShareOneBlob()
 
         print("\(passes)/\(passes + failures) passed")
@@ -524,6 +525,62 @@ struct ClipboardTests {
                 store.search("shared", filter: .text).map(\.text) == ["shared token prose"],
                 "and switching filters again re-runs rather than reusing")
             expect(store.search("shared", filter: .all).count == 2, "back to both")
+        }
+    }
+
+    /// Passive AI's kind and summary persist beside a row, search by summary, and go with it.
+    static func insightsAreDerivedMetadata() {
+        withStore { store, dir in
+            var captured: [String] = []
+            store.onTextCaptured = { captured.append($0.text ?? "") }
+            store.addText("func main() {}", sourceBundleID: nil)
+            store.addText("func main() {}", sourceBundleID: nil)
+            store.addText("a long essay", sourceBundleID: nil)
+            store.addText("kept", sourceBundleID: nil)
+            expect(captured.count == 3, "a re-copy of the top row is not captured again")
+
+            let essay = item(store, "a long essay")
+            let generation = store.extractionGeneration
+            expect(
+                !store.setInsight(kind: "prose", for: essay, generation: generation),
+                "nothing is written while the switch is off")
+            expect(store.setInsightsEnabled(true), "enabling creates the table")
+            expect(store.setInsight(kind: "prose", for: essay, generation: generation), "kind stored")
+            expect(
+                store.setSummary("Notes on tidal energy", for: essay, generation: generation),
+                "summary stored")
+            expect(
+                store.search("tidal", filter: .all).map(\.text) == ["a long essay"],
+                "a summary is searchable though the text never says it")
+            expect(
+                !store.setSummary("stale", for: essay, generation: UUID()),
+                "an answer from another generation lands on nothing")
+
+            let kept = item(store, "kept")
+            store.togglePinned(kept)
+            expect(store.setInsight(kind: "prose", for: kept, generation: generation), "pin tagged")
+
+            let reopened = ClipboardStore(directory: dir)
+            reopened.load()
+            expect(reopened.insights.isEmpty, "off by default after a reopen")
+            reopened.setInsightsEnabled(true)
+            expect(
+                reopened.insights[essay.id] == ClipboardInsight(
+                    kind: "prose", summary: "Notes on tidal energy"),
+                "the insight survives a reopen")
+
+            reopened.clearAll()
+            expect(reopened.insights.keys.sorted() == [kept.id], "Clear History drops the rest")
+            reopened.remove(item(reopened, "kept"))
+            expect(reopened.insights.isEmpty, "a removed row takes its insight with it")
+
+            let afterClear = ClipboardStore(directory: dir)
+            afterClear.load()
+            afterClear.setInsightsEnabled(true)
+            expect(afterClear.insights.isEmpty, "and the rows are gone from disk")
+            expect(
+                !afterClear.setInsight(kind: "prose", for: essay, generation: afterClear.extractionGeneration),
+                "a deleted row cannot be recreated by a late insight")
         }
     }
 

@@ -226,6 +226,9 @@ final class AIChatCoordinator {
         if case .claude? = selection, let title = await core.installedAI.claudeTitle(for: description) {
             return title
         }
+        if let title = await core.passiveAICoordinator.chatTitle(describing: description) {
+            return title
+        }
         guard let selection,
             let provider = try? AIProviderFactory.make(
                 selection: selection, settings: core.aiSettings,

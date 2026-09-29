@@ -55,6 +55,7 @@ final class AISettingsStore {
 
     /// Asked each time: the model lands mid-session, and a flag read at launch would never notice.
     @ObservationIgnored let isAppleIntelligenceAvailable: @Sendable () -> Bool
+    @ObservationIgnored let passive: PassiveAISettingsStore
 
     init(
         defaults: UserDefaults = .standard,
@@ -62,6 +63,7 @@ final class AISettingsStore {
     ) {
         self.defaults = defaults
         self.isAppleIntelligenceAvailable = isAppleIntelligenceAvailable
+        passive = PassiveAISettingsStore(defaults: defaults)
         connections = Self.decodeConnections(
             defaults.data(forKey: AppSettingsKey.aiConnections.rawValue))
         defaultModel = Self.decodeDefaultModel(

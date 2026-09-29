@@ -46,6 +46,7 @@ final class ClipboardCoordinator {
         guard settings.clipboardEnabled else {
             pasteQueue = PasteQueue()
             core.applyClipboardTextSearch()
+            core.applyClipboardInsights()
             clipboardManager.stop()
             if palette.mode == .clipboard { palette.prepare(mode: .launcher) }
             clipboardStore.close()
@@ -55,6 +56,7 @@ final class ClipboardCoordinator {
         clipboardStore.maxAge = settings.clipboardRetention.maxAge
         clipboardManager.start()
         core.applyClipboardTextSearch()
+        core.applyClipboardInsights()
         // Deferred off the launch path: the palette fills in behind the SQLite read and prune.
         Task { clipboardStore.load() }
     }
