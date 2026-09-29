@@ -14,13 +14,15 @@ struct ChatMessageActions {
     let retry: (UUID, AIModelOption?) -> Void
     let branch: (UUID) -> Void
     let speak: (ChatMessage) -> Void
+    /// Re-asks a reply's question of another model beside it, leaving the reply in place.
+    let compare: (UUID, AIModelOption) -> Void
     private let modelsKey: Int
 
     init(
         modelGroups: [AIModelOptionGroup], isBusy: Bool, canBranch: Bool, speakingID: UUID?,
         editingID: UUID?, edit: @escaping (UUID) -> Void,
         retry: @escaping (UUID, AIModelOption?) -> Void, branch: @escaping (UUID) -> Void,
-        speak: @escaping (ChatMessage) -> Void
+        speak: @escaping (ChatMessage) -> Void, compare: @escaping (UUID, AIModelOption) -> Void
     ) {
         self.modelGroups = modelGroups
         self.isBusy = isBusy
@@ -31,6 +33,7 @@ struct ChatMessageActions {
         self.retry = retry
         self.branch = branch
         self.speak = speak
+        self.compare = compare
         modelsKey = modelGroups.flatMap { $0.options.map(\.title) }.hashValue
     }
 
@@ -80,6 +83,10 @@ struct ChatMessageActionRow: View {
                 if !state.isBusy {
                     icon("arrow.clockwise", "Regenerate Response") { actions.retry(message.id, nil) }
                     ChatRetryMenu(groups: actions.modelGroups) { actions.retry(message.id, $0) }
+                    ChatModelsMenu(
+                        symbol: "rectangle.split.2x1", label: "Compare with Another Model",
+                        groups: actions.modelGroups
+                    ) { actions.compare(message.id, $0) }
                 }
                 branchButton
                 icon(
@@ -125,15 +132,27 @@ struct ChatMessageActionRow: View {
 
 /// Every model the chat could switch to, grouped by where it runs; picking one re-asks with it.
 private struct ChatRetryMenu: View {
-    @Environment(\.metrics) private var metrics
     let groups: [AIModelOptionGroup]
     let retry: (AIModelOption) -> Void
 
     var body: some View {
+        ChatModelsMenu(
+            symbol: "chevron.down", label: "Retry with Another Model", groups: groups, pick: retry)
+    }
+}
+
+private struct ChatModelsMenu: View {
+    @Environment(\.metrics) private var metrics
+    let symbol: String
+    let label: String
+    let groups: [AIModelOptionGroup]
+    let pick: (AIModelOption) -> Void
+
+    var body: some View {
         Menu {
-            ChatRetryModels(groups: groups, retry: retry)
+            ChatRetryModels(groups: groups, retry: pick)
         } label: {
-            Image(systemName: "chevron.down")
+            Image(systemName: symbol)
                 .font(metrics.typography.keyCap)
                 .foregroundStyle(Theme.Colors.textSecondary)
                 .frame(width: metrics.size.chatMessageAction, height: metrics.size.chatMessageAction)
@@ -144,8 +163,8 @@ private struct ChatRetryMenu: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .disabled(groups.isEmpty)
-        .help("Retry with Another Model")
-        .accessibilityLabel("Retry with Another Model")
+        .help(label)
+        .accessibilityLabel(label)
     }
 }
 
@@ -201,6 +220,9 @@ struct ChatMessageMenu: ViewModifier {
                 Button("Regenerate", systemImage: "arrow.clockwise") { actions.retry(message.id, nil) }
                 Menu("Retry With") {
                     ChatRetryModels(groups: actions.modelGroups) { actions.retry(message.id, $0) }
+                }
+                Menu("Compare With", systemImage: "rectangle.split.2x1") {
+                    ChatRetryModels(groups: actions.modelGroups) { actions.compare(message.id, $0) }
                 }
             }
             Button(

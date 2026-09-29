@@ -19,6 +19,14 @@ struct AIChatDetailView: View {
     }
 
     var body: some View {
+        if let comparison = coordinator.comparison {
+            ModelComparisonView(state: comparison)
+        } else {
+            chatBody
+        }
+    }
+
+    private var chatBody: some View {
         // Stacked, not floated: the transcript ends where the composer begins, never beneath it.
         VStack(spacing: 0) {
             content
@@ -61,7 +69,7 @@ struct AIChatDetailView: View {
             isDropTargeted = $0
         }
         .overlay {
-            if isDropTargeted { dropHint }
+            if isDropTargeted { ChatDropHint() }
         }
         .sheet(isPresented: Bindable(coordinator).showsChatInstructions) {
             ChatInstructionsSheet(chat: chat, coordinator: coordinator)
@@ -87,7 +95,8 @@ struct AIChatDetailView: View {
                         query: find.needle, matches: Set(occurrences.map(\.messageID)),
                         current: find.currentOccurrence(in: occurrences))
                     : nil,
-                actions: coordinator.messageActions(for: chat)
+                actions: coordinator.messageActions(for: chat),
+                inlineComparison: coordinator.inlineComparison(in: chat)
             )
             // A switched chat is a new scroll: its own tail-following, opening at its latest line.
             .id(chat.session.id)
@@ -104,8 +113,11 @@ struct AIChatDetailView: View {
             }
         }
     }
+}
 
-    private var dropHint: some View {
+/// Where dropped files will land: the whole detail, whichever composer it holds.
+struct ChatDropHint: View {
+    var body: some View {
         RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
             .strokeBorder(
                 Theme.Colors.dropTarget,
@@ -593,7 +605,7 @@ extension ChatContextReport {
 
 extension View {
     /// The composer's menus read as options, not links: a capsule the size of the row.
-    fileprivate func composerPill() -> some View {
+    func composerPill() -> some View {
         menuStyle(.button)
             .buttonStyle(.glass)
             .buttonBorderShape(.capsule)
@@ -602,7 +614,7 @@ extension View {
 }
 
 /// A menu draws an image at its own size, so a brand mark is redrawn at the symbols' size.
-private struct MenuIconImage: View {
+struct MenuIconImage: View {
     let icon: PopoverMenuIcon
 
     private static let edge: CGFloat = 16

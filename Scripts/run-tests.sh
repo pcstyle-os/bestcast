@@ -612,6 +612,7 @@ run ai-chat-test           Tinycast/Features/AI/Model/AIRequest.swift \
                            Tinycast/Features/AI/Model/ChatLibraryIndex.swift \
                            Tinycast/Features/AI/Model/ChatLibraryChunkEngine.swift \
                            Tinycast/Features/AI/Model/ChatLibraryPolicy.swift \
+                           Tinycast/Features/AI/Model/ModelComparison.swift \
                            Tinycast/Features/AI/Service/AIProvider.swift \
                            Tinycast/Features/AI/Service/ChatHistoryStore.swift \
                            Tinycast/Features/AI/Service/AIToolLoopProvider.swift \
@@ -622,6 +623,7 @@ run ai-chat-test           Tinycast/Features/AI/Model/AIRequest.swift \
                            Tinycast/Features/AI/UI/AIChatState.swift \
                            Tinycast/Features/AI/UI/AIChatSurfacesState.swift \
                            Tinycast/Features/AI/UI/ChatLibraryState.swift \
+                           Tinycast/Features/AI/UI/ModelComparisonState.swift \
                            Tinycast/Features/AI/UI/ChatFindState.swift
 run chat-library-test     Tinycast/Features/AI/Model/AIRequest.swift \
                            Tinycast/Features/AI/Model/AIAttachmentPolicy.swift \
@@ -636,6 +638,16 @@ run chat-library-test     Tinycast/Features/AI/Model/AIRequest.swift \
                            Tinycast/Features/AI/Model/ChatLibraryIndex.swift \
                            Tinycast/Features/AI/Model/ChatLibraryChunkEngine.swift \
                            Tinycast/Features/AI/Model/ChatLibraryPolicy.swift
+run model-comparison-test  Tinycast/Features/AI/Model/AIRequest.swift \
+                           Tinycast/Features/AI/Model/AIConnection.swift \
+                           Tinycast/Features/AI/Model/AppleIntelligence.swift \
+                           Tinycast/Features/AI/Model/AIAttachmentPolicy.swift \
+                           Tinycast/Features/AI/Model/AITool.swift \
+                           Tinycast/Features/AI/Model/JSONValue.swift \
+                           Tinycast/Features/AI/Model/ChatMessage.swift \
+                           Tinycast/Features/AI/Model/ChatSession.swift \
+                           Tinycast/Features/AI/Model/ChatChoices.swift \
+                           Tinycast/Features/AI/Model/ModelComparison.swift
 run chat-markdown-test     Tinycast/Platform/Appearance.swift \
                            Tinycast/DesignSystem/Theme.swift \
                            Tinycast/DesignSystem/InterfaceMetrics.swift \

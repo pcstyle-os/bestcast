@@ -433,8 +433,8 @@ so the sectioned view stays 1:1 with the flat selection.
 ### Suggestions
 
 `LauncherSuggestions.select` chooses at most five from every visible entry that is not a favorite, a
-meeting, an AI command or Tinycast itself. AI is the lowest priority, so Quick AI and AI Chat are
-never suggested, however often they are opened:
+meeting, an AI command or Tinycast itself. AI is the lowest priority, so Quick AI, AI Chat and
+Compare AI Models are never suggested, however often they are opened:
 
 1. up to two apps or extensions installed in the last five minutes and never opened —
    `AppEntry.installedAt` is the bundle's added-to-directory date;

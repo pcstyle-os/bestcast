@@ -32,6 +32,7 @@ extension AIChatCoordinator {
     }
 
     func newTemporaryChat() {
+        leaveComparisons()
         chats.newWindowChat(temporary: true)
     }
 
@@ -61,6 +62,10 @@ extension AIChatCoordinator {
                 guard let self, let chat else { return }
                 branch(from: id, in: chat)
             },
-            speak: { [weak self] message in self?.speak(message) })
+            speak: { [weak self] message in self?.speak(message) },
+            compare: { [weak self, weak chat] id, option in
+                guard let self, let chat else { return }
+                compare(reply: id, with: option, in: chat)
+            })
     }
 }

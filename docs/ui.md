@@ -165,7 +165,7 @@ AI Chat adds `aiChatWindow 960×660` (opening size), `aiChatWindowMinimum 680×4
 `aiChatSidebarMinimum 240`–`aiChatSidebarMaximum 340`, `aiChatDetailMinimum 440`,
 `aiChatReadingWidth 760` for the transcript and composer column, `aiChatComposerMaxHeight 180`, and
 `chatContextGauge 14` for the composer's context ring, and `chatContextCard 300` for the card it
-raises on hover.
+raises on hover. Compare Models keeps each column at least `aiComparisonColumnMinimum 220` wide.
 
 `keyCap` sizes the palette's keycap chips; `recorderKeyCap` (both size and radius) is the intentionally-smaller Settings shortcut-recorder chip.
 

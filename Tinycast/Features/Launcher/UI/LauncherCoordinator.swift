@@ -180,6 +180,9 @@ final class LauncherCoordinator {
             core.aiChatCoordinator.showWindow()
         case .aiInbox:
             core.aiInboxCoordinator.toggle()
+        case .compareAIModels:
+            dismissPalette()
+            core.aiChatCoordinator.showComparison()
         case .fixGrammar:
             core.quickActionCoordinator.run(.fixGrammar)
         case .rewrite:
