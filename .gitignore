@@ -72,3 +72,4 @@ website/.dev.vars
 
 # Local agent state
 .claude/
+.amp/portals/

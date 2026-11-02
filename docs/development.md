@@ -21,6 +21,66 @@ a few `openssl`/`security` commands.
 That is the whole required setup. Editor configuration is personal and the repo does not prescribe it;
 the section below is a note for anyone who wants it, not a step.
 
+## Amp orbs and Mac satellites
+
+`.agents/setup` prepares the Linux orb for website and JavaScript runtime work. It installs Node 24
+(matching website CI) and pnpm 10 under `~/.local/share/bestcast-orb`, adds them to the login-shell
+PATH, and installs both dependency trees from their lockfiles. Amp snapshots these tools and
+dependencies for reuse by fresh orbs. Repeated setup keeps matching website dependencies and
+regenerates the MDX and Worker types; pnpm checks its own installed tree. `.agents/resume` only checks
+the tools, without installing packages or starting services.
+
+No credentials are needed to develop the website or runtime. Polar credentials are optional for
+checkout testing; keep them in the ignored `website/.dev.vars`, never in a setup script. Start the
+website as a supervised service, not a background shell process:
+
+```sh
+amp orb service start website \
+  --command 'npm --prefix website run dev -- --hostname 0.0.0.0' --port 3000 --portal
+```
+
+See the [website README](../website/README.md) for its commands.
+
+Native development needs a [Mac satellite](https://ampcode.com/docs/orbs/mac). Linux setup cannot
+install Xcode, AppKit, or the macOS SDK, and its snapshot does not cache a Mac's installed tools or
+DerivedData. A satellite starts fresh, but a running satellite can reuse its tools and build cache.
+Do not start one from setup or resume, or for website-only work.
+
+For an agent working on the native app:
+
+1. Start the thread's satellite with `mac_sidecar(action: "start", image: "macos-26")`. That image
+   supplies Xcode 26, matching this repository and native CI. Inspect `xcodebuild -version` on the Mac
+   before building; select an installed Xcode 26 if needed. Use a runner only when the task requires
+   a specifically named machine or its local state.
+2. Keep repository edits on the Linux orb. `mac_shell` mirrors the worktree before each command;
+   edits made in the mirrored checkout on the Mac can be overwritten. Ignored files, including
+   `node_modules` and `.dev.vars`, do not sync. Run native commands through `mac_shell`, not the
+   Linux shell. For example, install missing prerequisites on the Mac with:
+
+   ```sh
+   export PATH="$(brew --prefix)/opt/node@24/bin:$PATH"
+   command -v node >/dev/null || brew install node@24
+   command -v swiftlint >/dev/null || brew install swiftlint
+   ```
+
+   Include that Node PATH in later Mac commands when using Homebrew's keg-only `node@24`.
+   Install XcodeGen with `brew install xcodegen` only when changing `project.yml`. The committed
+   runtime means a native app build needs no JavaScript dependencies; runtime regeneration stays
+   on the orb.
+3. Run `./Scripts/run-tests.sh`, `./Scripts/lint.sh`, and a Debug build on the Mac:
+
+   ```sh
+   xcodebuild -project Bestcast.xcodeproj -scheme Bestcast -configuration Debug \
+     -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO build
+   ```
+
+   Disabling signing is enough for compile verification. To launch and exercise the app, use ad-hoc
+   signing (`CODE_SIGN_IDENTITY=-`) on the disposable Mac, or follow [signing.md](signing.md) when a
+   persistent Accessibility grant is needed. Do not provision release credentials for local checks.
+4. Inspect native UI changes in the thread's Mac tab. Read screenshots with `mac_read_file`, and
+   copy review screenshots, recordings, or logs back with `mac_download` before the Mac stops.
+   The satellite and its build cache are deleted after idle shutdown or when the orb pauses.
+
 ## Build & run
 
 ```sh

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="$HOME/.local/share/bestcast-orb/bin:$PATH"
+node --version
+pnpm --version
+echo '[resume] Linux tools ready; use a Mac satellite for Xcode, Swift harnesses and SwiftLint.'

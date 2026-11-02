@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+export PATH="$HOME/.local/share/bestcast-orb/bin:$PATH"
+TIMEFORMAT='[setup] %3R seconds'
+
+echo '[setup] Node 24 and pnpm 10'
+if [[ "$(node --version)" != v24.* ]] || [[ "$(pnpm --version)" != 10.* ]]; then
+    time npm install --global --prefix "$HOME/.local/share/bestcast-orb" \
+        --no-audit --no-fund node@24 pnpm@10
+fi
+
+profile_line='export PATH="$HOME/.local/share/bestcast-orb/bin:$PATH"'
+if ! grep -Fqx "$profile_line" "$HOME/.bash_profile" 2>/dev/null; then
+    printf '\n%s\n' "$profile_line" >> "$HOME/.bash_profile"
+fi
+node --version
+pnpm --version
+
+echo '[setup] Website dependencies and generated MDX/Worker types'
+website_key="$(cat website/package.json website/package-lock.json; node --version; npm --version)"
+website_key="$(printf '%s' "$website_key" | sha256sum | cut -d ' ' -f 1)"
+website_marker=website/node_modules/.bestcast-orb-dependencies
+if [[ -f "$website_marker" && "$(cat "$website_marker")" == "$website_key" ]]; then
+    time npm --prefix website run postinstall
+else
+    time npm --prefix website ci --no-audit --no-fund
+    printf '%s\n' "$website_key" > "$website_marker"
+fi
+
+echo '[setup] Extension runtime dependencies'
+time env CI=true pnpm --dir Scripts/raycast-runtime install --frozen-lockfile
+
+echo '[setup] Ready. For Mac satellite development, see docs/development.md#amp-orbs-and-mac-satellites.'
