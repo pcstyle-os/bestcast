@@ -128,7 +128,7 @@ feature's doc, under its own `## Invariants`.
 
 `.agents/setup` caches the Linux Node toolchain and website/runtime dependencies; `.agents/resume`
 does no installation. Native builds, Swift harnesses, SwiftLint, and UI checks run on a Mac satellite
-started with `mac_sidecar(action: "start", image: "macos-26")`, using `mac_shell`. Keep repository
+started with `mac_sidecar(action: "start", image: "macos-27")` and Xcode 26.6, using `mac_shell`. Keep repository
 edits on the orb; the mirror to the Mac is one-way and excludes ignored dependencies. Do not install
 Linux Swift as a substitute for Xcode or start a satellite for website-only work. Follow
 [the satellite workflow](docs/development.md#amp-orbs-and-mac-satellites) for Mac prerequisites,

@@ -48,9 +48,11 @@ Do not start one from setup or resume, or for website-only work.
 
 For an agent working on the native app:
 
-1. Start the thread's satellite with `mac_sidecar(action: "start", image: "macos-26")`. That image
-   supplies Xcode 26, matching this repository and native CI. Inspect `xcodebuild -version` on the Mac
-   before building; select an installed Xcode 26 if needed. Use a runner only when the task requires
+1. Start the thread's satellite with `mac_sidecar(action: "start", image: "macos-27")`. Native CI
+   builds with the newest Xcode 26 on its runner (26.6), and only that image carries it; `macos-26`
+   stops at 26.3, which rejects code CI accepts. Export
+   `DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer` in Mac commands, since the image
+   defaults to Xcode 27, and check `xcodebuild -version` before building. Use a runner only when the task requires
    a specifically named machine or its local state.
 2. Keep repository edits on the Linux orb. `mac_shell` mirrors the worktree before each command;
    edits made in the mirrored checkout on the Mac can be overwritten. Ignored files, including
