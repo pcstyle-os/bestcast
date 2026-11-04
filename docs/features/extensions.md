@@ -533,8 +533,13 @@ Settings → Extensions offers five routes, under **Install New**:
 5. **Install from Git** — a GitHub URL, cloned and built on this Mac; see
    [Development](#development).
 
-Only `package.json`, the built commands and `assets/` are copied — never `node_modules` or the
-multi-megabyte `.js.map` Raycast writes beside each bundle.
+Only `package.json`, the built commands and `assets/` are copied — never the multi-megabyte `.js.map`
+Raycast writes beside each bundle, nor a source tree's `node_modules`. The one `node_modules` copied
+is the one `ray build` 2.10+ emits beside its bundles, recognised by its
+`.raycast-shared-dependencies` marker: it leaves shared dependencies such as `@raycast/utils`
+external and writes each there as a small CJS package. The runtime's `require` resolves a name it
+does not provide the way Node does — relative paths from the requiring file, bare names through the
+nearest `node_modules` upwards, honouring `exports` — so those bundles load as they would in Raycast.
 
 ## Development
 

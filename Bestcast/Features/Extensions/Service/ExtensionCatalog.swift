@@ -231,7 +231,7 @@ enum ExtensionCatalog {
         }
     }
 
-    /// Manifest, built commands, `assets/` and `bestcast` files, never `node_modules` or maps.
+    /// Manifest, built commands, `assets/`, `bestcast` files and `ray`'s shared dependencies; no maps.
     @discardableResult
     static func install(from source: URL) throws -> InstalledExtension {
         guard let manifest = try? ExtensionManifest.load(directory: source) else {
@@ -266,6 +266,11 @@ enum ExtensionCatalog {
                 if fm.fileExists(atPath: item.path) {
                     try fm.copyItem(at: item, to: destination.appendingPathComponent(folder))
                 }
+            }
+            // `ray build` 2.10+ emits shared dependencies here and marks the folder as its own output.
+            let shared = source.appendingPathComponent("node_modules")
+            if fm.fileExists(atPath: shared.appendingPathComponent(".raycast-shared-dependencies").path) {
+                try fm.copyItem(at: shared, to: destination.appendingPathComponent("node_modules"))
             }
             try copyBestcastFiles(of: manifest, from: source, to: destination)
             try restoreExecutablePermissions(in: destination)
