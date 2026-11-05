@@ -248,6 +248,11 @@ private struct WindowModeRow: View {
                         RoundedRectangle(cornerRadius: Theme.Radius.barControl, style: .continuous)
                     )
                     .saturation(selected ? 1 : 0)
+                    .padding(3)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: Theme.Radius.barControl + 3, style: .continuous)
+                            .strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 2)
+                    }
                 Text(title)
                     .font(.caption)
                     .fontWeight(selected ? .semibold : .regular)
