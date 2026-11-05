@@ -942,7 +942,7 @@ struct RootPaletteView: View {
             if showActions {
                 Rectangle()
                     .fill(Theme.Colors.separator)
-                    .frame(width: 1, height: metrics.size.menuIcon)
+                    .frame(width: Theme.Size.hairline, height: metrics.size.menuIcon)
                     .padding(.horizontal, metrics.spacing.xxs)
                     .accessibilityHidden(true)
                 BarButton(action: toggleActions) {

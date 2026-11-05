@@ -191,7 +191,7 @@ struct ClipboardRow: View {
         )
         .armedHover($hovered)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.title(for: item))
+        .accessibilityLabel(displayTitle)
         .accessibilityValue(spokenDetail)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .task(id: imageURL) {
@@ -221,8 +221,9 @@ struct ClipboardRow: View {
         switch item.kind {
         // Cap before trimming: never walk a multi-MB clipboard string per row.
         case .text:
-            return String((item.text ?? "").prefix(200)).trimmingCharacters(
+            let head = String((item.text ?? "").prefix(200)).trimmingCharacters(
                 in: .whitespacesAndNewlines)
+            return head.split(whereSeparator: \.isNewline).first.map(String.init) ?? head
         case .image: return "Image"
         case .file:
             return item.filePath.map {
@@ -437,7 +438,7 @@ struct ClipboardPreview: View {
                 ColorPreview(color: color, text: item.text ?? "")
             } else {
                 ScrollView { previewText(item.text ?? "") }
-                    .overflowFade()
+                    .overflowFade(includingTop: true)
                     .padding(.bottom, metrics.spacing.lg)
             }
         case .image:

@@ -116,7 +116,7 @@ enum SettingsSearchCatalog {
     private static let general: [SettingsSearchEntry] = [
         .init(pane: .general, keywords: ["preferences", "settings"]),
         .init(
-            .generalGlobalShortcuts, "App launcher",
+            .generalGlobalHotkeys, "App launcher",
             keywords: ["hotkey", "shortcut", "summon", "palette"]),
         .init(
             .generalBehavior, "Launch at login",

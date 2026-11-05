@@ -46,12 +46,13 @@ struct CalculatorCard: View {
         return Group {
             switch result.payload {
             case .value(let display, _):
-                HStack(spacing: 0) {
+                // Baseline-aligned, so the sign reads inline with the numerals: "2+2×10 = 22".
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
                     LeadCardColumn(
                         text: CalcSyntax.highlighted(result.expression),
                         badge: result.sourceBadge, weight: .regular, isSource: true)
-                    Image(systemName: "equal")
-                        .font(.title3)
+                    Text("=")
+                        .font(metrics.typography.calcResult)
                         .foregroundStyle(.tertiary)
                     LeadCardColumn(
                         text: CalcSyntax.highlighted(display), badge: result.targetBadge,
@@ -81,7 +82,7 @@ struct CalculatorCard: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// One phrase, where reading the parts would speak the arrow between them as a glyph.
+    /// One phrase, where reading the parts would speak the sign between them as a glyph.
     static func spokenLabel(for result: CalcResult) -> String {
         switch result.payload {
         case .value(let display, _): return "\(result.expression) equals \(display)"

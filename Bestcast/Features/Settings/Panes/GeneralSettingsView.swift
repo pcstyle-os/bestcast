@@ -33,11 +33,11 @@ struct GeneralSettingsView: View {
         @Bindable var settings = settings
         return Form {
             Section {
-                SettingsRow(title: "App launcher", anchor: .generalGlobalShortcuts) {
+                SettingsRow(title: "App launcher", anchor: .generalGlobalHotkeys) {
                     ShortcutRecorder(action: .togglePalette)
                 }
             } header: {
-                SettingsSectionHeader(.generalGlobalShortcuts)
+                SettingsSectionHeader(.generalGlobalHotkeys)
             }
 
             Section {
@@ -46,7 +46,7 @@ struct GeneralSettingsView: View {
                 }
                 Toggle(isOn: $settings.showInMenuBar) {
                     SettingsRowTitle(.generalBehavior, "Show in menu bar")
-                    Text("Shortcuts still work when hidden.")
+                    Text("Hotkeys still work when hidden.")
                 }
                 Picker(selection: $settings.popToRootTimeout) {
                     ForEach(PopToRootTimeout.allCases) { timeout in

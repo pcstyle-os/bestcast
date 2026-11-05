@@ -29,7 +29,7 @@ struct AboutView: View {
             Section {
                 hero
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, Theme.Spacing.lg)
+                    .padding(.vertical, Theme.Spacing.md)
             }
             .settingsAnchor(.aboutAbout)
             links
@@ -40,7 +40,7 @@ struct AboutView: View {
     }
 
     private var hero: some View {
-        VStack(spacing: Theme.Spacing.xl) {
+        VStack(spacing: Theme.Spacing.lg) {
             Image(nsImage: Self.appIcon)
                 .resizable()
                 .interpolation(.high)
