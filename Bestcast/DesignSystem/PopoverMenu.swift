@@ -258,7 +258,7 @@ struct PopoverMenu: View {
             // A margin, not padding: a revealed end row keeps its inset instead of meeting the edge.
             .contentMargins(.vertical, listInset, for: .scrollContent)
             .frame(height: extent.viewport + listInset * 2)
-            .mask { overflowMask(scrolls: extent.content > extent.viewport) }
+            .overflowFade(band: Theme.Size.menuOverflowFade)
             // `never`, not `hidden`: hidden still lets AppKit claim the scroller's gutter.
             .scrollIndicators(.never)
             .scrollBounceBehavior(extent.content > extent.viewport ? .always : .basedOnSize)
@@ -271,18 +271,6 @@ struct PopoverMenu: View {
                 guard !byPointer else { return }
                 proxy.scrollTo(selection)
             }
-        }
-    }
-
-    /// Fades the bottom edge only while rows lie past it.
-    private func overflowMask(scrolls: Bool) -> some View {
-        VStack(spacing: 0) {
-            Color.black
-            LinearGradient(
-                colors: [.black, .black.opacity(scrolls ? 0 : 1)], startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: Theme.Size.menuOverflowFade)
         }
     }
 

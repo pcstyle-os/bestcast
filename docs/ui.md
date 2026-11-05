@@ -370,6 +370,8 @@ or pass `includingTop: true` for a bounded popup whose title and rows scroll tog
   edge because their content, including the title, can scroll past it.
 - Fade band: **24px** with the original single-stop curve by default; popups opt into the progressive
   top-and-bottom curve and their own 30pt band.
+- `PopoverMenu` uses the bottom edge with `menuOverflowFade` (20pt), so a capped menu's last row
+  clears once scrolled to.
 - **No alpha floor.** Each enabled edge eases with how much content is hidden there and clears
   completely once the list rests against it.
 - No `.ignoresSafeArea()`: a Settings list carries no bar insets to correct for.
@@ -848,7 +850,7 @@ shortcut"), live held keys, a pending second Globe tap, or a conflict (rejected 
 - `allowsHitTesting(false)`: clicks reach the capture session's mouse monitor; a click on the active
   recorder toggles it off, and a click elsewhere closes it.
 
-The calculator's inline `CalculatorCard` reuses this card language (`cardFill` + `cardStroke`) rather than the row language, since it's a highlighted answer, not a list item. A value answer is a **two-column** layout: a source column (input echo) and a target column (result), separated by a centered `arrow.right` glyph (no divider line). `LeadCardColumn` is that column, pill included, so the colour card is built from the same part rather than a copy of it. Each column optionally carries a word-name **badge pill** beneath its value (`keyCap` font, `controlSurface` fill, `keyCap` radius) — `Expression`→`Result` for scalar arithmetic, unit or currency names for typed results (`Expression`→`Kilograms`), and moment labels for a date/time calc (`12:18 AM`→`9:00 AM`, `Friday, 24 July`→`Friday, 9 April, 2027`). A trailing operator keeps the last complete result and its badge visible while the next operand is being typed.
+The calculator's inline `CalculatorCard` reuses this card language (`cardFill` + `cardStroke`) rather than the row language, since it's a highlighted answer, not a list item. A value answer is a **two-column** layout: a source column (input echo) and a target column (result), separated by a centered `arrow.right` glyph (no divider line). `LeadCardColumn` is that column, so the colour card is built from the same part rather than a copy of it. The result is primary and semibold; the input echo is secondary at regular weight. Each column optionally carries a plain tertiary **caption** beneath its value — `Expression`→`Result` for scalar arithmetic, unit or currency names for typed results (`Expression`→`Kilograms`), and moment labels for a date/time calc (`12:18 AM`→`9:00 AM`, `Friday, 24 July`→`Friday, 9 April, 2027`). A trailing operator keeps the last complete result and its caption visible while the next operand is being typed.
 
 ---
 
