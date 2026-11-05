@@ -50,8 +50,8 @@ struct CalculatorCard: View {
                     LeadCardColumn(
                         text: CalcSyntax.highlighted(result.expression),
                         badge: result.sourceBadge, weight: .regular, isSource: true)
-                    Image(systemName: "arrow.right")
-                        .font(.title3.weight(.semibold))
+                    Image(systemName: "equal")
+                        .font(.title3)
                         .foregroundStyle(.tertiary)
                     LeadCardColumn(
                         text: CalcSyntax.highlighted(display), badge: result.targetBadge,

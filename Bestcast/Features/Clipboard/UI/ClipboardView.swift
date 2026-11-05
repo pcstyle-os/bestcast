@@ -146,6 +146,8 @@ struct ClipboardRow: View {
     var insight: ClipboardInsight?
     @Environment(PaletteState.self) private var palette
     @State private var hovered = false
+    /// An image row's dimensions, read off-main so a long list never blocks on image headers.
+    @State private var pixelSize: CGSize?
 
     /// Selection wins over hover when a row is both; otherwise hover shows its fainter layer.
     private var fill: Color {
@@ -158,7 +160,7 @@ struct ClipboardRow: View {
         HStack(spacing: metrics.spacing.lg) {
             thumbnail(item.colorValue)
             VStack(alignment: .leading, spacing: metrics.spacing.xxs) {
-                Text(Self.title(for: item))
+                Text(displayTitle)
                     .font(metrics.typography.menuRow)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -192,6 +194,17 @@ struct ClipboardRow: View {
         .accessibilityLabel(Self.title(for: item))
         .accessibilityValue(spokenDetail)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .task(id: imageURL) {
+            guard item.kind == .image, let url = imageURL else { return }
+            pixelSize = await Task.detached(priority: .utility) {
+                ImageThumbnail.pixelSize(of: url)
+            }.value
+        }
+    }
+
+    private var displayTitle: String {
+        guard item.kind == .image, let pixelSize else { return Self.title(for: item) }
+        return "Image · \(Int(pixelSize.width))×\(Int(pixelSize.height))"
     }
 
     private var spokenDetail: String {

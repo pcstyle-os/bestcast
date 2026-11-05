@@ -64,8 +64,7 @@ struct AboutView: View {
                 } label: {
                     SettingsRowTitle(.aboutAbout, "Check for Updates")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(.link)
             }
         }
     }

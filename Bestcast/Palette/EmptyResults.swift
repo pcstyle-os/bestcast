@@ -5,9 +5,9 @@ struct EmptyResults: View {
     /// An unused screen names its own subject; a search that found nothing keeps this.
     var symbol = "magnifyingglass"
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             Image(systemName: symbol).font(.largeTitle)
-                .symbolRenderingMode(.hierarchical).foregroundStyle(.tertiary)
+                .symbolRenderingMode(.hierarchical).foregroundStyle(.secondary)
             Text(text).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
