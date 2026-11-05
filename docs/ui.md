@@ -372,6 +372,8 @@ or pass `includingTop: true` for a bounded popup whose title and rows scroll tog
   top-and-bottom curve and their own 30pt band.
 - `PopoverMenu` uses the bottom edge with `menuOverflowFade` (20pt), so a capped menu's last row
   clears once scrolled to.
+- The clipboard's text preview fades its bottom edge too, so a long clip reads as scrollable rather
+  than cut against the Information block.
 - **No alpha floor.** Each enabled edge eases with how much content is hidden there and clears
   completely once the list rests against it.
 - No `.ignoresSafeArea()`: a Settings list carries no bar insets to correct for.

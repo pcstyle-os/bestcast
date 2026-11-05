@@ -33,7 +33,7 @@ struct GeneralSettingsView: View {
         @Bindable var settings = settings
         return Form {
             Section {
-                SettingsRow(title: "App Launcher", anchor: .generalGlobalShortcuts) {
+                SettingsRow(title: "App launcher", anchor: .generalGlobalShortcuts) {
                     ShortcutRecorder(action: .togglePalette)
                 }
             } header: {

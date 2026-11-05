@@ -940,6 +940,11 @@ struct RootPaletteView: View {
             .accessibilityLabel(pillLabel)
             .accessibilityHint(formPrimaryShortcut ? "Command-Return" : "Return")
             if showActions {
+                Rectangle()
+                    .fill(Theme.Colors.separator)
+                    .frame(width: 1, height: metrics.size.menuIcon)
+                    .padding(.horizontal, metrics.spacing.xxs)
+                    .accessibilityHidden(true)
                 BarButton(action: toggleActions) {
                     HStack(spacing: metrics.spacing.sm) {
                         Text("Actions")

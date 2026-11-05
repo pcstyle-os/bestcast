@@ -49,7 +49,7 @@ struct LeadCardColumn: View {
             if let badge {
                 Text(badge)
                     .font(metrics.typography.keyCap)
-                    .foregroundStyle(Theme.Colors.textTertiary)
+                    .foregroundStyle(Theme.Colors.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
             }

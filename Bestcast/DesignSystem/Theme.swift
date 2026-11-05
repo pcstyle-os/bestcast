@@ -436,7 +436,7 @@ enum Theme {
         /// Selection fill, shared by every list so they look identical.
         static let selection = ramp(dark: 0.10, light: 0.09)
         /// A selected lead card: a row's selection at card size reads as a slab in light ink.
-        static let cardSelection = ramp(dark: 0.10, light: 0.06)
+        static let cardSelection = ramp(dark: 0.10, light: 0.045)
         /// Mouse hover: a fainter layer, visually distinct from selection.
         static let rowHover = ramp(dark: 0.05, light: 0.045)
         /// The emoji grid's selection ring; a cell at rest draws nothing but its glyph.

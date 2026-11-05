@@ -424,6 +424,8 @@ struct ClipboardPreview: View {
                 ColorPreview(color: color, text: item.text ?? "")
             } else {
                 ScrollView { previewText(item.text ?? "") }
+                    .overflowFade()
+                    .padding(.bottom, metrics.spacing.lg)
             }
         case .image:
             AsyncThumbnail(url: store.imageURL(for: item), maxPixel: metrics.size.clipboardPreviewPixel) {
