@@ -118,7 +118,7 @@ struct ShortcutRecorder: View {
             boundLabel(binding)
         } else {
             Text(isRecording ? "Listening…" : "Record Hotkey")
-                .font(Theme.Typography.keyCap)
+                .font(.callout)
                 .foregroundStyle(unsetInk)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

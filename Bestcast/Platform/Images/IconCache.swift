@@ -43,11 +43,13 @@ struct SymbolTint: Hashable, Sendable {
 }
 
 enum SystemSymbolName {
-    // This pair renders opposite to its name on the target SF Symbols runtime, in both appearances.
-    static func resolve(_ name: String) -> String {
+    // Dark Aqua draws this pair opposite to its name; a light surface draws it as named.
+    static func resolve(_ name: String, dark: Bool) -> String {
+        guard dark else { return name }
         switch name {
-        case "face.smiling": "face.smiling.inverse"
-        default: name
+        case "face.smiling": return "face.smiling.inverse"
+        case "face.smiling.inverse": return "face.smiling"
+        default: return name
         }
     }
 }
@@ -249,29 +251,41 @@ enum IconCache {
         return (image, rep.bytesPerRow * rep.pixelsHigh)
     }
 
+    /// The share of a symbol tile its glyph's longer side spans.
+    private static let glyphExtent: CGFloat = 0.64
+
     /// A symbol on an app-icon-shaped tile; a tint fills it and brightens the glyph to white.
     static func symbolIcon(named name: String, tint: SymbolTint? = nil) -> NSImage {
         let key = symbolKey(name, tint)
         if let cached = cache.object(forKey: key) { return cached }
 
         let side = displayPixel
-        let isDark = darkSurface.withLock { $0 }
-        let plainInk: CGFloat = isDark ? 1 : 0
         let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
             // Tile inset mirrors the margin macOS app icons carry inside their canvas.
             let tile = NSRect(x: 0, y: 0, width: side, height: side).insetBy(dx: 4, dy: 4)
-            (tint?.color ?? .srgbInk(plainInk, alpha: 0.09)).setFill()
-            NSBezierPath(roundedRect: tile, xRadius: 9, yRadius: 9).fill()
+            let path = NSBezierPath(roundedRect: tile, xRadius: 9, yRadius: 9)
+            if let tint {
+                tint.color.setFill()
+                path.fill()
+            } else {
+                // Graphite, solid like an app icon beside it, so a built-in never reads as disabled.
+                NSGradient(starting: .srgbInk(0.44, alpha: 1), ending: .srgbInk(0.27, alpha: 1))?
+                    .draw(in: path, angle: -90)
+            }
 
-            // A tinted tile keeps white ink in both appearances; the tint carries the contrast.
-            let ink = tint == nil ? NSColor.srgbInk(plainInk, alpha: 0.85) : .white
-            guard let symbol = glyph(named: name, tint: ink)
+            // Every tile is solid now, so white ink carries the contrast in both appearances.
+            guard let symbol = glyph(named: name, tint: .white)
             else { return true }
-            let size = symbol.size
-            symbol.draw(
-                in: NSRect(
-                    x: (side - size.width) / 2, y: (side - size.height) / 2,
-                    width: size.width, height: size.height))
+            // Fitted to one box, so a round glyph and a tall one fill their tiles alike.
+            let fit = tile.width * glyphExtent / max(symbol.size.width, symbol.size.height)
+            let size = NSSize(width: symbol.size.width * fit, height: symbol.size.height * fit)
+            // Dark Aqua draws some glyphs inverted (`face.smiling` as a disc); the tile never varies.
+            NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {
+                symbol.draw(
+                    in: NSRect(
+                        x: (side - size.width) / 2, y: (side - size.height) / 2,
+                        width: size.width, height: size.height))
+            }
             return true
         }
         let (icon, cost) = downsampled(image)
@@ -284,7 +298,7 @@ enum IconCache {
         let config = NSImage.SymbolConfiguration(pointSize: 21, weight: .medium)
             .applying(.init(paletteColors: [tint]))
         if let symbol = NSImage(
-            systemSymbolName: SystemSymbolName.resolve(name), accessibilityDescription: nil
+            systemSymbolName: name, accessibilityDescription: nil
         )?
         .withSymbolConfiguration(config) {
             return symbol

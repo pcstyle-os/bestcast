@@ -60,7 +60,7 @@ Showing the palette calls `prepare(mode:)`, which resets state and bumps `focusT
 SwiftUI search field re-focuses. `prepare` is one of four motions over the screen — see
 [Navigation](#navigation).
 
-Hiding schedules Pop to Root Search, and `PaletteWindowController.popToRoot` is its only path: the
+Hiding schedules Return to main search, and `PaletteWindowController.popToRoot` is its only path: the
 palette returns to the launcher *and* chat starts a new conversation, at once or after
 `popToRootTimeout`, unless a re-summon inside that window consumes the pending reset first. An
 unfinished chat is a thing being done, exactly like a typed query, so the screen and the conversation
@@ -430,8 +430,8 @@ list under itself (Move Favorite Up/Down) is no exception, so no row ever runs a
 `PopoverMenuItem.startsSection` draws a separator with the list inset (8pt) above and below it, so a
 row sits as far from it as from the search field's hairline. That height joins the menu's exact
 sizing, but the separator takes no selection index, so navigation still walks only rows. A menu
-taller than its cap ends its viewport mid-row, so the fold never lands on a separator or section
-title, and both hairlines are one device pixel.
+taller than its cap ends its viewport on a whole row, so the fold never lands on a separator or
+section title, and fades that edge while rows lie past it; both hairlines are one device pixel.
 Built-in action menus mark boundaries between opening or copying, managing the item, settings, and
 deletion. Menus offering one kind of action, such as calculator copies, color formats, or emoji
 transfers, keep their rows in one group.

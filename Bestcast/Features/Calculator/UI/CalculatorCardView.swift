@@ -39,23 +39,28 @@ struct CalculatorCard: View {
     @Environment(AppCore.self) private var core
     let result: CalcResult
     let selected: Bool
+    private static let contentWidth: CGFloat = 520
 
     var body: some View {
         let result = core.calcNumberFormat.localized(result)
         return Group {
             switch result.payload {
             case .value(let display, _):
-                HStack(spacing: 0) {
+                // Baseline-aligned, so the sign reads inline with the numerals: "2+2×10 = 22".
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
                     LeadCardColumn(
                         text: CalcSyntax.highlighted(result.expression),
-                        badge: result.sourceBadge)
-                    Image(systemName: "arrow.right")
-                        .font(.title3.weight(.semibold))
+                        badge: result.sourceBadge, weight: .regular, isSource: true)
+                    Text("=")
+                        .font(metrics.typography.calcResult)
                         .foregroundStyle(.tertiary)
                     LeadCardColumn(
                         text: CalcSyntax.highlighted(display), badge: result.targetBadge,
                         weight: .semibold)
                 }
+                // Capped, so the eye travels from expression to answer rather than across the panel.
+                .frame(maxWidth: metrics.scaled(Self.contentWidth))
+                .frame(maxWidth: .infinity)
                 .fixedSize(horizontal: false, vertical: true)
             case .error(let message):
                 HStack(spacing: metrics.spacing.md) {
@@ -77,7 +82,7 @@ struct CalculatorCard: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// One phrase, where reading the parts would speak the arrow between them as a glyph.
+    /// One phrase, where reading the parts would speak the sign between them as a glyph.
     static func spokenLabel(for result: CalcResult) -> String {
         switch result.payload {
         case .value(let display, _): return "\(result.expression) equals \(display)"

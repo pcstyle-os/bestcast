@@ -8,12 +8,12 @@ struct SettingsAnchor: Hashable, Sendable {
 
 // Named `<pane><Section>` throughout, so the constant for a section is always guessable from it.
 extension SettingsAnchor {
-    static let generalGlobalShortcuts = Self(tab: .general, title: "Global Shortcuts")
+    static let generalGlobalHotkeys = Self(tab: .general, title: "Global Hotkeys")
     static let generalSearch = Self(tab: .general, title: "Search")
     static let generalHyperKey = Self(tab: .general, title: "Hyper Key")
     static let generalAppearance = Self(tab: .general, title: "Appearance")
     static let generalCalculator = Self(tab: .general, title: "Calculator")
-    static let generalGeneral = Self(tab: .general, title: "General")
+    static let generalBehavior = Self(tab: .general, title: "Behavior")
 
     static let applicationsSearchScopes = Self(tab: .applications, title: "Search Scopes")
     static let applicationsApplications = Self(tab: .applications, title: "Applications")

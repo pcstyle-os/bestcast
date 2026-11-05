@@ -25,60 +25,47 @@ struct AboutView: View {
     private static let supportTile: CGFloat = 30
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                Section {
-                    hero
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Theme.Spacing.lg)
-                }
-                .settingsAnchor(.aboutAbout)
-                links
-                support
+        Form {
+            Section {
+                hero
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Theme.Spacing.md)
             }
-            .formStyle(.grouped)
-            .settingsScrollTarget(.about)
-
-            // Outside the form, so the copyright stays pinned to the bottom edge.
-            footer
-                .padding(.bottom, Theme.Spacing.xxl)
+            .settingsAnchor(.aboutAbout)
+            links
+            support
         }
+        .formStyle(.grouped)
+        .settingsScrollTarget(.about)
     }
 
     private var hero: some View {
-        VStack(spacing: Theme.Spacing.xl) {
+        VStack(spacing: Theme.Spacing.lg) {
             Image(nsImage: Self.appIcon)
                 .resizable()
                 .interpolation(.high)
                 .frame(width: Self.iconSize, height: Self.iconSize)
                 .shadow(color: .black.opacity(0.35), radius: 12, y: 6)
 
-            VStack(spacing: Theme.Spacing.sm) {
+            VStack(spacing: Theme.Spacing.xs) {
                 Text(Bundle.main.appDisplayName)
                     .font(.title.weight(.bold))
-                Text(Self.version)
-                    .font(.caption.monospacedDigit())
+                Text("A fast, native macOS launcher.")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, Theme.Spacing.md)
-                    .padding(.vertical, Theme.Spacing.xs / 2)
-                    .background(
-                        Capsule().fill(Theme.Colors.cardFill)
-                    )
-                    .overlay(
-                        Capsule().strokeBorder(Theme.Colors.cardStroke, lineWidth: 1)
-                    )
+            }
+
+            HStack(spacing: Theme.Spacing.lg) {
+                Text(Self.version)
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
                 Button {
                     core.updateCoordinator.checkForUpdates()
                 } label: {
                     SettingsRowTitle(.aboutAbout, "Check for Updates")
                 }
                 .buttonStyle(.link)
-                .font(.caption)
             }
-
-            Text("A fast, native macOS launcher.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -114,17 +101,21 @@ struct AboutView: View {
                 }
                 Spacer(minLength: Theme.Spacing.lg)
                 Button("Support…") { core.supportCoordinator.showSupport() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.Colors.brand)
+                    .buttonStyle(.bordered)
             }
             .padding(.vertical, Theme.Spacing.xs)
+        } footer: {
+            // Closes the page under its last card rather than floating at the window's bottom edge.
+            footer
+                .frame(maxWidth: .infinity)
+                .padding(.top, Theme.Spacing.lg)
         }
     }
 
     private var footer: some View {
         Text("© 2026 pcstyle · Based on work by Abue Ammar · Released under AGPL-3.0")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 }
 
@@ -177,7 +168,7 @@ private struct AboutLinkRow: View {
             LabeledContent {
                 HStack(spacing: Theme.Spacing.sm) {
                     Text(link.detail)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                     Image(systemName: "arrow.up.right")
                         .font(.caption.weight(.semibold))

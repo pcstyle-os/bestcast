@@ -49,7 +49,7 @@ enum SettingsTab: CaseIterable, Identifiable {
         case .snippets: return "curlybraces"
         case .navigation: return "arrow.left.arrow.right"
         case .windowManagement: return "macwindow"
-        case .clipboard: return "doc.on.clipboard"
+        case .clipboard: return "list.clipboard"
         case .emoji: return "face.smiling"
         case .calendar: return "calendar"
         case .extensions: return "puzzlepiece.extension"

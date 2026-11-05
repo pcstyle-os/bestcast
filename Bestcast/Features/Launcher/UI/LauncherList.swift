@@ -74,7 +74,7 @@ struct LauncherList: View {
         case fallbackHeader(String)
         case card(LeadCard)
         /// `slot` is the row's ⌘-digit, carried from the section build rather than searched.
-        case app(AppEntry, slot: Character?)
+        case app(AppEntry, slot: Character?, underKindHeader: Bool = false)
         case fallback(AppEntry, index: Int)
         case leading(index: Int, id: String)
         case leadingHeader(index: Int, title: String)
@@ -83,7 +83,7 @@ struct LauncherList: View {
             case .header(let title): return "header-" + title
             case .fallbackHeader: return "fallback-header"
             case .card(let card): return card.rowID
-            case .app(let app, _): return app.id
+            case .app(let app, _, _): return app.id
             case .fallback(let app, _): return "fallback-" + app.id
             case .leading(_, let id): return id
             case .leadingHeader(let index, _): return "leading-header-\(index)"
@@ -95,6 +95,11 @@ struct LauncherList: View {
     private var firstRowSelected: Bool {
         if selectedRowID != nil, selectedRowID == leading?.rowIDs.first { return true }
         return card != nil ? cardSelected : selectedRowID != nil && selectedRowID == results.first?.id
+    }
+
+    /// A label repeated on every fallback says nothing; it only tells mixed kinds apart.
+    private var fallbacksMixKinds: Bool {
+        Set(fallbacks?.entries.map(\.kindLabel) ?? []).count > 1
     }
 
     /// Every row the fallback section contributes, always after the results.
@@ -148,7 +153,7 @@ struct LauncherList: View {
         for kind in kinds {
             guard let group = grouped[kind], !group.isEmpty else { continue }
             rows.append(.header(kind.descriptor.sectionTitle))
-            rows.append(contentsOf: group.map { .app($0, slot: nil) })
+            rows.append(contentsOf: group.map { .app($0, slot: nil, underKindHeader: true) })
         }
         // A missing kind would make every later row activate its neighbour: assert instead.
         assert(
@@ -187,12 +192,13 @@ struct LauncherList: View {
                                         .accessibilityAction(named: "Show Actions", onCardActions)
                                         .padding(.bottom, metrics.spacing.xs)
                                         .selectionFrame(cardSelected)
-                                case .app(let app, let slot):
+                                case .app(let app, let slot, let underKindHeader):
                                     AppRow(
                                         app: app,
                                         selected: app.id == selectedRowID,
                                         running: runningApps.isRunning(app),
-                                        slot: slot
+                                        slot: slot,
+                                        showsKind: !underKindHeader || app.ownerName != nil
                                     )
                                     .contentShape(Rectangle())
                                     .onRowTap(drag: drag(for: app)) { onActivate(app) }
@@ -203,7 +209,7 @@ struct LauncherList: View {
                                 case .fallback(let app, let index):
                                     AppRow(
                                         app: app, selected: row.id == selectedRowID, running: false,
-                                        slot: nil
+                                        slot: nil, showsKind: fallbacksMixKinds
                                     )
                                     .contentShape(Rectangle())
                                     .onTapGesture { fallbacks?.onActivate(index) }
@@ -278,6 +284,8 @@ private struct AppRow: View {
     let running: Bool
     /// This row's ⌘-digit, or nil for a row no chord launches.
     let slot: Character?
+    /// Off under a header that already names the kind, where it would repeat on every row.
+    var showsKind = true
     /// Observed so a hotkey set/cleared in Settings re-renders the row's keycaps immediately.
     @Environment(HotKeyManager.self) private var hotKeys
     /// Observed for the same reason: an alias edit re-renders the row's badge at once.
@@ -370,7 +378,7 @@ private struct AppRow: View {
                 }
             } else if app.kind == .meeting {
                 MeetingEntryContent(entryID: app.id) { MeetingTiming(meeting: $0, now: $1) }
-            } else {
+            } else if showsKind {
                 Text(app.kindLabel)
                     .font(metrics.typography.rowTrailing)
                     .foregroundStyle(.secondary)

@@ -173,8 +173,10 @@ enum Theme {
         static let menuRowSpacing: CGFloat = 1
         /// Stated, not measured: `viewportHeight` counts headers, so a capped menu lands on a row.
         static let menuSectionHeader: CGFloat = 16
-        /// Five rows and half of the sixth, so a capped menu reads as scrollable, not clipped.
-        static let menuVisibleRows: CGFloat = 5.5
+        /// Whole rows only: a capped menu signals more with a fade, never with a sliced row.
+        static let menuVisibleRows: CGFloat = 6
+        /// The fade at a capped menu's scrolling edge.
+        static let menuOverflowFade: CGFloat = 20
         /// Rounded: a half-row of an odd pitch lands the glass edge on a half pixel.
         static var menuRowsMaxHeight: CGFloat {
             (menuVisibleRows * (menuRowHeight + menuRowSpacing)).rounded()
@@ -433,16 +435,12 @@ enum Theme {
 
         /// Selection fill, shared by every list so they look identical.
         static let selection = ramp(dark: 0.10, light: 0.09)
+        /// A selected lead card: a row's selection at card size reads as a slab in light ink.
+        static let cardSelection = ramp(dark: 0.10, light: 0.055)
         /// Mouse hover: a fainter layer, visually distinct from selection.
         static let rowHover = ramp(dark: 0.05, light: 0.045)
-        /// Emoji grid chrome: a quiet tile at rest, with two legible rings on interaction.
-        static let emojiCell = ramp(dark: 0.045, light: 0.04)
-        static let emojiHoverBorder = ramp(dark: 0.42, light: 0.34)
-        static let emojiSelectionBorder = adaptive(
-            dark: NSColor(srgbRed: 0.96, green: 0.90, blue: 0.72, alpha: 0.92),
-            light: .srgbInk(0, alpha: 0.72))
-        static let emojiInnerBorder = adaptive(
-            dark: .srgbInk(0, alpha: 0.72), light: .srgbInk(1, alpha: 0.72))
+        /// The emoji grid's selection ring; a cell at rest draws nothing but its glyph.
+        static let emojiSelectionBorder = ramp(dark: 0.55, light: 0.32)
         static let menuHover = ramp(dark: 0.10, light: 0.09)
         static let separator = ramp(dark: 0.10, light: 0.12)
         /// Small control surfaces: kbd chips, glyph tiles.
@@ -520,6 +518,6 @@ enum Theme {
 extension View {
     /// A floating glass control surface: clear, interactive Liquid Glass.
     func frosted(in shape: some Shape) -> some View {
-        glassEffect(.clear.interactive(), in: shape)
+        glassEffect(.regular.interactive(), in: shape)
     }
 }

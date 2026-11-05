@@ -43,22 +43,25 @@ struct OverflowFadeMask: ViewModifier {
             return [.init(color: .black, location: 0)]
         }
         let extent = min(band / height, 0.5)
+        // The outer fifth stays fully faded, so a row leaving the edge never ghosts on the frame.
         return [
             .init(color: .black.opacity(1 - topStrength), location: 0),
+            .init(color: .black.opacity(1 - topStrength), location: extent * 0.2),
             .init(
                 color: .black.opacity(1 - topStrength * 0.75),
-                location: extent * 0.35),
+                location: extent * 0.45),
             .init(
                 color: .black.opacity(1 - topStrength * 0.25),
-                location: extent * 0.7),
+                location: extent * 0.75),
             .init(color: .black, location: extent),
             .init(color: .black, location: 1 - extent),
             .init(
                 color: .black.opacity(1 - bottomStrength * 0.25),
-                location: 1 - extent * 0.7),
+                location: 1 - extent * 0.75),
             .init(
                 color: .black.opacity(1 - bottomStrength * 0.75),
-                location: 1 - extent * 0.35),
+                location: 1 - extent * 0.45),
+            .init(color: .black.opacity(1 - bottomStrength), location: 1 - extent * 0.2),
             .init(color: .black.opacity(1 - bottomStrength), location: 1)
         ]
     }

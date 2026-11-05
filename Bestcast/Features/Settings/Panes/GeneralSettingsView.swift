@@ -33,27 +33,27 @@ struct GeneralSettingsView: View {
         @Bindable var settings = settings
         return Form {
             Section {
-                SettingsRow(title: "App Launcher", anchor: .generalGlobalShortcuts) {
+                SettingsRow(title: "App launcher", anchor: .generalGlobalHotkeys) {
                     ShortcutRecorder(action: .togglePalette)
                 }
             } header: {
-                SettingsSectionHeader(.generalGlobalShortcuts)
+                SettingsSectionHeader(.generalGlobalHotkeys)
             }
 
             Section {
                 Toggle(isOn: $settings.launchAtLogin) {
-                    SettingsRowTitle(.generalGeneral, "Launch at login")
+                    SettingsRowTitle(.generalBehavior, "Launch at login")
                 }
                 Toggle(isOn: $settings.showInMenuBar) {
-                    SettingsRowTitle(.generalGeneral, "Show in menu bar")
-                    Text("Shortcuts still work when hidden.")
+                    SettingsRowTitle(.generalBehavior, "Show in menu bar")
+                    Text("Hotkeys still work when hidden.")
                 }
                 Picker(selection: $settings.popToRootTimeout) {
                     ForEach(PopToRootTimeout.allCases) { timeout in
                         Text(timeout.title).tag(timeout)
                     }
                 } label: {
-                    SettingsRowTitle(.generalGeneral, "Pop to Root Search")
+                    SettingsRowTitle(.generalBehavior, "Return to main search")
                     Text("After the launcher closes.")
                 }
                 Picker(selection: $settings.escapeKeyBehavior) {
@@ -61,23 +61,23 @@ struct GeneralSettingsView: View {
                         Text(behavior.title).tag(behavior)
                     }
                 } label: {
-                    SettingsRowTitle(.generalGeneral, "Escape Key Behavior")
+                    SettingsRowTitle(.generalBehavior, "Escape key")
                     Text("When the search field is empty.")
                 }
                 // Empty only when TIS fails; one layout still lists, so the row stays put.
                 if !inputSources.isEmpty {
                     Picker(selection: $settings.autoSwitchInputSourceID) {
-                        Text("None").tag(nil as String?)
+                        Text("Keep current").tag(nil as String?)
                         ForEach(inputSources) { source in
                             Text(source.title).tag(Optional(source.id))
                         }
                     } label: {
-                        SettingsRowTitle(.generalGeneral, "Auto-switch input source")
+                        SettingsRowTitle(.generalBehavior, "Keyboard input source")
                         Text("While the launcher is open.")
                     }
                 }
             } header: {
-                SettingsSectionHeader(.generalGeneral)
+                SettingsSectionHeader(.generalBehavior)
             }
 
             Section {
@@ -248,6 +248,11 @@ private struct WindowModeRow: View {
                         RoundedRectangle(cornerRadius: Theme.Radius.barControl, style: .continuous)
                     )
                     .saturation(selected ? 1 : 0)
+                    .padding(3)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: Theme.Radius.barControl + 3, style: .continuous)
+                            .strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 2)
+                    }
                 Text(title)
                     .font(.caption)
                     .fontWeight(selected ? .semibold : .regular)
@@ -301,6 +306,11 @@ private struct InterfaceSizeRow: View {
             anchor: .generalAppearance
         ) {
             HStack(spacing: Theme.Spacing.xs) {
+                // The glyphs show relative size; the name says which one is in force.
+                Text(settings.interfaceSize.title)
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, Theme.Spacing.sm)
+                    .accessibilityHidden(true)
                 ForEach(InterfaceSize.allCases) { size in
                     segment(size)
                 }

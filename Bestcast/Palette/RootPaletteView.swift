@@ -940,6 +940,11 @@ struct RootPaletteView: View {
             .accessibilityLabel(pillLabel)
             .accessibilityHint(formPrimaryShortcut ? "Command-Return" : "Return")
             if showActions {
+                Rectangle()
+                    .fill(Theme.Colors.separator)
+                    .frame(width: Theme.Size.hairline, height: metrics.size.menuIcon)
+                    .padding(.horizontal, metrics.spacing.xxs)
+                    .accessibilityHidden(true)
                 BarButton(action: toggleActions) {
                     HStack(spacing: metrics.spacing.sm) {
                         Text("Actions")
@@ -1507,11 +1512,9 @@ private struct MenuCircleButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 3) {
-                Capsule().frame(width: 14, height: 1.5)
-                Capsule().frame(width: 8, height: 1.5)
-            }
-            .foregroundStyle(Theme.Colors.textSecondary)
+            Image(systemName: "ellipsis")
+                .font(metrics.typography.bar)
+                .foregroundStyle(Theme.Colors.textSecondary)
             .frame(width: metrics.size.menuButton, height: metrics.size.menuButton)
             .background(Circle().fill(hovered ? Theme.Colors.rowHover : Color.clear))
             .contentShape(.circle)

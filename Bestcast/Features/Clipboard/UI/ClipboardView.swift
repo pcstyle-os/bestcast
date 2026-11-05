@@ -146,6 +146,8 @@ struct ClipboardRow: View {
     var insight: ClipboardInsight?
     @Environment(PaletteState.self) private var palette
     @State private var hovered = false
+    /// An image row's dimensions, read off-main so a long list never blocks on image headers.
+    @State private var pixelSize: CGSize?
 
     /// Selection wins over hover when a row is both; otherwise hover shows its fainter layer.
     private var fill: Color {
@@ -158,7 +160,7 @@ struct ClipboardRow: View {
         HStack(spacing: metrics.spacing.lg) {
             thumbnail(item.colorValue)
             VStack(alignment: .leading, spacing: metrics.spacing.xxs) {
-                Text(Self.title(for: item))
+                Text(displayTitle)
                     .font(metrics.typography.menuRow)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -189,9 +191,20 @@ struct ClipboardRow: View {
         )
         .armedHover($hovered)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.title(for: item))
+        .accessibilityLabel(displayTitle)
         .accessibilityValue(spokenDetail)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .task(id: imageURL) {
+            guard item.kind == .image, let url = imageURL else { return }
+            pixelSize = await Task.detached(priority: .utility) {
+                ImageThumbnail.pixelSize(of: url)
+            }.value
+        }
+    }
+
+    private var displayTitle: String {
+        guard item.kind == .image, let pixelSize else { return Self.title(for: item) }
+        return "Image · \(Int(pixelSize.width))×\(Int(pixelSize.height))"
     }
 
     private var spokenDetail: String {
@@ -208,8 +221,9 @@ struct ClipboardRow: View {
         switch item.kind {
         // Cap before trimming: never walk a multi-MB clipboard string per row.
         case .text:
-            return String((item.text ?? "").prefix(200)).trimmingCharacters(
+            let head = String((item.text ?? "").prefix(200)).trimmingCharacters(
                 in: .whitespacesAndNewlines)
+            return head.split(whereSeparator: \.isNewline).first.map(String.init) ?? head
         case .image: return "Image"
         case .file:
             return item.filePath.map {
@@ -289,7 +303,7 @@ struct ClipboardRow: View {
                 Image(systemName: systemName)
                     .font(.system(size: 12))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Colors.menuSymbol)
             )
     }
 }
@@ -376,16 +390,44 @@ struct ClipboardPreview: View {
 
     var body: some View {
         if let item {
-            VStack(alignment: .leading, spacing: 0) {
-                content(for: item)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                ClipboardInfoSection(
-                    item: item, imageURL: store.imageURL(for: item), insight: store.insights[item.id])
+            // Short text sits right above its details; only text that fills the pane pins them low.
+            ViewThatFits(in: .vertical) {
+                if let text = plainText(of: item) {
+                    VStack(alignment: .leading, spacing: metrics.spacing.xxl) {
+                        previewText(text)
+                        info(for: item)
+                        Spacer(minLength: 0)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    content(for: item)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    info(for: item)
+                }
             }
             .padding(.horizontal, 12)
         } else {
             Color.clear
         }
+    }
+
+    private func info(for item: ClipboardItem) -> some View {
+        ClipboardInfoSection(
+            item: item, imageURL: store.imageURL(for: item), insight: store.insights[item.id])
+    }
+
+    /// Text that is just text: a colour has its own preview, and other kinds have their own stage.
+    private func plainText(of item: ClipboardItem) -> String? {
+        guard item.kind == .text, item.colorValue == nil else { return nil }
+        return item.text ?? ""
+    }
+
+    private func previewText(_ text: String) -> some View {
+        Text(text)
+            .font(metrics.typography.rowTitle)
+            .lineSpacing(metrics.spacing.xxs)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -395,12 +437,9 @@ struct ClipboardPreview: View {
             if let color = item.colorValue {
                 ColorPreview(color: color, text: item.text ?? "")
             } else {
-                ScrollView {
-                    Text(item.text ?? "")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
+                ScrollView { previewText(item.text ?? "") }
+                    .overflowFade(includingTop: true)
+                    .padding(.bottom, metrics.spacing.lg)
             }
         case .image:
             AsyncThumbnail(url: store.imageURL(for: item), maxPixel: metrics.size.clipboardPreviewPixel) {
