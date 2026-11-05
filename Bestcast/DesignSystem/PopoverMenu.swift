@@ -258,7 +258,7 @@ struct PopoverMenu: View {
             // A margin, not padding: a revealed end row keeps its inset instead of meeting the edge.
             .contentMargins(.vertical, listInset, for: .scrollContent)
             .frame(height: extent.viewport + listInset * 2)
-            .overflowFade(band: Theme.Size.menuOverflowFade)
+            .overflowFade(band: metrics.scaled(Theme.Size.menuOverflowFade))
             // `never`, not `hidden`: hidden still lets AppKit claim the scroller's gutter.
             .scrollIndicators(.never)
             .scrollBounceBehavior(extent.content > extent.viewport ? .always : .basedOnSize)
@@ -350,6 +350,7 @@ private struct PopoverMenuRow: View {
     let selected: Bool
     let onActivate: () -> Void
     @Environment(\.metrics) private var metrics
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: onActivate) {
@@ -363,7 +364,9 @@ private struct PopoverMenuRow: View {
                     case .blank:
                         EmptyView()
                     case .symbol(let name):
-                        Image(systemName: name)
+                        Image(
+                            systemName: SystemSymbolName.resolve(
+                                name, dark: colorScheme == .dark))
                             .font(
                                 .system(
                                     size: metrics.scaled(Theme.Typography.menuSymbolSize),

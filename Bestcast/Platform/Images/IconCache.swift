@@ -42,6 +42,18 @@ struct SymbolTint: Hashable, Sendable {
     let color: NSColor
 }
 
+enum SystemSymbolName {
+    // Dark Aqua draws this pair opposite to its name; a light surface draws it as named.
+    static func resolve(_ name: String, dark: Bool) -> String {
+        guard dark else { return name }
+        switch name {
+        case "face.smiling": return "face.smiling.inverse"
+        case "face.smiling.inverse": return "face.smiling"
+        default: return name
+        }
+    }
+}
+
 /// A feature sets one rather than branching `AppEntry`; `artwork` carries its extent.
 enum EntryIcon: Hashable, Sendable {
     /// The stamp is `FileIconStamp`'s: it moves when the file's icon does, retiring the old bitmap.

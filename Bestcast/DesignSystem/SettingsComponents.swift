@@ -14,8 +14,8 @@ struct SettingsTabIcon: View {
         Image(systemName: systemImage)
             .resizable()
             .scaledToFit()
-            // The sidebar fills any symbol that has a fill variant; one outline style reads as a set.
-            .symbolVariant(.none)
+            // Replaced, not `.symbolVariant(.none)`, which adds to the sidebar's inherited fill.
+            .environment(\.symbolVariants, .none)
             .frame(
                 width: Theme.Size.settingsSidebarGlyph * scale,
                 height: Theme.Size.settingsSidebarGlyph * scale

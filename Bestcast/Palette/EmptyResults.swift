@@ -2,7 +2,7 @@ import SwiftUI
 
 struct EmptyResults: View {
     let text: String
-    /// A screen with nothing in it yet names its own subject; a search that found nothing keeps this.
+    /// An unused screen names its own subject; a search that found nothing keeps this.
     var symbol = "magnifyingglass"
     var body: some View {
         VStack(spacing: 8) {
