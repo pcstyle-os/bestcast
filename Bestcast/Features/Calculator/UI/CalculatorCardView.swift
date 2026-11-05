@@ -39,6 +39,7 @@ struct CalculatorCard: View {
     @Environment(AppCore.self) private var core
     let result: CalcResult
     let selected: Bool
+    private static let contentWidth: CGFloat = 520
 
     var body: some View {
         let result = core.calcNumberFormat.localized(result)
@@ -48,7 +49,7 @@ struct CalculatorCard: View {
                 HStack(spacing: 0) {
                     LeadCardColumn(
                         text: CalcSyntax.highlighted(result.expression),
-                        badge: result.sourceBadge)
+                        badge: result.sourceBadge, weight: .regular, isSource: true)
                     Image(systemName: "arrow.right")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.tertiary)
@@ -56,6 +57,9 @@ struct CalculatorCard: View {
                         text: CalcSyntax.highlighted(display), badge: result.targetBadge,
                         weight: .semibold)
                 }
+                // Capped, so the eye travels from expression to answer rather than across the panel.
+                .frame(maxWidth: metrics.scaled(Self.contentWidth))
+                .frame(maxWidth: .infinity)
                 .fixedSize(horizontal: false, vertical: true)
             case .error(let message):
                 HStack(spacing: metrics.spacing.md) {

@@ -42,10 +42,10 @@ struct GeneralSettingsView: View {
 
             Section {
                 Toggle(isOn: $settings.launchAtLogin) {
-                    SettingsRowTitle(.generalGeneral, "Launch at login")
+                    SettingsRowTitle(.generalBehavior, "Launch at login")
                 }
                 Toggle(isOn: $settings.showInMenuBar) {
-                    SettingsRowTitle(.generalGeneral, "Show in menu bar")
+                    SettingsRowTitle(.generalBehavior, "Show in menu bar")
                     Text("Shortcuts still work when hidden.")
                 }
                 Picker(selection: $settings.popToRootTimeout) {
@@ -53,7 +53,7 @@ struct GeneralSettingsView: View {
                         Text(timeout.title).tag(timeout)
                     }
                 } label: {
-                    SettingsRowTitle(.generalGeneral, "Pop to Root Search")
+                    SettingsRowTitle(.generalBehavior, "Return to main search")
                     Text("After the launcher closes.")
                 }
                 Picker(selection: $settings.escapeKeyBehavior) {
@@ -61,23 +61,23 @@ struct GeneralSettingsView: View {
                         Text(behavior.title).tag(behavior)
                     }
                 } label: {
-                    SettingsRowTitle(.generalGeneral, "Escape Key Behavior")
+                    SettingsRowTitle(.generalBehavior, "Escape key")
                     Text("When the search field is empty.")
                 }
                 // Empty only when TIS fails; one layout still lists, so the row stays put.
                 if !inputSources.isEmpty {
                     Picker(selection: $settings.autoSwitchInputSourceID) {
-                        Text("None").tag(nil as String?)
+                        Text("Keep current").tag(nil as String?)
                         ForEach(inputSources) { source in
                             Text(source.title).tag(Optional(source.id))
                         }
                     } label: {
-                        SettingsRowTitle(.generalGeneral, "Auto-switch input source")
+                        SettingsRowTitle(.generalBehavior, "Keyboard input source")
                         Text("While the launcher is open.")
                     }
                 }
             } header: {
-                SettingsSectionHeader(.generalGeneral)
+                SettingsSectionHeader(.generalBehavior)
             }
 
             Section {
@@ -301,6 +301,11 @@ private struct InterfaceSizeRow: View {
             anchor: .generalAppearance
         ) {
             HStack(spacing: Theme.Spacing.xs) {
+                // The glyphs show relative size; the name says which one is in force.
+                Text(settings.interfaceSize.title)
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, Theme.Spacing.sm)
+                    .accessibilityHidden(true)
                 ForEach(InterfaceSize.allCases) { size in
                     segment(size)
                 }

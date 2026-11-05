@@ -125,9 +125,10 @@ struct CalculatorHistoryScreen: PaletteScreen {
     private func content(selection: Int, scroll: ScrollIntent) -> some View {
         let rows = rows
         if rows.isEmpty {
+            let unused = vm.query.trimmingCharacters(in: .whitespaces).isEmpty
             EmptyResults(
-                text: vm.query.trimmingCharacters(in: .whitespaces).isEmpty
-                    ? "No calculations yet" : "No matching calculations")
+                text: unused ? "No calculations yet" : "No matching calculations",
+                symbol: unused ? PaletteMode.calculatorHistory.systemImage : "magnifyingglass")
         } else {
             CalculatorHistoryList(
                 results: entries,

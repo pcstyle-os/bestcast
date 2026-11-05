@@ -119,20 +119,20 @@ enum SettingsSearchCatalog {
             .generalGlobalShortcuts, "App Launcher",
             keywords: ["hotkey", "shortcut", "summon", "palette"]),
         .init(
-            .generalGeneral, "Launch at login",
+            .generalBehavior, "Launch at login",
             keywords: ["startup", "login item", "start", "boot"]),
         .init(
-            .generalGeneral, "Show in menu bar",
+            .generalBehavior, "Show in menu bar",
             keywords: ["menubar", "status item", "icon", "hide"]),
         .init(
-            .generalGeneral, "Pop to Root Search",
-            keywords: ["reset", "timeout", "back"]),
+            .generalBehavior, "Return to main search",
+            keywords: ["pop to root", "reset", "timeout", "back"]),
         .init(
-            .generalGeneral, "Escape Key Behavior",
+            .generalBehavior, "Escape key",
             keywords: ["escape", "esc", "back", "close", "navigate"]),
         .init(
-            .generalGeneral, "Auto-switch input source",
-            keywords: ["keyboard", "layout", "language", "abc"]),
+            .generalBehavior, "Keyboard input source",
+            keywords: ["auto-switch", "layout", "language", "abc"]),
         .init(
             .generalAppearance, "Theme",
             keywords: ["dark", "light", "mode", "appearance"]),

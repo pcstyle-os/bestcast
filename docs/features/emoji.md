@@ -59,8 +59,8 @@ into the first row scrolls to the origin rather than the row, so the section hea
 
 The grid list uses the palette scrollbar (`.thinScrollbar()` + `.hideNativeScrollers()`). Its local
 section header adds the item count without changing list headers elsewhere — see [ui.md](../ui.md).
-Rows keep the same gap in both axes, while a selected cell expands its own blurred glyph behind the
-foreground glyph so the colour wash and slim outer ring remain specific to that emoji.
+Rows keep the same gap in both axes. A cell selects the way a list row does — the shared selection
+fill — plus one ink ring, so the grid never introduces a selection colour of its own.
 
 ## Categories, pins and density
 

@@ -289,7 +289,7 @@ struct ClipboardRow: View {
                 Image(systemName: systemName)
                     .font(.system(size: 12))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Colors.menuSymbol)
             )
     }
 }
@@ -376,16 +376,44 @@ struct ClipboardPreview: View {
 
     var body: some View {
         if let item {
-            VStack(alignment: .leading, spacing: 0) {
-                content(for: item)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                ClipboardInfoSection(
-                    item: item, imageURL: store.imageURL(for: item), insight: store.insights[item.id])
+            // Short text sits right above its details; only text that fills the pane pins them low.
+            ViewThatFits(in: .vertical) {
+                if let text = plainText(of: item) {
+                    VStack(alignment: .leading, spacing: metrics.spacing.xxl) {
+                        previewText(text)
+                        info(for: item)
+                        Spacer(minLength: 0)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    content(for: item)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    info(for: item)
+                }
             }
             .padding(.horizontal, 12)
         } else {
             Color.clear
         }
+    }
+
+    private func info(for item: ClipboardItem) -> some View {
+        ClipboardInfoSection(
+            item: item, imageURL: store.imageURL(for: item), insight: store.insights[item.id])
+    }
+
+    /// Text that is just text: a colour has its own preview, and other kinds have their own stage.
+    private func plainText(of item: ClipboardItem) -> String? {
+        guard item.kind == .text, item.colorValue == nil else { return nil }
+        return item.text ?? ""
+    }
+
+    private func previewText(_ text: String) -> some View {
+        Text(text)
+            .font(metrics.typography.rowTitle)
+            .lineSpacing(metrics.spacing.xxs)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -395,12 +423,7 @@ struct ClipboardPreview: View {
             if let color = item.colorValue {
                 ColorPreview(color: color, text: item.text ?? "")
             } else {
-                ScrollView {
-                    Text(item.text ?? "")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
+                ScrollView { previewText(item.text ?? "") }
             }
         case .image:
             AsyncThumbnail(url: store.imageURL(for: item), maxPixel: metrics.size.clipboardPreviewPixel) {

@@ -8,7 +8,6 @@ private struct LeadCardChrome: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(shape.fill(Theme.Colors.cardFill))
             .background(shape.fill(fill))
             .armedHover($hovered)
     }
@@ -18,9 +17,9 @@ private struct LeadCardChrome: ViewModifier {
     }
 
     private var fill: Color {
-        if selected { return Theme.Colors.selection }
+        if selected { return Theme.Colors.cardSelection }
         if hovered { return Theme.Colors.rowHover }
-        return .clear
+        return Theme.Colors.cardFill
     }
 }
 
@@ -31,42 +30,31 @@ extension View {
     }
 }
 
-/// One side of a two-column lead card: a value line with an optional word-name badge beneath.
+/// One side of a two-column lead card: a value line with an optional caption beneath.
 struct LeadCardColumn: View {
     @Environment(\.metrics) private var metrics
     let text: AttributedString
     let badge: String?
     var weight: Font.Weight = .medium
+    /// The side a card answers from, so the eye lands on the answer first.
+    var isSource = false
 
     var body: some View {
-        VStack(spacing: metrics.spacing.md) {
+        VStack(spacing: metrics.spacing.xs) {
             Text(text)
                 .font(metrics.typography.calcResult.weight(weight))
+                .foregroundStyle(isSource ? Theme.Colors.textSecondary : Theme.Colors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-            if let badge { LeadCardBadge(text: badge) }
+            if let badge {
+                Text(badge)
+                    .font(metrics.typography.keyCap)
+                    .foregroundStyle(Theme.Colors.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, metrics.spacing.md)
-    }
-}
-
-/// The pill a lead card states its kind in — the calculator's unit, a colour's notation.
-private struct LeadCardBadge: View {
-    @Environment(\.metrics) private var metrics
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(metrics.typography.keyCap)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, metrics.spacing.sm)
-            .padding(.vertical, metrics.spacing.xxs)
-            .background(
-                RoundedRectangle(cornerRadius: metrics.radius.keyCap, style: .continuous)
-                    .fill(Theme.Colors.controlSurface)
-            )
     }
 }

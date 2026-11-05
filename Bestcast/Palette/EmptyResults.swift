@@ -2,9 +2,11 @@ import SwiftUI
 
 struct EmptyResults: View {
     let text: String
+    /// A screen with nothing in it yet names its own subject; a search that found nothing keeps this.
+    var symbol = "magnifyingglass"
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.largeTitle)
+            Image(systemName: symbol).font(.largeTitle)
                 .symbolRenderingMode(.hierarchical).foregroundStyle(.tertiary)
             Text(text).foregroundStyle(.secondary)
         }

@@ -301,7 +301,7 @@ private struct EmojiCell: View {
     private var fill: Color {
         if selected { return Theme.Colors.selection }
         if hovered { return Theme.Colors.rowHover }
-        return Theme.Colors.emojiCell
+        return .clear
     }
 
     private var glyphSize: CGFloat { min(max(size * 0.48, 30), 52) }
@@ -310,44 +310,14 @@ private struct EmojiCell: View {
         let shape = RoundedRectangle(cornerRadius: metrics.radius.emojiCell, style: .continuous)
         return ZStack {
             shape.fill(fill)
-            if selected {
-                // A blurred duplicate keeps every colour in the glyph instead of inventing a tint.
-                selectedHalo
-                    .opacity(0.25)
-                    .clipShape(shape)
-            }
             Text(glyph)
                 .font(.system(size: glyphSize))
+            // The ring is the list's selection in a grid: one ink edge, never a colour of its own.
             if selected {
-                // Let the same colours tint the slim outer ring, then restore a crisp light edge.
-                selectedHalo
-                    .mask(shape.strokeBorder(lineWidth: 2))
                 shape.strokeBorder(Theme.Colors.emojiSelectionBorder, lineWidth: 2)
-                shape.inset(by: 2)
-                    .strokeBorder(Theme.Colors.emojiInnerBorder, lineWidth: 1)
-            } else if hovered {
-                ZStack {
-                    shape.strokeBorder(
-                        Theme.Colors.emojiHoverBorder, lineWidth: 2)
-                    shape.inset(by: 2)
-                        .strokeBorder(Theme.Colors.emojiInnerBorder, lineWidth: 1)
-                }
-                .transition(.opacity)
             }
         }
         .frame(width: size, height: size)
         .animation(.easeOut(duration: Theme.Duration.hover), value: hovered)
-    }
-
-    /// Oversized before blur so its multi-colour wash reaches every corner of the selected tile.
-    private var selectedHalo: some View {
-        Text(glyph)
-            .font(.system(size: size))
-            .scaleEffect(1.6)
-            .blur(radius: max(16, size * 0.28))
-            .saturation(2)
-            .opacity(0.76)
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
     }
 }

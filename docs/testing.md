@@ -354,8 +354,8 @@ caches, TCC grants and login item, so this cannot disturb an installed copy.
   and it needs Accessibility granted to the running build. With the palette closed, ⌘⎋ still does
   whatever macOS does with it
 - A bare ⌫ in an empty field walks the same path Escape does
-- General ▸ Escape Key Behavior set to `Close window and pop to root`: Escape on any screen closes
-  the window, and reopening lands on the root search whatever Pop to Root Search says
+- General ▸ Escape key set to `Close window and pop to root`: Escape on any screen closes
+  the window, and reopening lands on the root search whatever Return to main search says
 - Reopening focuses the search field with an empty query, in the same position and at the same size
 - Compact mode: typing expands it, and the search bar does **not** shift vertically during the swap
 - With a CJK IME: the placeholder clears as soon as composition starts and the composing text never

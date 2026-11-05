@@ -135,6 +135,8 @@ struct PopoverMenu: View {
             .accessibilityLabel(name)
             .frame(width: width ?? metrics.size.actionMenuWidth)
             .glassEffect(.regular, in: shape)
+            // Glass over the same glass panel has no edge of its own; the hairline draws one.
+            .overlay(shape.stroke(Theme.Colors.separator, lineWidth: hairline))
     }
 
     private var surfaceContent: some View {
@@ -209,7 +211,7 @@ struct PopoverMenu: View {
     private func headerLabel(_ text: String) -> some View {
         Text(text)
             .font(metrics.typography.sectionHeader)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.Colors.textSecondary)
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(height: metrics.size.menuSectionHeader, alignment: .leading)
@@ -256,6 +258,7 @@ struct PopoverMenu: View {
             // A margin, not padding: a revealed end row keeps its inset instead of meeting the edge.
             .contentMargins(.vertical, listInset, for: .scrollContent)
             .frame(height: extent.viewport + listInset * 2)
+            .mask { overflowMask(scrolls: extent.content > extent.viewport) }
             // `never`, not `hidden`: hidden still lets AppKit claim the scroller's gutter.
             .scrollIndicators(.never)
             .scrollBounceBehavior(extent.content > extent.viewport ? .always : .basedOnSize)
@@ -268,6 +271,18 @@ struct PopoverMenu: View {
                 guard !byPointer else { return }
                 proxy.scrollTo(selection)
             }
+        }
+    }
+
+    /// Fades the bottom edge only while rows lie past it.
+    private func overflowMask(scrolls: Bool) -> some View {
+        VStack(spacing: 0) {
+            Color.black
+            LinearGradient(
+                colors: [.black, .black.opacity(scrolls ? 0 : 1)], startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: Theme.Size.menuOverflowFade)
         }
     }
 
@@ -287,7 +302,7 @@ struct PopoverMenu: View {
         }
     }
 
-    /// Exact, not measured; a capped viewport ends mid-row, never on a separator or section title.
+    /// Exact, not measured; a capped viewport ends on a whole row, never a separator or title.
     private var listExtent: (content: CGFloat, viewport: CGFloat) {
         let capacity = metrics.size.menuRowsMaxHeight + headerExtent
         let rowHeight = metrics.size.menuRowHeight
@@ -301,9 +316,8 @@ struct PopoverMenu: View {
                 offset += metrics.size.menuSectionHeader + metrics.spacing.xxs
                 if index > 0 { offset += metrics.spacing.md }
             }
-            let midRow = (offset + rowHeight / 2).rounded(.down)
-            if midRow <= capacity { fold = midRow }
             offset += rowHeight
+            if offset <= capacity { fold = offset }
         }
         return (offset, offset > capacity ? fold : offset)
     }
@@ -318,7 +332,7 @@ struct PopoverMenu: View {
     private func sectionLabel(_ title: String, isFirst: Bool) -> some View {
         Text(title)
             .font(metrics.typography.sectionHeader)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.Colors.textSecondary)
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(
@@ -361,7 +375,7 @@ private struct PopoverMenuRow: View {
                     case .blank:
                         EmptyView()
                     case .symbol(let name):
-                        Image(systemName: SystemSymbolName.resolve(name))
+                        Image(systemName: name)
                             .font(
                                 .system(
                                     size: metrics.scaled(Theme.Typography.menuSymbolSize),
