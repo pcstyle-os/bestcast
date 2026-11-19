@@ -236,6 +236,10 @@ final class LauncherCoordinator {
         case .moveKeystrokes:
             dismissPalette()
             core.keystrokeOverlay.toggleMoving()
+        case .toggleAppAudio:
+            dismissPalette()
+            core.settings.appAudioInMenuBar.toggle()
+            core.showMessage(core.settings.appAudioInMenuBar ? "App Audio in the menu bar" : "App Audio hidden")
         case .define:
             core.dictionaryCoordinator.show()
         case .openInBrowser, .runShellCommand, .askAI:

@@ -15,6 +15,8 @@ enum AppSettingsKey: String, CaseIterable {
     case keystrokeOverlaySize = "keystrokeOverlaySize"
     case keystrokeOverlayFilter = "keystrokeOverlayFilter"
     case keystrokeOverlayAnchor = "keystrokeOverlayAnchor"
+    case appAudioSettings = "appAudioSettings"
+    case appAudioInMenuBar = "appAudioInMenuBar"
     case emojiSkinTone = "emojiSkinTone"
     case emojiGridColumns = "emojiGridColumns"
     case showInMenuBar = "showInMenuBar"

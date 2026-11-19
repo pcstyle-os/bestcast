@@ -48,6 +48,7 @@ enum SettingsFileSchema {
         case .hyperKeyQuickPress: return bind(settings, \.hyperKeyQuickPress)
         case .keystrokeOverlaySize: return bind(settings, \.keystrokeOverlaySize)
         case .keystrokeOverlayFilter: return bind(settings, \.keystrokeOverlayFilter)
+        case .appAudioInMenuBar: return bind(settings, \.appAudioInMenuBar)
         case .calcNumberStyle: return bind(settings, \.calcNumberStyle)
         case .launcherShowsSuggestions: return bind(settings, \.launcherShowsSuggestions)
         case .rootSearchSensitivity: return bind(settings, \.rootSearchSensitivity)

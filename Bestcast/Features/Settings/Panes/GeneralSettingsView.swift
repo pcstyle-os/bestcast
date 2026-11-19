@@ -199,6 +199,15 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                Toggle(isOn: $settings.appAudioInMenuBar) {
+                    SettingsRowTitle(.generalAppAudio, "Mixer in menu bar")
+                    Text("Volume, mute and output for each app.")
+                }
+            } header: {
+                SettingsSectionHeader(.generalAppAudio)
+            }
+
+            Section {
                 Picker(selection: $settings.calcNumberStyle) {
                     ForEach(CalcNumberStyle.allCases) { style in
                         let sample = core.regionNumberFormat.format(for: style).localized("1,234,567.89")

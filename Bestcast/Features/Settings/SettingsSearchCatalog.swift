@@ -164,6 +164,9 @@ enum SettingsSearchCatalog {
             .generalHyperKey, "Include Shift (⇧)",
             keywords: ["modifier", "chord"]),
         .init(
+            .generalAppAudio, "Mixer in menu bar",
+            keywords: ["volume", "mixer", "per app", "output", "mute", "sound", "audio"]),
+        .init(
             .generalKeystrokes, "Show keystrokes",
             keywords: ["screencast", "keycastr", "recording", "presentation", "overlay"]),
         .init(

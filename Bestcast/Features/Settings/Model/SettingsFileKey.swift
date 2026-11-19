@@ -11,6 +11,7 @@ enum SettingsFileKey: String, CaseIterable, Sendable {
     case appInputSourceFallback = "general.inputSourceOtherApps"
     case keystrokeOverlaySize = "general.keystrokeOverlaySize"
     case keystrokeOverlayFilter = "general.keystrokeOverlayShows"
+    case appAudioInMenuBar = "general.appAudioInMenuBar"
     case supportReminders = "general.supportReminders"
     case appearance = "appearance.theme"
     case interfaceSize = "appearance.interfaceSize"

@@ -200,6 +200,7 @@ final class AppCore {
     @ObservationIgnored private(set) lazy var screenCaptureCoordinator = ScreenCaptureCoordinator(core: self)
     @ObservationIgnored private(set) lazy var keyboardClickCoordinator = KeyboardClickCoordinator(core: self)
     @ObservationIgnored private(set) lazy var keystrokeOverlay = KeystrokeOverlayController(settings: settings)
+    let appAudio = AppAudioRouter()
     @ObservationIgnored private(set) lazy var dictionaryCoordinator = DictionaryCoordinator(
         paletteCoordinator: paletteCoordinator)
     @ObservationIgnored private(set) lazy var updateCoordinator = UpdateCoordinator(
@@ -457,6 +458,11 @@ final class AppCore {
             }
             track({ _ = $0.keystrokeOverlayEnabled; _ = $0.keystrokeOverlaySize }) { $0.keystrokeOverlay.apply() }
             keystrokeOverlay.apply()
+            appAudio.onFailure = { [weak self] _ in
+                self?.showMessage("Couldn’t take over that app’s audio", tone: .danger)
+            }
+            track({ _ = $0.appAudioSettings }) { $0.appAudio.apply($0.settings.appAudioSettings) }
+            appAudio.apply(settings.appAudioSettings)
             hyperKeyTap.onLayerEvent = { [weak self] event in self?.handleHyperLayer(event) }
             track(hotKeys, { _ = $0.hyperLayers; _ = $0.recordingAction }) { $0.applyHyperLayers() }
             applyHyperLayers()
@@ -625,6 +631,8 @@ final class AppCore {
         clipboardInsightIndexer?.stop()
         // Caps Lock first: its remap is the one teardown that outlives the process.
         hyperKeyTap.prepareForTermination()
+        // A tap mutes its app's own output, so it must not outlive the process that replays it.
+        appAudio.stopAll()
         windowLayoutCoordinator.prepareForTermination()
         roomCoordinator.prepareForTermination()
         inputSourceSwitcher.endSession()

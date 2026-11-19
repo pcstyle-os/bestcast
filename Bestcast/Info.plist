@@ -71,8 +71,10 @@
 	<string>Bestcast reads today's and tomorrow's events so you can join a meeting from the palette.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bestcast uses Bluetooth access only when you run the Toggle Bluetooth action.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Bestcast replays an app's audio at the volume and on the output you chose for it in the App Audio mixer.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Bestcast listens only while you dictate a question to AI, and only after you start dictation yourself.</string>
+	<string>Bestcast listens only while you dictate a question to AI, after you start dictation yourself. The App Audio mixer asks too when it plays through an output that has a microphone, and never records from it.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Bestcast turns your dictated AI questions into text on this Mac. Your voice is never sent anywhere.</string>
 	<key>NSHumanReadableCopyright</key>

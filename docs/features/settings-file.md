@@ -29,8 +29,9 @@ in `Features/WindowManagement/`.
   formatting stays until then.
 - **Content and machine state never enter it.** Notes, snippets, custom commands, quicklinks, MCP
   servers and AI connections stay where they are — the file can say which folder notes and snippets
-  live in, never what is in them — as do the palette's and the keystroke overlay's positions, the extension toolchain,
-  every shortcut outside window management, and what a room learns by being entered.
+  live in, never what is in them — as do the palette's and the keystroke overlay's positions, the
+  extension toolchain, every shortcut outside window management, per-app volumes and outputs, and
+  what a room learns by being entered.
 
 ## Layout
 

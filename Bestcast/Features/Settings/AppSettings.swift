@@ -195,6 +195,18 @@ final class AppSettings {
         didSet { defaults.set(keystrokeOverlayFilter.rawValue, forKey: Key.keystrokeOverlayFilter.rawValue) }
     }
 
+    /// Per-app volume, mute and output, by bundle ID. See docs/features/app-audio.md.
+    var appAudioSettings: [String: AppAudioSetting] {
+        didSet {
+            let data = try? JSONEncoder().encode(appAudioSettings)
+            defaults.set(data, forKey: Key.appAudioSettings.rawValue)
+        }
+    }
+
+    var appAudioInMenuBar: Bool {
+        didSet { defaults.set(appAudioInMenuBar, forKey: Key.appAudioInMenuBar.rawValue) }
+    }
+
     /// The overlay's bottom-centre in global screen points; nil until it is first dragged.
     var keystrokeOverlayAnchor: CGPoint? {
         didSet {
@@ -667,6 +679,10 @@ final class AppSettings {
         keystrokeOverlayFilter =
             defaults.string(forKey: Key.keystrokeOverlayFilter.rawValue).flatMap(KeystrokeFilter.init)
             ?? .allKeys
+        appAudioSettings =
+            defaults.data(forKey: Key.appAudioSettings.rawValue)
+            .flatMap { try? JSONDecoder().decode([String: AppAudioSetting].self, from: $0) } ?? [:]
+        appAudioInMenuBar = defaults.bool(forKey: Key.appAudioInMenuBar.rawValue)
         keystrokeOverlayAnchor =
             (defaults.array(forKey: Key.keystrokeOverlayAnchor.rawValue) as? [Double])
             .flatMap { $0.count == 2 ? CGPoint(x: $0[0], y: $0[1]) : nil }

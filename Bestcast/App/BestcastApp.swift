@@ -7,7 +7,7 @@ struct BestcastApp: App {
     // Channel-aware: "Bestcast", "Bestcast Dev", or "Bestcast Beta".
     private let appName = Bundle.main.appDisplayName
 
-    /// Independent items: one preference each, and a third that only Secure Input raises.
+    /// Independent items: one preference each, and one that only Secure Input raises.
     var body: some Scene {
         MenuBarExtra(isInserted: menuBarInsertion) {
             MenuBarMenu(appName: appName)
@@ -27,6 +27,26 @@ struct BestcastApp: App {
         } label: {
             SecureInputMenuBarLabel(holder: AppCore.shared.secureInput.holder)
         }
+
+        MenuBarExtra(isInserted: appAudioInsertion) {
+            AppAudioMixerView(
+                router: AppCore.shared.appAudio, settings: AppCore.shared.settings,
+                appIndex: AppCore.shared.appIndex)
+        } label: {
+            Image(systemName: "slider.vertical.3").accessibilityLabel("App Audio")
+        }
+        .menuBarExtraStyle(.window)
+    }
+
+    private var appAudioInsertion: Binding<Bool> {
+        let settings = AppCore.shared.settings
+        let isInserted = settings.appAudioInMenuBar
+        return Binding(
+            get: { isInserted },
+            set: { inserted in
+                guard inserted != settings.appAudioInMenuBar else { return }
+                settings.appAudioInMenuBar = inserted
+            })
     }
 
     /// Raised and lowered by the monitor alone, so a drag-out cannot hide a live warning.

@@ -269,6 +269,8 @@ run screen-capture-test    Bestcast/Features/ScreenCapture/Model/ScreenCaptureRe
 run keyboard-click-test    Bestcast/Features/KeyboardClick/Model/ClickTarget.swift \
                            Bestcast/Features/KeyboardClick/Model/ClickHints.swift
 run keystroke-overlay-test Bestcast/Features/Keystrokes/Model/KeystrokeFeed.swift
+run app-audio-test         Bestcast/Features/AppAudio/Model/AppAudioMix.swift \
+                           Bestcast/Features/AppAudio/Model/AudioSampleRing.swift
 run input-source-test      Bestcast/Features/InputSources/Model/AppInputSourcePolicy.swift
 run fallback-test          Bestcast/Features/Launcher/Model/Fallback.swift \
                            Bestcast/Features/Launcher/Model/CommandID.swift \

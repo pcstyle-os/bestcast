@@ -32,6 +32,7 @@ struct SettingsBackup: Codable {
         var hyperKeyQuickPress: String?
         var keystrokeOverlaySize: String?
         var keystrokeOverlayFilter: String?
+        var appAudioInMenuBar: Bool?
         var emojiSkinTone: String?
         var emojiGridColumns: Int?
         var showInMenuBar: Bool?
@@ -146,6 +147,7 @@ extension SettingsBackup {
             hyperKeyQuickPress: s.hyperKeyQuickPress.rawValue,
             keystrokeOverlaySize: s.keystrokeOverlaySize.rawValue,
             keystrokeOverlayFilter: s.keystrokeOverlayFilter.rawValue,
+            appAudioInMenuBar: s.appAudioInMenuBar,
             emojiSkinTone: s.emojiSkinTone.rawValue,
             emojiGridColumns: s.emojiGridColumns.rawValue,
             showInMenuBar: s.showInMenuBar,
@@ -353,6 +355,10 @@ extension SettingsBackup {
         }
         if let raw = s.keystrokeOverlayFilter, let filter = KeystrokeFilter(rawValue: raw) {
             settings.keystrokeOverlayFilter = filter
+            count += 1
+        }
+        if let flag = s.appAudioInMenuBar {
+            settings.appAudioInMenuBar = flag
             count += 1
         }
         if let raw = s.emojiSkinTone, let tone = EmojiSkinTone(rawValue: raw) {
