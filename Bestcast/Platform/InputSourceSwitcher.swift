@@ -57,6 +57,17 @@ final class InputSourceSwitcher {
         TISSelectInputSource(session.previousSource)
     }
 
+    static func currentSourceID() -> String? {
+        currentSource().flatMap(identifier(of:))
+    }
+
+    /// Selects an enabled keyboard source by ID; a source since removed is skipped, not an error.
+    static func select(sourceID: String) {
+        guard let source = enabledKeyboardSources().first(where: { identifier(of: $0) == sourceID })
+        else { return }
+        TISSelectInputSource(source)
+    }
+
     private static func currentSource() -> TISInputSource? {
         TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
     }

@@ -152,6 +152,9 @@ enum SettingsSearchCatalog {
             .generalAppearance, "Drag to reposition",
             keywords: ["move", "position", "window"]),
         .init(
+            .generalInputSources, "Other apps",
+            keywords: ["keyboard", "layout", "language", "input source", "per app", "remember"]),
+        .init(
             .generalHyperKey, "Hyper Key",
             keywords: ["modifier", "remap", "caps lock", "capslock"]),
         .init(

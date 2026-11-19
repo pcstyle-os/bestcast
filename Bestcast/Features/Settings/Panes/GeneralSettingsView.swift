@@ -85,6 +85,10 @@ struct GeneralSettingsView: View {
                 SettingsSectionHeader(.generalBehavior)
             }
 
+            if !inputSources.isEmpty {
+                InputSourcesSection(sources: inputSources)
+            }
+
             Section {
                 Picker(selection: $settings.appearance) {
                     ForEach(AppAppearance.allCases) { appearance in

@@ -7,6 +7,8 @@ enum SettingsFileKey: String, CaseIterable, Sendable {
     case popToRootTimeout = "general.popToRootSeconds"
     case escapeKeyBehavior = "general.escapeKeyBehavior"
     case autoSwitchInputSource = "general.autoSwitchInputSource"
+    case appInputSourceRules = "general.inputSourcePerApp"
+    case appInputSourceFallback = "general.inputSourceOtherApps"
     case supportReminders = "general.supportReminders"
     case appearance = "appearance.theme"
     case interfaceSize = "appearance.interfaceSize"

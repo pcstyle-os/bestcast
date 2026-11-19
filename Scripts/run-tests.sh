@@ -265,6 +265,7 @@ run palette-tab-test       Bestcast/Palette/PaletteMode.swift \
                            Bestcast/Features/Quicklinks/Model/Quicklink.swift \
                            Bestcast/Features/Quicklinks/Model/QuicklinkDestination.swift \
                            Bestcast/Features/CustomCommands/Model/CustomCommand.swift
+run input-source-test      Bestcast/Features/InputSources/Model/AppInputSourcePolicy.swift
 run fallback-test          Bestcast/Features/Launcher/Model/Fallback.swift \
                            Bestcast/Features/Launcher/Model/CommandID.swift \
                            Bestcast/Features/HotKeys/Model/HotKeyAction.swift \

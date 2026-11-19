@@ -31,6 +31,7 @@ final class AppCore {
     let windowMover = WindowMover()
     let spaceSwitcher = SpaceSwitcher()
     let inputSourceSwitcher = InputSourceSwitcher()
+    private let appInputSources = AppInputSourceController()
     let settings: AppSettings
     /// Mirrors settings into settings.json; nil while the Backup pane's switch is off.
     @ObservationIgnored private var settingsFile: SettingsFileRepository?
@@ -454,6 +455,10 @@ final class AppCore {
                 $0.applySecureInputWatch()
             }
             applySecureInputWatch()
+            track({ _ = $0.appInputSourceRules; _ = $0.appInputSourceFallback }) {
+                $0.applyAppInputSources()
+            }
+            applyAppInputSources()
 
             snippetsStore.onSnapshot = { [weak self] snapshot in
                 guard let self else { return }
@@ -874,6 +879,11 @@ final class AppCore {
         defer { chatsRunTheirOwnTools = runsOwnTools }
         guard let previous = chatsRunTheirOwnTools, previous != runsOwnTools else { return }
         mcpCoordinator.applyEnabled()
+    }
+
+    private func applyAppInputSources() {
+        appInputSources.apply(
+            rules: settings.appInputSourceRules, fallback: settings.appInputSourceFallback)
     }
 
     /// Secure Input withholds key presses, not modifier changes, so only these two go quiet.

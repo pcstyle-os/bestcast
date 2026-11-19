@@ -254,6 +254,20 @@ final class AppSettings {
         }
     }
 
+    /// Apps pinned to a keyboard input source. See docs/features/input-sources.md.
+    var appInputSourceRules: [AppInputSourceRule] {
+        didSet {
+            let data = try? JSONEncoder().encode(appInputSourceRules)
+            defaults.set(data, forKey: Key.appInputSourceRules.rawValue)
+        }
+    }
+
+    var appInputSourceFallback: AppInputSourceFallback {
+        didSet {
+            defaults.set(appInputSourceFallback.rawValue, forKey: Key.appInputSourceFallback.rawValue)
+        }
+    }
+
     /// Lets the panel be dragged by its top edge; off by default, so most launches never grab it.
     var paletteDraggable: Bool {
         didSet { defaults.set(paletteDraggable, forKey: Key.paletteDraggable.rawValue) }
@@ -662,6 +676,12 @@ final class AppSettings {
             defaults.object(forKey: Key.openOnCursorScreen.rawValue) == nil
             || defaults.bool(forKey: Key.openOnCursorScreen.rawValue)
         autoSwitchInputSourceID = defaults.string(forKey: Key.autoSwitchInputSource.rawValue)
+        appInputSourceRules =
+            defaults.data(forKey: Key.appInputSourceRules.rawValue)
+            .flatMap { try? JSONDecoder().decode([AppInputSourceRule].self, from: $0) } ?? []
+        appInputSourceFallback =
+            defaults.string(forKey: Key.appInputSourceFallback.rawValue)
+            .flatMap(AppInputSourceFallback.init) ?? .keep
         paletteDraggable = defaults.bool(forKey: Key.paletteDraggable.rawValue)
         palettePositions =
             defaults.dictionary(forKey: Key.palettePosition.rawValue)

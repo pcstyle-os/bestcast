@@ -14,6 +14,7 @@ extension SettingsAnchor {
     static let generalAppearance = Self(tab: .general, title: "Appearance")
     static let generalCalculator = Self(tab: .general, title: "Calculator")
     static let generalBehavior = Self(tab: .general, title: "Behavior")
+    static let generalInputSources = Self(tab: .general, title: "Input Sources")
 
     static let applicationsSearchScopes = Self(tab: .applications, title: "Search Scopes")
     static let applicationsApplications = Self(tab: .applications, title: "Applications")
