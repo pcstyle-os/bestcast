@@ -306,16 +306,26 @@ revocation, and rebuilds a tap it finds disabled, dropping any hold as it does (
 watchdog still finds off is treated as dead: re-enabling an invalidated port is a silent no-op, and
 reviving in place left Hyper broken until relaunch.
 
-**Secure Event Input** is the other silent failure. While any app holds it — a password field, a
-password manager, Terminal's Secure Keyboard Entry, or one that never released it — macOS withholds
-keyDown/keyUp from every tap but still delivers `flagsChanged`. The Hyper key's own press is rewritten,
-but the letter after it arrives with only the physical modifier, so Hyper+key does nothing while the tap
-looks healthy. Nothing in a tap can work around it, so the watchdog reports it as
-`.blockedBySecureInput` and Settings names the app from `IOConsoleUsers`' `kCGSSessionSecureInputPID`,
-which records the frontmost app when input went secure — a hint, not proof. On
-fast user switching another session owns the keyboard, so half-held state is dropped, rewriting
+[Secure Input](#secure-input) is the other silent failure. On fast user switching another session owns the keyboard, so half-held state is dropped, rewriting
 stops and the watchdog stands down until this session is active again. The HID remap outlives the
 process, so `applicationWillTerminate` hands the key back to the system before exiting.
+
+### Secure Input
+
+While any app holds Secure Event Input — a password field, a password manager, Terminal's Secure
+Keyboard Entry, or one that never released it — macOS withholds keyDown/keyUp from every tap but still
+delivers `flagsChanged`. The Hyper key's own press is rewritten, but the letter after it arrives with
+only the physical modifier, so Hyper+key and every layer do nothing while the tap looks healthy; snippet
+keywords stop for the same reason. Modifier-only shortcuts keep working, since they read only
+`flagsChanged`, and Carbon combos are delivered above the taps.
+
+Nothing in a tap can work around it, so Bestcast says so instead. `SecureInputMonitor`
+(`Platform/`) polls `IsSecureEventInputEnabled` on the shared one-second watchdog, but only while
+`AppCore` reports a feature it would pause — an active Hyper tap or snippet listener — so an idle
+install never wakes for it. While it is on, a third menu-bar item appears on its own, whatever Show in
+menu bar says: a lock and the app `IOConsoleUsers`' `kCGSSessionSecureInputPID` names, with what is
+paused and Show / Quit for that app. Settings' Hyper Key section repeats it. That PID records the
+frontmost app when input went secure, which is not always the caller, so the copy says "reported by".
 
 ## Recorder
 

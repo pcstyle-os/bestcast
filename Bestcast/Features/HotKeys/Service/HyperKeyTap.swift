@@ -203,8 +203,6 @@ final class HyperKeyTap: HealthCheckable {
         case off
         case active
         case needsAccessibility
-        /// Installed, but macOS withholds key events from every tap while Secure Input is on.
-        case blockedBySecureInput(holder: String?)
     }
 
     /// Marker on events this tap posts, so it never reacts to its own synthetics.
@@ -358,24 +356,6 @@ final class HyperKeyTap: HealthCheckable {
             tearDownTap()
             installTapIfNeeded()
         }
-        guard tapThread != nil else { return }
-        let current: Status =
-            IsSecureEventInputEnabled()
-            ? .blockedBySecureInput(holder: Self.secureInputHolderName()) : .active
-        if status != current { status = current }
-    }
-
-    /// Best effort: macOS records the frontmost app when input went secure, not always the caller.
-    private static func secureInputHolderName() -> String? {
-        let root = IORegistryGetRootEntry(kIOMainPortDefault)
-        defer { IOObjectRelease(root) }
-        let users =
-            IORegistryEntryCreateCFProperty(
-                root, "IOConsoleUsers" as CFString, kCFAllocatorDefault, 0)?
-            .takeRetainedValue() as? [[String: Any]]
-        guard let pid = users?.lazy.compactMap({ $0["kCGSSessionSecureInputPID"] as? Int }).first
-        else { return nil }
-        return NSRunningApplication(processIdentifier: pid_t(pid))?.localizedName
     }
 
     private func sessionDidResign() {

@@ -127,6 +127,7 @@
 		21591427369333F740A5AD9A /* ExtensionListKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9E6D95C827D51481B71BCE1 /* ExtensionListKey.swift */; };
 		216092DF322CCBA183640003 /* AIConnectionEditorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03256043C7ABEEA194142C8C /* AIConnectionEditorPanel.swift */; };
 		21759BDC5A8B5635518E11A3 /* CustomCommandArgumentsAccessory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 399E820C4FB6C2F072BBD354 /* CustomCommandArgumentsAccessory.swift */; };
+		217AF5EF03737BE54829A7E9 /* SecureInputMenuBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3493D8DAC129B0FAB8FD50D5 /* SecureInputMenuBar.swift */; };
 		21FEB971451FA043FBFA3053 /* FeatureCommandsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0261B737F8F4D4870B314B7B /* FeatureCommandsSection.swift */; };
 		221BCEE5C1E4B2D07534C885 /* InstalledAIProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E50DF520980B905B2789C6B /* InstalledAIProbe.swift */; };
 		2263FBEF7BA182B6BE6F5EB8 /* MCPServerConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504DB60D4DAEC843E92A849C /* MCPServerConnection.swift */; };
@@ -567,6 +568,7 @@
 		A4E96D9318DB67436A0A939F /* CodexAppServerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4103DB7FBF7B283E7AB06C23 /* CodexAppServerClient.swift */; };
 		A4F073F77EF12FF305E04F32 /* ExtensionSourceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF75A3499B88E621053E78B1 /* ExtensionSourceStore.swift */; };
 		A54996027D454C1D74FB383A /* ExtensionStoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556F5F4D99EE262EADB7CBAB /* ExtensionStoreClient.swift */; };
+		A5C96EE04A4B1B10A76A6DB4 /* SecureInputMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7EE050914B9DBD7AEFBE5B /* SecureInputMonitor.swift */; };
 		A6714F20EC0D7742BBFF2A32 /* SettingsEditorPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA7697DAD24E438DBBA59533 /* SettingsEditorPresenter.swift */; };
 		A6CDF8369A834890048DF71D /* EntryNaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 788139FF36402BA36339B98F /* EntryNaming.swift */; };
 		A6EA364599DFE7FD64217CA2 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03FF5EA18EECAD436C3609BD /* ChatMessage.swift */; };
@@ -1095,6 +1097,7 @@
 		3394A286CF9BB411A59252C6 /* DictionaryMarkup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryMarkup.swift; sourceTree = "<group>"; };
 		33D36D91F3E02EC677C3FB93 /* CalcValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalcValue.swift; sourceTree = "<group>"; };
 		344EA7E77C40C0C2FA1B7449 /* ChatEmbeddingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatEmbeddingService.swift; sourceTree = "<group>"; };
+		3493D8DAC129B0FAB8FD50D5 /* SecureInputMenuBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureInputMenuBar.swift; sourceTree = "<group>"; };
 		3558B0872659D9C22D2CC5C3 /* ExtensionPermissionsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionPermissionsSection.swift; sourceTree = "<group>"; };
 		35932B169705A7462EB3EDE7 /* ChatCopyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCopyButton.swift; sourceTree = "<group>"; };
 		363C889CB532BBA3FE14EC2F /* ExtensionFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionFormView.swift; sourceTree = "<group>"; };
@@ -1400,6 +1403,7 @@
 		9B0D2B7E0FEC3CA06B09FE4E /* AppIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIndex.swift; sourceTree = "<group>"; };
 		9B5E60E3781F4C197FD8F910 /* WindowCycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCycle.swift; sourceTree = "<group>"; };
 		9B9E80AD8A9B3E3332FD3EF0 /* SnippetsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsSettingsView.swift; sourceTree = "<group>"; };
+		9C7EE050914B9DBD7AEFBE5B /* SecureInputMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureInputMonitor.swift; sourceTree = "<group>"; };
 		9D1A8B0EA38436D2FEACAE8B /* SpaceSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcher.swift; sourceTree = "<group>"; };
 		9D55E634792C7F266DC5636A /* EntryIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryIconView.swift; sourceTree = "<group>"; };
 		9D59F1EE29342202F5880539 /* MCPProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPProtocol.swift; sourceTree = "<group>"; };
@@ -2185,6 +2189,7 @@
 				CF328489E0F0F49C44DCBBDB /* PseudoTerminal.swift */,
 				C7B6333329BC5265B4FF7428 /* RegionCurrency.swift */,
 				B48A763022039BB3D1D1A3B7 /* ScreenTarget.swift */,
+				9C7EE050914B9DBD7AEFBE5B /* SecureInputMonitor.swift */,
 				DFF6D013EBFB9410FDD337F2 /* Signposts.swift */,
 				954437DD58BEC9EBC2D87B7B /* WindowLevel.swift */,
 			);
@@ -3223,6 +3228,7 @@
 				C54F889D0489A658C8D7B9DE /* AppDelegate.swift */,
 				F592A854D2B6F2BBC2E07D8C /* BestcastApp.swift */,
 				A5EA4E7E0E8439D56CCFF2DD /* MenuBarItem.swift */,
+				3493D8DAC129B0FAB8FD50D5 /* SecureInputMenuBar.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -4553,6 +4559,8 @@
 				EF83A9EF454E928E5D73F6C7 /* SearchScopes.swift in Sources */,
 				C643CD975679E36ABE929696 /* SearchScopesSection.swift in Sources */,
 				7F6969E92E86EC3C6E271D0D /* SectionHeader.swift in Sources */,
+				217AF5EF03737BE54829A7E9 /* SecureInputMenuBar.swift in Sources */,
+				A5C96EE04A4B1B10A76A6DB4 /* SecureInputMonitor.swift in Sources */,
 				2533D80B560246D39277BFC5 /* SelectionFollowing.swift in Sources */,
 				80BF848830CDFFBB8A6812EC /* SelectionReveal.swift in Sources */,
 				92E91F6A86623F946471FC9E /* SettingsAnchor.swift in Sources */,

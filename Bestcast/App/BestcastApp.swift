@@ -7,7 +7,7 @@ struct BestcastApp: App {
     // Channel-aware: "Bestcast", "Bestcast Dev", or "Bestcast Beta".
     private let appName = Bundle.main.appDisplayName
 
-    /// Two independent items: one preference each, no state either can read off the other.
+    /// Independent items: one preference each, and a third that only Secure Input raises.
     var body: some Scene {
         MenuBarExtra(isInserted: menuBarInsertion) {
             MenuBarMenu(appName: appName)
@@ -21,6 +21,18 @@ struct BestcastApp: App {
         } label: {
             CalendarMenuBarLabel(appName: appName)
         }
+
+        MenuBarExtra(isInserted: secureInputInsertion) {
+            SecureInputMenuBarMenu(monitor: AppCore.shared.secureInput)
+        } label: {
+            SecureInputMenuBarLabel(holder: AppCore.shared.secureInput.holder)
+        }
+    }
+
+    /// Raised and lowered by the monitor alone, so a drag-out cannot hide a live warning.
+    private var secureInputInsertion: Binding<Bool> {
+        let isInserted = AppCore.shared.secureInput.holder != nil
+        return Binding(get: { isInserted }, set: { _ in })
     }
 
     /// Read in `body` for Observation; SwiftUI echoes the binding back, so only a change writes.

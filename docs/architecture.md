@@ -130,8 +130,9 @@ change, clears it when extensions are switched off, and wires the snippet closur
 
 ## Entry points and windows
 
-`BestcastApp` (`@main`) declares only two `MenuBarExtra` scenes — Bestcast's own item and the
-calendar's, each inserted by one preference and independent of the other; everything else visible is
+`BestcastApp` (`@main`) declares only three `MenuBarExtra` scenes — Bestcast's own item and the
+calendar's, each inserted by one preference and independent of the other, and a Secure Input warning
+that `SecureInputMonitor` alone inserts ([hotkeys.md](features/hotkeys.md#secure-input)); everything else visible is
 driven imperatively from AppKit. Extension menu extras are dynamic `NSStatusItem`s owned entirely by
 `Features/Extensions/`, through `ExtensionManager`, with no scene or lifecycle wiring in the core.
 

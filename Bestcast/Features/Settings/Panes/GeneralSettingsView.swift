@@ -133,12 +133,12 @@ struct GeneralSettingsView: View {
                     }
                 }
 
-                if case .blockedBySecureInput(let holder) = hyperTap.status {
+                if hyperTap.status == .active, let holder = core.secureInput.holder {
                     HStack(alignment: .center, spacing: Theme.Spacing.lg) {
                         Image(systemName: "lock")
                             .foregroundStyle(.orange)
                             .frame(width: Theme.Size.settingsRowIcon)
-                        Text(secureInputMessage(holder: holder))
+                        Text(secureInputMessage(holder: holder.name))
                             .foregroundStyle(.orange)
                     }
                 }

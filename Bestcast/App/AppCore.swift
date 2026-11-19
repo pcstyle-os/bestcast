@@ -27,6 +27,7 @@ final class AppCore {
     let textInjector: TextInjector
     let hotKeys = HotKeyManager()
     let hyperKeyTap = HyperKeyTap()
+    let secureInput = SecureInputMonitor()
     let windowMover = WindowMover()
     let spaceSwitcher = SpaceSwitcher()
     let inputSourceSwitcher = InputSourceSwitcher()
@@ -375,6 +376,7 @@ final class AppCore {
             supportReminders.start()
 
             hyperKeyTap.healthTicker = healthTicker
+            secureInput.healthTicker = healthTicker
             hotKeys.modifierTapMonitor.healthTicker = healthTicker
             snippetListener.healthTicker = healthTicker
 
@@ -448,6 +450,10 @@ final class AppCore {
             hyperKeyTap.onLayerEvent = { [weak self] event in self?.handleHyperLayer(event) }
             track(hotKeys, { _ = $0.hyperLayers; _ = $0.recordingAction }) { $0.applyHyperLayers() }
             applyHyperLayers()
+            track(self, { _ = $0.hyperKeyTap.status; _ = $0.snippetListener.status }) {
+                $0.applySecureInputWatch()
+            }
+            applySecureInputWatch()
 
             snippetsStore.onSnapshot = { [weak self] snapshot in
                 guard let self else { return }
@@ -868,6 +874,14 @@ final class AppCore {
         defer { chatsRunTheirOwnTools = runsOwnTools }
         guard let previous = chatsRunTheirOwnTools, previous != runsOwnTools else { return }
         mcpCoordinator.applyEnabled()
+    }
+
+    /// Secure Input withholds key presses, not modifier changes, so only these two go quiet.
+    private func applySecureInputWatch() {
+        var paused: [String] = []
+        if hyperKeyTap.status == .active { paused.append("Hyper Key") }
+        if snippetListener.status == .active { paused.append("Snippet keywords") }
+        secureInput.watch(for: paused)
     }
 
     /// Off while recording, so a layer's keys reach the recorder instead of firing.
