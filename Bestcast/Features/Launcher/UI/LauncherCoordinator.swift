@@ -229,6 +229,13 @@ final class LauncherCoordinator {
         case .scrollByKeyboard:
             dismissPalette()
             core.keyboardClickCoordinator.start(.scroll)
+        case .toggleKeystrokes:
+            dismissPalette()
+            core.settings.keystrokeOverlayEnabled.toggle()
+            core.showMessage(core.settings.keystrokeOverlayEnabled ? "Showing keystrokes" : "Keystrokes hidden")
+        case .moveKeystrokes:
+            dismissPalette()
+            core.keystrokeOverlay.toggleMoving()
         case .define:
             core.dictionaryCoordinator.show()
         case .openInBrowser, .runShellCommand, .askAI:

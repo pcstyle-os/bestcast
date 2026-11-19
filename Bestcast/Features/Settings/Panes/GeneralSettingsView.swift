@@ -170,6 +170,35 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                Toggle(isOn: $settings.keystrokeOverlayEnabled) {
+                    SettingsRowTitle(.generalKeystrokes, "Show keystrokes")
+                    Text("Every key you press, on screen, for recordings.")
+                }
+                Picker(selection: $settings.keystrokeOverlayFilter) {
+                    Text("All keys").tag(KeystrokeFilter.allKeys)
+                    Text("Shortcuts only").tag(KeystrokeFilter.shortcuts)
+                } label: {
+                    SettingsRowTitle(.generalKeystrokes, "Show")
+                }
+                Picker(selection: $settings.keystrokeOverlaySize) {
+                    Text("Small").tag(KeystrokeOverlaySize.small)
+                    Text("Medium").tag(KeystrokeOverlaySize.medium)
+                    Text("Large").tag(KeystrokeOverlaySize.large)
+                } label: {
+                    SettingsRowTitle(.generalKeystrokes, "Size")
+                }
+                .pickerStyle(.segmented)
+                LabeledContent {
+                    Button("Move…") { core.keystrokeOverlay.toggleMoving() }
+                } label: {
+                    SettingsRowTitle(.generalKeystrokes, "Position")
+                    Text("Drag it, then release to drop it.")
+                }
+            } header: {
+                SettingsSectionHeader(.generalKeystrokes)
+            }
+
+            Section {
                 Picker(selection: $settings.calcNumberStyle) {
                     ForEach(CalcNumberStyle.allCases) { style in
                         let sample = core.regionNumberFormat.format(for: style).localized("1,234,567.89")

@@ -17,7 +17,8 @@ in `Features/WindowManagement/`.
   Preview, Quick Actions, MCP, clipboard text recognition and snippet AI placeholders are switched on
   only in the app, which asks first. Passive AI's route and its selection and clipboard switches join
   them; only its root search answers switch has a key. Scheduled AI Commands' switch has none either,
-  and neither do AI integrations, each of which lets a model read or act on part of the Mac.
+  and neither do AI integrations, each of which lets a model read or act on part of the Mac. The
+  keystroke overlay's switch has none, since it shows everything typed; its size and filter do.
   `settings-file-test` checks those paths stay absent.
 - **`SettingsFileSchema`'s switch is exhaustive.** A new `SettingsFileKey` case fails to build until it
   is bound to a property.
@@ -28,7 +29,7 @@ in `Features/WindowManagement/`.
   formatting stays until then.
 - **Content and machine state never enter it.** Notes, snippets, custom commands, quicklinks, MCP
   servers and AI connections stay where they are — the file can say which folder notes and snippets
-  live in, never what is in them — as do the palette's position, the extension toolchain,
+  live in, never what is in them — as do the palette's and the keystroke overlay's positions, the extension toolchain,
   every shortcut outside window management, and what a room learns by being entered.
 
 ## Layout

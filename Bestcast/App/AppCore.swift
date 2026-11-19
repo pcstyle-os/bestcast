@@ -199,6 +199,7 @@ final class AppCore {
     @ObservationIgnored private(set) lazy var cameraCoordinator = CameraCoordinator(core: self)
     @ObservationIgnored private(set) lazy var screenCaptureCoordinator = ScreenCaptureCoordinator(core: self)
     @ObservationIgnored private(set) lazy var keyboardClickCoordinator = KeyboardClickCoordinator(core: self)
+    @ObservationIgnored private(set) lazy var keystrokeOverlay = KeystrokeOverlayController(settings: settings)
     @ObservationIgnored private(set) lazy var dictionaryCoordinator = DictionaryCoordinator(
         paletteCoordinator: paletteCoordinator)
     @ObservationIgnored private(set) lazy var updateCoordinator = UpdateCoordinator(
@@ -450,6 +451,12 @@ final class AppCore {
                 aiPresetIDs: Set(aiSettings.quickAIPresets.map(\.id)))
             // Keeps running while Carbon pauses: the recorder needs its rewritten flags.
             hyperKeyTap.start(settings: settings)
+            keystrokeOverlay.onTapRefused = { [weak self] in
+                self?.showMessage("Keystrokes need Accessibility access", tone: .danger)
+                Permissions.ensureAccessibility()
+            }
+            track({ _ = $0.keystrokeOverlayEnabled; _ = $0.keystrokeOverlaySize }) { $0.keystrokeOverlay.apply() }
+            keystrokeOverlay.apply()
             hyperKeyTap.onLayerEvent = { [weak self] event in self?.handleHyperLayer(event) }
             track(hotKeys, { _ = $0.hyperLayers; _ = $0.recordingAction }) { $0.applyHyperLayers() }
             applyHyperLayers()
@@ -910,6 +917,7 @@ final class AppCore {
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             hyperLayerHUD.open(leader: leader, items: items)
         case .fired(let leader, let key):
+            keystrokeOverlay.recordLayer(leader: leader, key: key)
             guard let action = hotKeys.hyperLayers[leader]?[key] else { return }
             hyperLayerHUD.flash(key: key)
             hotKeys.perform(action)

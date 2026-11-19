@@ -46,6 +46,8 @@ enum SettingsFileSchema {
         case .hyperKey: return bind(settings, \.hyperKey)
         case .hyperKeyIncludesShift: return bind(settings, \.hyperKeyIncludesShift)
         case .hyperKeyQuickPress: return bind(settings, \.hyperKeyQuickPress)
+        case .keystrokeOverlaySize: return bind(settings, \.keystrokeOverlaySize)
+        case .keystrokeOverlayFilter: return bind(settings, \.keystrokeOverlayFilter)
         case .calcNumberStyle: return bind(settings, \.calcNumberStyle)
         case .launcherShowsSuggestions: return bind(settings, \.launcherShowsSuggestions)
         case .rootSearchSensitivity: return bind(settings, \.rootSearchSensitivity)
@@ -144,6 +146,8 @@ extension EmojiSkinTone: SettingsFileRawValue {}
 extension EmojiGridColumns: SettingsFileRawValue {}
 extension JoinWindow: SettingsFileRawValue {}
 extension AppInputSourceFallback: SettingsFileRawValue {}
+extension KeystrokeOverlaySize: SettingsFileRawValue {}
+extension KeystrokeFilter: SettingsFileRawValue {}
 
 /// `{"app": bundle ID, "source": input source ID}`, so the file reads as the pane's rows do.
 extension AppInputSourceRule: SettingsFileValue {

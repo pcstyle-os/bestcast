@@ -182,6 +182,27 @@ final class AppSettings {
         }
     }
 
+    /// Doubles as consent to listen to every keystroke. See docs/features/keystroke-overlay.md.
+    var keystrokeOverlayEnabled: Bool {
+        didSet { defaults.set(keystrokeOverlayEnabled, forKey: Key.keystrokeOverlayEnabled.rawValue) }
+    }
+
+    var keystrokeOverlaySize: KeystrokeOverlaySize {
+        didSet { defaults.set(keystrokeOverlaySize.rawValue, forKey: Key.keystrokeOverlaySize.rawValue) }
+    }
+
+    var keystrokeOverlayFilter: KeystrokeFilter {
+        didSet { defaults.set(keystrokeOverlayFilter.rawValue, forKey: Key.keystrokeOverlayFilter.rawValue) }
+    }
+
+    /// The overlay's bottom-centre in global screen points; nil until it is first dragged.
+    var keystrokeOverlayAnchor: CGPoint? {
+        didSet {
+            let value = keystrokeOverlayAnchor.map { [Double($0.x), Double($0.y)] }
+            defaults.set(value, forKey: Key.keystrokeOverlayAnchor.rawValue)
+        }
+    }
+
     /// Preferred skin tone applied to modifier-capable emoji at render and copy time.
     var emojiSkinTone: EmojiSkinTone {
         didSet { defaults.set(emojiSkinTone.rawValue, forKey: Key.emojiSkinTone.rawValue) }
@@ -639,6 +660,16 @@ final class AppSettings {
             defaults.string(forKey: Key.hyperKeyQuickPress.rawValue)
             .flatMap(HyperKeyQuickPress.init)
             ?? .none
+        keystrokeOverlayEnabled = defaults.bool(forKey: Key.keystrokeOverlayEnabled.rawValue)
+        keystrokeOverlaySize =
+            defaults.string(forKey: Key.keystrokeOverlaySize.rawValue).flatMap(KeystrokeOverlaySize.init)
+            ?? .medium
+        keystrokeOverlayFilter =
+            defaults.string(forKey: Key.keystrokeOverlayFilter.rawValue).flatMap(KeystrokeFilter.init)
+            ?? .allKeys
+        keystrokeOverlayAnchor =
+            (defaults.array(forKey: Key.keystrokeOverlayAnchor.rawValue) as? [Double])
+            .flatMap { $0.count == 2 ? CGPoint(x: $0[0], y: $0[1]) : nil }
         emojiSkinTone =
             defaults.string(forKey: Key.emojiSkinTone.rawValue).flatMap(EmojiSkinTone.init) ?? .none
         emojiGridColumns =

@@ -164,6 +164,9 @@ enum SettingsSearchCatalog {
             .generalHyperKey, "Include Shift (⇧)",
             keywords: ["modifier", "chord"]),
         .init(
+            .generalKeystrokes, "Show keystrokes",
+            keywords: ["screencast", "keycastr", "recording", "presentation", "overlay"]),
+        .init(
             .generalCalculator, "Number format",
             keywords: ["decimal", "comma", "separator", "locale", "region", "thousands"]),
         .init(

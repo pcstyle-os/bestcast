@@ -268,6 +268,7 @@ run palette-tab-test       Bestcast/Palette/PaletteMode.swift \
 run screen-capture-test    Bestcast/Features/ScreenCapture/Model/ScreenCaptureReading.swift
 run keyboard-click-test    Bestcast/Features/KeyboardClick/Model/ClickTarget.swift \
                            Bestcast/Features/KeyboardClick/Model/ClickHints.swift
+run keystroke-overlay-test Bestcast/Features/Keystrokes/Model/KeystrokeFeed.swift
 run input-source-test      Bestcast/Features/InputSources/Model/AppInputSourcePolicy.swift
 run fallback-test          Bestcast/Features/Launcher/Model/Fallback.swift \
                            Bestcast/Features/Launcher/Model/CommandID.swift \
