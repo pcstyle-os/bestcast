@@ -584,7 +584,10 @@ extension SettingsBackup {
         }
         if let b = hotkeys.togglePalette { apply(b, .togglePalette) }
         for (rawID, b) in hotkeys.commands ?? [:] {
-            guard let action = CommandID(rawValue: rawID)?.hotKeyAction else { continue }
+            // Pressing an imported chord is not consent to show every keystroke.
+            guard rawID != CommandID.toggleKeystrokes.rawValue,
+                let action = CommandID(rawValue: rawID)?.hotKeyAction
+            else { continue }
             apply(b, action)
         }
         for (id, b) in hotkeys.apps ?? [:] { apply(b, .app(bundleID: id)) }

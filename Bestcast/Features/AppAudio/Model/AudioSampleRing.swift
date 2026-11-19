@@ -28,13 +28,15 @@ nonisolated final class AudioSampleRing: @unchecked Sendable {
     /// Interleaved frames; a source with fewer channels repeats its last one.
     func write(_ source: UnsafePointer<Float>, frames: Int, sourceChannels: Int) {
         let start = written.load(ordering: .relaxed)
-        for frame in 0..<frames {
+        // Never overtake the reader: a full ring drops the newest frames instead.
+        let count = min(frames, capacity - (start - read.load(ordering: .acquiring)))
+        for frame in 0..<max(count, 0) {
             let slot = (start + frame) % capacity * channels
             for channel in 0..<channels {
                 samples[slot + channel] = source[frame * sourceChannels + min(channel, sourceChannels - 1)]
             }
         }
-        written.store(start + frames, ordering: .releasing)
+        written.store(start + max(count, 0), ordering: .releasing)
     }
 
     /// `step` is source frames per output frame, so an output at another rate keeps its pitch.
@@ -62,6 +64,6 @@ nonisolated final class AudioSampleRing: @unchecked Sendable {
             position += step
         }
         phase = position - position.rounded(.down)
-        read.store(Int(position), ordering: .relaxed)
+        read.store(Int(position), ordering: .releasing)
     }
 }

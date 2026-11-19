@@ -8,9 +8,9 @@ App Audio Mixer**.
 
 - **An untouched app is never tapped.** Only a setting below 100%, muted, or pinned to another output
   installs anything, and a mixer nobody has touched installs no listener either.
-- **Every HAL call runs on `AppAudioEngine`'s one serial queue.** Creating or stopping an I/O proc from
-  main, or inside a property listener, deadlocks against the HAL and can wedge `coreaudiod`; listeners
-  are delivered on a second queue and only hop onto the engine's.
+- **Taps are built and torn down only on `AppAudioEngine`'s serial queue.** Creating or stopping an I/O
+  proc from main, or inside a property listener, deadlocks against the HAL and can wedge `coreaudiod`;
+  listeners only queue work, never call the HAL themselves.
 - **`coreaudiod` never asks for the microphone.** Its prompt stalls every app's audio until answered.
   The aggregate holds the tap alone with its rate left alone, playback is a raw I/O proc with input
   off, never an audio unit, and an output with an input side waits for Bestcast's own microphone
@@ -28,8 +28,9 @@ wraps it in a private tap-only aggregate, and copies its input into `AudioSample
 single-producer ring. A raw I/O proc on the chosen device, its input streams switched off, reads the
 ring at the gain, an atomic word. The device may run at another rate than the tap, so the reader steps
 through the ring at their ratio and interpolates between frames; a listener on both rates keeps that
-ratio current. The reader never touches a slot past the last one written, and one more than 100 ms
-behind skips ahead.
+ratio current. The reader never touches a slot past the last one written, the writer drops frames
+rather than overtake the reader, and a reader more than 100 ms behind skips ahead. Rate listeners only
+queue their reads, since the HAL may wait on a listener while a tap tears down.
 
 Two obvious routes ask for the microphone and stall `coreaudiod` on the prompt, and with it every
 app's audio: a HAL output audio unit, which also binds the default input, and setting the aggregate's

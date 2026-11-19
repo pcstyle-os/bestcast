@@ -107,7 +107,7 @@ struct HyperKeyRewriter: Sendable {
         guard isHolding else { return Outcome(.pass) }
         // Any other key or modifier going down while Hyper is held makes this a combo, not a tap.
         if type == .keyDown || type == .flagsChanged { otherKeyPressed = true }
-        if type == .keyDown, isBareChord(flagsRaw),
+        if type == .keyDown, activeLayer != nil || isBareChord(flagsRaw),
             let outcome = decideLayerKey(keyCode, isAutorepeat: isAutorepeat)
         {
             return outcome
@@ -134,7 +134,7 @@ struct HyperKeyRewriter: Sendable {
         return Outcome(.suppress)
     }
 
-    /// With Include Shift off, ✦⇧ is its own chord, so a held ⇧ is not a layer key.
+    /// With Include Shift off, ✦⇧ is its own chord, so a held ⇧ opens no layer.
     private func isBareChord(_ flagsRaw: UInt64) -> Bool {
         configuration.includesShift || (flagsRaw & ~strippedFlagsRaw) & CGEventFlags.maskShift.rawValue == 0
     }

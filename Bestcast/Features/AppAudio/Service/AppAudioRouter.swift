@@ -62,7 +62,7 @@ final class AppAudioRouter {
     }
 }
 
-/// Every HAL call runs on one serial queue: from main, creating or stopping an I/O proc can
+/// Taps are built and torn down on one serial queue: from main, creating or stopping an I/O proc can
 /// deadlock against the property listeners the HAL delivers.
 nonisolated final class AppAudioEngine: @unchecked Sendable {
     struct Snapshot: Sendable {

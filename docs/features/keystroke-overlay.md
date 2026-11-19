@@ -8,7 +8,7 @@ Overlay or with **Toggle Keystroke Overlay**; **Move Keystroke Overlay** lets yo
 - **The switch is consent to read every keystroke**, so it is off by default and travels in neither a
   backup nor settings.json. Size and filter do, as `general.keystrokeOverlaySize` and
   `general.keystrokeOverlayShows`; the dragged position stays on this Mac. A deeplink can turn it off
-  but never on.
+  but never on, and a backup never restores Toggle Keystroke Overlay's shortcut.
 - **The tap is listen-only and exists only while the overlay is on.** It is appended at the session
   tap's tail, after Hyper has rewritten a key, so a Hyper chord reads as ✦.
 - **Secure Input hides keys from it**, as from every tap: a password field never reaches the overlay.

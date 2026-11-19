@@ -867,6 +867,10 @@ struct DoubleTapDetectorTests {
         expect(
             shifted.key(kVK_ANSI_W, flags: shiftDown, at: 20) == rewrite(shiftDown | hyperWithoutShift),
             "with Include Shift off, ✦⇧ and a leader stays the ✦⇧ chord it was")
+        _ = shifted.key(kVK_ANSI_W, flags: nonCoalesced, at: 40)
+        expect(
+            shifted.key(kVK_ANSI_H, flags: shiftDown, at: 60).layer == .fired(leader: kVK_ANSI_W, key: kVK_ANSI_H),
+            "inside an open layer ⇧ changes nothing")
 
         var plain = layered(.rightOption)
         _ = plain.modifier(flags: rightOptionDown, at: 0)

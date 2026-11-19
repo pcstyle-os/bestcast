@@ -15,7 +15,8 @@ A backup carries five independently selectable categories, ticked on export and 
   `SettingsBackupCoverage` in the same commit.
 - **`snippetsEnabled` is excluded, and that is a security control.** It doubles as consent to keystroke
   listening, so an imported file must not be able to grant it. A `Mirror` or a macro is the wrong
-  answer: neither can be read to check what is covered.
+  answer: neither can be read to check what is covered. Toggle Keystroke Overlay's shortcut is skipped
+  on import for the same reason: a restored chord pressed by habit would turn on keystroke capture.
 - **A flag that grants a capability is never carried by a backup**, whether it is excluded from
   `SettingsBackupCoverage` like `snippetsEnabled` or kept out of `AppSettings` entirely. Importing a
   config must not be able to grant something the user never granted. `FallbackStore` is the second

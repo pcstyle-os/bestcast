@@ -67,6 +67,13 @@ struct AppAudioTests {
         ring.read(into: &out, frames: 2, outputChannels: 2, gain: 1, step: 1.5)
         check("a reader caught up plays silence, not stale frames", out == [0, 0, 0, 0])
 
+        let full = AudioSampleRing(channels: 1, capacity: 8, maximumLag: 6)
+        let ten = (0..<10).map(Float.init)
+        full.write(ten, frames: ten.count, sourceChannels: 1)
+        var pair = [Float](repeating: -1, count: 2)
+        full.read(into: &pair, frames: 2, outputChannels: 1, gain: 1)
+        check("a full ring drops the newest frames instead of overwriting unread ones", pair == [5, 6])
+
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
     }

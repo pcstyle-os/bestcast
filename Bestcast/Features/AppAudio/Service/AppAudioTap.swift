@@ -24,6 +24,7 @@ nonisolated final class AppAudioTap: @unchecked Sendable {
     }
 
     private static let rateChanges = DispatchQueue(label: "com.bestcast.app-audio.rate")
+    private static let rateReads = DispatchQueue(label: "com.bestcast.app-audio.rate-reads")
 
     /// Long enough to ride out a late I/O cycle; a reader further behind skips to 50 ms.
     private static let ringSeconds = 1.0
@@ -106,7 +107,10 @@ nonisolated final class AppAudioTap: @unchecked Sendable {
 
     private func followRateChanges(_ shared: Shared) {
         let (tap, output) = (tapID, outputID)
-        let listener: AudioObjectPropertyListenerBlock = { _, _ in Self.updateStep(shared, tap: tap, output: output) }
+        // Only queued here: the HAL may wait on this listener while a tap tears down.
+        let listener: AudioObjectPropertyListenerBlock = { _, _ in
+            Self.rateReads.async { Self.updateStep(shared, tap: tap, output: output) }
+        }
         Self.updateStep(shared, tap: tap, output: output)
         rateListener = listener
         for (object, selector) in rateSources {
