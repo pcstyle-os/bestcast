@@ -137,6 +137,9 @@ If a change touches anything in the right column, the harness on the left is man
 | `settings-backup-test` | `Settings/AppSettingsKey.swift`, `Backup/Model/SettingsBackupCoverage.swift` |
 | `settings-file-test` | `Settings/Model/` and `Settings/Service/` — key paths, value tokens, the printer and parser, and the repository's import, replace, save, reload and symlink handling on a scratch folder |
 | `window-file-test` | `WindowManagement/Model/WindowManagementFileFormat.swift` — command shortcuts, custom sizes, layouts and rooms as settings.json spells them, hand edits and bad records |
+| `screen-capture-test` | `ScreenCapture/Model/ScreenCaptureReading.swift` — what a capture copies, codes over text, and the hex of a picked colour |
+| `keyboard-click-test` | `KeyboardClick/Model/` — prefix-free hint labels, typing into them, name search ranking, which targets get hints and in what order, scroll offsets |
+| `input-source-test` | `InputSources/Model/AppInputSourcePolicy.swift` — which input source an app switches to, and the remembered fallback |
 | `backup-archive-test` | all of `Backup/Model/`, plus `Backup/Service/BackupStaging.swift` |
 | `updates-test` | `Updates/Model/` — version precedence, channel filtering, install route, readiness |
 | `support-test` | `Support/Model/` — when the support reminder comes due, and a clock moved backwards |

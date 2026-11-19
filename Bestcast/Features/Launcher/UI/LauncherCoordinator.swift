@@ -220,6 +220,15 @@ final class LauncherCoordinator {
         case .pickColor:
             dismissPalette()
             core.screenCaptureCoordinator.pickColor()
+        case .clickByKeyboard:
+            dismissPalette()
+            core.keyboardClickCoordinator.start(.hints)
+        case .clickByName:
+            dismissPalette()
+            core.keyboardClickCoordinator.start(.name)
+        case .scrollByKeyboard:
+            dismissPalette()
+            core.keyboardClickCoordinator.start(.scroll)
         case .define:
             core.dictionaryCoordinator.show()
         case .openInBrowser, .runShellCommand, .askAI:
