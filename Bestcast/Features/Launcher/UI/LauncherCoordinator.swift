@@ -214,6 +214,12 @@ final class LauncherCoordinator {
         case .openCamera:
             dismissPalette()
             Task { await core.cameraCoordinator.show() }
+        case .captureText:
+            dismissPalette()
+            core.screenCaptureCoordinator.captureText()
+        case .pickColor:
+            dismissPalette()
+            core.screenCaptureCoordinator.pickColor()
         case .define:
             core.dictionaryCoordinator.show()
         case .openInBrowser, .runShellCommand, .askAI:

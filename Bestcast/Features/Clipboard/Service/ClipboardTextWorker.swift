@@ -3,6 +3,12 @@ import Foundation
 /// Runs one `ClipboardTextHelper` per item, so Vision's allocations leave with the child process.
 nonisolated enum ClipboardTextWorker {
     enum Failure: Error { case recognition, outputLimit }
+    /// The helper's first argument; `codes` answers NUL-separated payloads instead of text.
+    enum Mode: String { case image, pdf, codes }
+
+    static var bundledHelper: URL {
+        Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/ClipboardTextHelper")
+    }
 
     /// Mirrors `ClipboardTextExtractor.maximumTextBytes`: the helper is not in the app's module.
     private static let maximumOutputBytes = 32_000
@@ -15,18 +21,17 @@ nonisolated enum ClipboardTextWorker {
         guard let path = item.imagePath ?? item.filePath else { return "" }
         let kind = item.kind == .image ? ClipboardFileKind.image : ClipboardFileKind.of(path: path)
         guard kind == .image || kind == .pdf else { return "" }
-        let executable = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/ClipboardTextHelper")
-        return try await extract(at: URL(fileURLWithPath: path), isPDF: kind == .pdf, executable: executable)
+        return try await extract(at: URL(fileURLWithPath: path), mode: kind == .pdf ? .pdf : .image)
     }
 
     static func extract(
-        at url: URL, isPDF: Bool, executable: URL, timeout: Duration = .seconds(60)
+        at url: URL, mode: Mode, executable: URL = bundledHelper, timeout: Duration = .seconds(60)
     ) async throws -> String {
         try Task.checkCancellation()
         let process = Process()
         let output = Pipe()
         process.executableURL = executable
-        process.arguments = [isPDF ? "pdf" : "image", url.path]
+        process.arguments = [mode.rawValue, url.path]
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice

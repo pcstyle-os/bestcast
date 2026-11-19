@@ -114,7 +114,8 @@ New long-lived state belongs on `AppCore`, wired in `start()`. Do not create a c
 Extensions reach other features through one narrow seam: `App/AppCore+ExtensionServices.swift`
 conforms to `ExtensionBestcastServices`, and the `@bestcast/api` bridge sees that protocol, never `AppCore`.
 
-Clipboard text recognition is the one feature that leaves the process. `AppCore` owns the indexer;
+Text and code recognition — clipboard text and Capture Text from Screen — is the one job that leaves
+the process. `AppCore` owns the indexer;
 the stateless `ClipboardTextWorker` runs one bundled `ClipboardTextHelper` per item, from
 `Contents/Helpers`, and reaps it before returning. Vision's and PDFKit's allocations therefore belong
 to a process that exits, and the helper — which has no database, clipboard or settings access — is

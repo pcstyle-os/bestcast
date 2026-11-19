@@ -26,6 +26,13 @@ nonisolated enum ClipboardTextExtractor {
         return bounded(try await recognize(image))
     }
 
+    /// Every QR and bar code payload, NUL-separated, since a payload may itself hold newlines.
+    static func codes(at url: URL) async throws -> String {
+        guard let image = autoreleasepool(invoking: { image(at: url) }) else { throw Failure.unreadable }
+        let payloads = try await DetectBarcodesRequest().perform(on: image).compactMap(\.payloadString)
+        return bounded(payloads.joined(separator: "\0"))
+    }
+
     private static func image(at url: URL) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
             let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
