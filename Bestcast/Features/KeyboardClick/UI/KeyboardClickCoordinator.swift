@@ -36,6 +36,8 @@ final class KeyboardClickCoordinator {
             let result = await Task.detached(priority: .userInitiated) { AXClickTargetSweep.read(pid: pid) }.value
             guard let self else { return }
             sweep = nil
+            // Switching apps during the sweep makes its geometry another window's.
+            guard FrontmostApplication.current()?.processIdentifier == pid else { return }
             guard let result else {
                 core.showMessage("No window to click", tone: .neutral)
                 return
@@ -82,7 +84,9 @@ final class KeyboardClickCoordinator {
             return
         }
         guard event.modifierFlags.isDisjoint(with: [.command, .control, .option]) else { return }
-        let key = event.charactersIgnoringModifiers?.lowercased().first
+        // Hints and scroll keys are Latin, so they read the key's ASCII letter on any layout.
+        let key = (ASCIIKeyboardLayout.character(for: event) ?? event.charactersIgnoringModifiers)?
+            .lowercased().first
         switch state.mode {
         case .scroll:
             guard let key, let offset = KeyboardScroll.offset(for: key, viewportHeight: state.window.height)

@@ -102,10 +102,14 @@ struct HyperKeyRewriter: Sendable {
             return decideModifierTransition(flagsRaw: flagsRaw, swapKeyCode: true, at: now)
         }
         if type == .keyUp, swallowedKeys.remove(keyCode) != nil { return Outcome(.suppress) }
+        // A swallowed key still held after ✦ lets go repeats into nothing, not into typing.
+        if type == .keyDown, isAutorepeat, !isHolding, swallowedKeys.contains(keyCode) { return Outcome(.suppress) }
         guard isHolding else { return Outcome(.pass) }
         // Any other key or modifier going down while Hyper is held makes this a combo, not a tap.
         if type == .keyDown || type == .flagsChanged { otherKeyPressed = true }
-        if type == .keyDown, let outcome = decideLayerKey(keyCode, isAutorepeat: isAutorepeat) {
+        if type == .keyDown, isBareChord(flagsRaw),
+            let outcome = decideLayerKey(keyCode, isAutorepeat: isAutorepeat)
+        {
             return outcome
         }
         return Outcome(.rewrite(flags: hyperized(flagsRaw)))
@@ -128,6 +132,11 @@ struct HyperKeyRewriter: Sendable {
         guard activeLayer != nil else { return nil }
         swallowedKeys.insert(keyCode)
         return Outcome(.suppress)
+    }
+
+    /// With Include Shift off, ✦⇧ is its own chord, so a held ⇧ is not a layer key.
+    private func isBareChord(_ flagsRaw: UInt64) -> Bool {
+        configuration.includesShift || (flagsRaw & ~strippedFlagsRaw) & CGEventFlags.maskShift.rawValue == 0
     }
 
     /// Leaves the layer as Hyper lets go; the swallowed releases may still be in flight.

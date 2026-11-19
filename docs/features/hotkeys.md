@@ -249,7 +249,9 @@ swallowed and opens its layer; a bound key inside it is swallowed and fires; an 
 layer is swallowed too, rather than leaking out as a ✦ chord. The layer **stays open** until ✦ is
 released, so ✦ W H L tiles twice in one hold, and a held layer key repeats like a held volume key.
 Every swallowed press has its release swallowed as well, even when ✦ lets go first, so no app sees a
-keyUp without its keyDown. A key that is a leader is no longer a ✦ combo, which is why
+keyUp without its keyDown, and its autorepeat after that release is swallowed too rather than typed.
+With Include Shift off, ✦⇧ is a chord of its own, so a leader pressed with ⇧ stays that ✦⇧ combo.
+A key that is a leader is no longer a ✦ combo, which is why
 `conflictOwner` treats a ✦W combo and a W layer as holding the same chord.
 
 The tap reports `.entered`, `.fired` and `.exited` the way it reports Quick Press, through a `Task`
@@ -321,7 +323,8 @@ keywords stop for the same reason. Modifier-only shortcuts keep working, since t
 
 Nothing in a tap can work around it, so Bestcast says so instead. `SecureInputMonitor`
 (`Platform/`) polls `IsSecureEventInputEnabled` on the shared one-second watchdog, but only while
-`AppCore` reports a feature it would pause — an active Hyper tap or snippet listener — so an idle
+`AppCore` reports a feature it would pause — an active Hyper tap, snippet listener or keystroke
+overlay — so an idle
 install never wakes for it. While it is on, a third menu-bar item appears on its own, whatever Show in
 menu bar says: a lock and the app `IOConsoleUsers`' `kCGSSessionSecureInputPID` names, with what is
 paused and Show / Quit for that app. Settings' Hyper Key section repeats it. That PID records the

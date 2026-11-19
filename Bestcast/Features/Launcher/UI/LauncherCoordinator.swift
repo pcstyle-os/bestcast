@@ -409,6 +409,11 @@ final class LauncherCoordinator {
             core.showMessage("Nothing in Bestcast answers that link", tone: .danger)
             return
         }
+        // Showing every keystroke is consent given here, never by a link another app opens.
+        if action == .command(.toggleKeystrokes), !core.settings.keystrokeOverlayEnabled {
+            core.showMessage("Turn on the keystroke overlay in Bestcast first", tone: .danger)
+            return
+        }
         if !core.hotKeys.perform(action) {
             core.showMessage("\(entry?.name ?? "That command") is disabled", tone: .danger)
         }

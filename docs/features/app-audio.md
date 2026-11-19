@@ -27,8 +27,9 @@ App Audio Mixer**.
 wraps it in a private tap-only aggregate, and copies its input into `AudioSampleRing`, a lock-free
 single-producer ring. A raw I/O proc on the chosen device, its input streams switched off, reads the
 ring at the gain, an atomic word. The device may run at another rate than the tap, so the reader steps
-through the ring at their ratio and interpolates between frames. A reader more than 100 ms behind skips
-ahead.
+through the ring at their ratio and interpolates between frames; a listener on both rates keeps that
+ratio current. The reader never touches a slot past the last one written, and one more than 100 ms
+behind skips ahead.
 
 Two obvious routes ask for the microphone and stall `coreaudiod` on the prompt, and with it every
 app's audio: a HAL output audio unit, which also binds the default input, and setting the aggregate's
@@ -42,7 +43,7 @@ half. Muted is gain 0 at any slider position.
 `AppAudioGrouping` folds helper processes under the app that owns them by bundle-ID prefix, so a
 browser's renderers are one row. A process without a bundle ID, such as `afplay`, is its executable
 name. Rows show apps playing now plus any app with a setting, while it runs. The listeners re-route on
-new or exiting processes, devices coming and going and a new default; a pinned output that disappears
+new or exiting processes, devices coming and going, a new default and apps launching or quitting; a pinned output that disappears
 plays on the default until it returns.
 
 ## Permission

@@ -462,11 +462,15 @@ final class AppCore {
                 self?.showMessage("Couldn’t take over that app’s audio", tone: .danger)
             }
             track({ _ = $0.appAudioSettings }) { $0.appAudio.apply($0.settings.appAudioSettings) }
+            // A relaunched app's helpers only join its row once the app itself is known to run.
+            track(runningApps, { _ = $0.runningBundleIDs }) { $0.appAudio.apply($0.settings.appAudioSettings) }
             appAudio.apply(settings.appAudioSettings)
             hyperKeyTap.onLayerEvent = { [weak self] event in self?.handleHyperLayer(event) }
             track(hotKeys, { _ = $0.hyperLayers; _ = $0.recordingAction }) { $0.applyHyperLayers() }
             applyHyperLayers()
-            track(self, { _ = $0.hyperKeyTap.status; _ = $0.snippetListener.status }) {
+            track(self, {
+                _ = $0.hyperKeyTap.status; _ = $0.snippetListener.status; _ = $0.settings.keystrokeOverlayEnabled
+            }) {
                 $0.applySecureInputWatch()
             }
             applySecureInputWatch()
@@ -908,6 +912,7 @@ final class AppCore {
         var paused: [String] = []
         if hyperKeyTap.status == .active { paused.append("Hyper Key") }
         if snippetListener.status == .active { paused.append("Snippet keywords") }
+        if settings.keystrokeOverlayEnabled { paused.append("Keystroke overlay") }
         secureInput.watch(for: paused)
     }
 

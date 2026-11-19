@@ -46,16 +46,20 @@ nonisolated final class AudioSampleRing: @unchecked Sendable {
         if Double(end) - position > Double(maximumLag) { position = Double(end - maximumLag / 2) }
         for frame in 0..<frames {
             let index = Int(position)
-            let ready = index + 1 < end
+            // Slots past `end` are still the writer's, so an underrun never reads them.
+            guard index + 1 < end else {
+                output.advanced(by: frame * outputChannels).update(repeating: 0, count: outputChannels)
+                continue
+            }
             let fraction = Float(position - Double(index))
             let here = index % capacity * channels
             let next = (index + 1) % capacity * channels
             for channel in 0..<outputChannels {
                 let source = min(channel, channels - 1)
                 let sample = samples[here + source] + (samples[next + source] - samples[here + source]) * fraction
-                output[frame * outputChannels + channel] = ready ? sample * gain : 0
+                output[frame * outputChannels + channel] = sample * gain
             }
-            if ready { position += step }
+            position += step
         }
         phase = position - position.rounded(.down)
         read.store(Int(position), ordering: .relaxed)

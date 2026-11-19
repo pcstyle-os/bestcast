@@ -850,6 +850,24 @@ struct DoubleTapDetectorTests {
         expect(keys.key(kVK_ANSI_K, type: .keyUp, at: 230) == suppress, "so is the unbound key's")
         expect(keys.key(kVK_ANSI_H, at: 240) == .init(.pass), "outside a layer its keys type normally")
 
+        var heldPast = layered(.rightOption)
+        _ = heldPast.modifier(flags: rightOptionDown, at: 0)
+        _ = heldPast.key(kVK_ANSI_W, at: 20)
+        _ = heldPast.key(kVK_ANSI_H, at: 40)
+        _ = heldPast.modifier(flags: nonCoalesced, at: 60)
+        expect(
+            heldPast.key(kVK_ANSI_H, at: 100, autorepeat: true) == suppress,
+            "a layer key still held after ✦ lets go repeats into nothing")
+
+        var shifted = HyperKeys(.rightOption)
+        shifted.rewriter.configure(
+            .init(key: .rightOption, includesShift: false, layers: [kVK_ANSI_W: [kVK_ANSI_H]]))
+        _ = shifted.modifier(flags: rightOptionDown, at: 0)
+        let shiftDown = nonCoalesced | 0x2_0000 | 0x2
+        expect(
+            shifted.key(kVK_ANSI_W, flags: shiftDown, at: 20) == rewrite(shiftDown | hyperWithoutShift),
+            "with Include Shift off, ✦⇧ and a leader stays the ✦⇧ chord it was")
+
         var plain = layered(.rightOption)
         _ = plain.modifier(flags: rightOptionDown, at: 0)
         expect(

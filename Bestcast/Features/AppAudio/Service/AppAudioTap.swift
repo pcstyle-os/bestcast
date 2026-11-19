@@ -11,16 +11,19 @@ nonisolated final class AppAudioTap: @unchecked Sendable {
     let processIDs: [AudioObjectID]
     let outputUID: String
 
-    /// What both real-time threads read: the ring between them, and the gain as a lock-free word.
+    /// What both real-time threads read: the ring, the gain, and tap frames per output frame.
     final class Shared: Sendable {
         let ring: AudioSampleRing
         let gain: Atomic<UInt32>
+        let step = Atomic<UInt64>(1.0.bitPattern)
 
         init(ring: AudioSampleRing, gain: Float) {
             self.ring = ring
             self.gain = Atomic(gain.bitPattern)
         }
     }
+
+    private static let rateChanges = DispatchQueue(label: "com.bestcast.app-audio.rate")
 
     /// Long enough to ride out a late I/O cycle; a reader further behind skips to 50 ms.
     private static let ringSeconds = 1.0
@@ -33,6 +36,7 @@ nonisolated final class AppAudioTap: @unchecked Sendable {
     private var procID: AudioDeviceIOProcID?
     private var outputID = AudioObjectID(kAudioObjectUnknown)
     private var outputProcID: AudioDeviceIOProcID?
+    private var rateListener: AudioObjectPropertyListenerBlock?
 
     init(processIDs: [AudioObjectID], outputUID: String, gain: Float) throws {
         self.processIDs = processIDs
@@ -51,6 +55,13 @@ nonisolated final class AppAudioTap: @unchecked Sendable {
     }
 
     func stop() {
+        if let rateListener {
+            for (object, selector) in rateSources {
+                var address = address(selector)
+                AudioObjectRemovePropertyListenerBlock(object, &address, Self.rateChanges, rateListener)
+            }
+            self.rateListener = nil
+        }
         if let outputProcID {
             AudioDeviceStop(outputID, outputProcID)
             AudioDeviceDestroyIOProcID(outputID, outputProcID)
@@ -84,8 +95,42 @@ nonisolated final class AppAudioTap: @unchecked Sendable {
             gain: initialGain)
         self.shared = shared
         try startCapture(into: shared.ring)
-        let outputRate = try property(outputID, kAudioDevicePropertyNominalSampleRate, Float64(0))
-        try startOutput(shared: shared, step: outputRate > 0 ? rate / outputRate : 1)
+        followRateChanges(shared)
+        try startOutput(shared: shared)
+    }
+
+    /// Either side changing rate, say a headset switching to its call profile, re-pitches the copy.
+    private var rateSources: [(AudioObjectID, AudioObjectPropertySelector)] {
+        [(outputID, kAudioDevicePropertyNominalSampleRate), (tapID, kAudioTapPropertyFormat)]
+    }
+
+    private func followRateChanges(_ shared: Shared) {
+        let (tap, output) = (tapID, outputID)
+        let listener: AudioObjectPropertyListenerBlock = { _, _ in Self.updateStep(shared, tap: tap, output: output) }
+        Self.updateStep(shared, tap: tap, output: output)
+        rateListener = listener
+        for (object, selector) in rateSources {
+            var address = address(selector)
+            AudioObjectAddPropertyListenerBlock(object, &address, Self.rateChanges, listener)
+        }
+    }
+
+    private static func updateStep(_ shared: Shared, tap: AudioObjectID, output: AudioObjectID) {
+        var tapFormat = AudioStreamBasicDescription()
+        var outputRate = Float64(0)
+        var formatAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioTapPropertyFormat, mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var rateAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate, mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var formatSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        var rateSize = UInt32(MemoryLayout<Float64>.size)
+        guard AudioObjectGetPropertyData(tap, &formatAddress, 0, nil, &formatSize, &tapFormat) == noErr,
+            AudioObjectGetPropertyData(output, &rateAddress, 0, nil, &rateSize, &outputRate) == noErr,
+            tapFormat.mSampleRate > 0, outputRate > 0
+        else { return }
+        shared.step.store((tapFormat.mSampleRate / outputRate).bitPattern, ordering: .relaxed)
     }
 
     /// The tap alone, with no device in the aggregate: a device's input side would be a microphone.
@@ -112,7 +157,7 @@ nonisolated final class AppAudioTap: @unchecked Sendable {
     }
 
     /// A raw I/O proc, input off: an audio unit or a rate set on the aggregate both ask for the mic.
-    private func startOutput(shared: Shared, step: Double) throws {
+    private func startOutput(shared: Shared) throws {
         try check(
             AudioDeviceCreateIOProcIDWithBlock(&outputProcID, outputID, nil) { _, _, _, output, _ in
                 let buffers = UnsafeMutableAudioBufferListPointer(output)
@@ -123,7 +168,8 @@ nonisolated final class AppAudioTap: @unchecked Sendable {
                     if index == 0 {
                         shared.ring.read(
                             into: data, frames: frames, outputChannels: channels,
-                            gain: Float(bitPattern: shared.gain.load(ordering: .relaxed)), step: step)
+                            gain: Float(bitPattern: shared.gain.load(ordering: .relaxed)),
+                            step: Double(bitPattern: shared.step.load(ordering: .relaxed)))
                     } else {
                         data.update(repeating: 0, count: frames * channels)
                     }
