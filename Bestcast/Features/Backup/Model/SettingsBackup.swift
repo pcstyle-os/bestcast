@@ -30,6 +30,9 @@ struct SettingsBackup: Codable {
         var hyperKey: String?
         var hyperKeyIncludesShift: Bool?
         var hyperKeyQuickPress: String?
+        var keystrokeOverlaySize: String?
+        var keystrokeOverlayFilter: String?
+        var appAudioInMenuBar: Bool?
         var emojiSkinTone: String?
         var emojiGridColumns: Int?
         var showInMenuBar: Bool?
@@ -142,6 +145,9 @@ extension SettingsBackup {
             hyperKey: s.hyperKey.rawValue,
             hyperKeyIncludesShift: s.hyperKeyIncludesShift,
             hyperKeyQuickPress: s.hyperKeyQuickPress.rawValue,
+            keystrokeOverlaySize: s.keystrokeOverlaySize.rawValue,
+            keystrokeOverlayFilter: s.keystrokeOverlayFilter.rawValue,
+            appAudioInMenuBar: s.appAudioInMenuBar,
             emojiSkinTone: s.emojiSkinTone.rawValue,
             emojiGridColumns: s.emojiGridColumns.rawValue,
             showInMenuBar: s.showInMenuBar,
@@ -341,6 +347,18 @@ extension SettingsBackup {
         }
         if let raw = s.hyperKeyQuickPress, let quick = HyperKeyQuickPress(rawValue: raw) {
             settings.hyperKeyQuickPress = quick
+            count += 1
+        }
+        if let raw = s.keystrokeOverlaySize, let size = KeystrokeOverlaySize(rawValue: raw) {
+            settings.keystrokeOverlaySize = size
+            count += 1
+        }
+        if let raw = s.keystrokeOverlayFilter, let filter = KeystrokeFilter(rawValue: raw) {
+            settings.keystrokeOverlayFilter = filter
+            count += 1
+        }
+        if let flag = s.appAudioInMenuBar {
+            settings.appAudioInMenuBar = flag
             count += 1
         }
         if let raw = s.emojiSkinTone, let tone = EmojiSkinTone(rawValue: raw) {
@@ -566,7 +584,10 @@ extension SettingsBackup {
         }
         if let b = hotkeys.togglePalette { apply(b, .togglePalette) }
         for (rawID, b) in hotkeys.commands ?? [:] {
-            guard let action = CommandID(rawValue: rawID)?.hotKeyAction else { continue }
+            // Pressing an imported chord is not consent to show every keystroke.
+            guard rawID != CommandID.toggleKeystrokes.rawValue,
+                let action = CommandID(rawValue: rawID)?.hotKeyAction
+            else { continue }
             apply(b, action)
         }
         for (id, b) in hotkeys.apps ?? [:] { apply(b, .app(bundleID: id)) }

@@ -234,6 +234,31 @@ that ended the hold is still in flight a runloop turn later — so the Escape we
 Terminals read the raw `0x1B` and did not care; a focused field editor and any exact-match keymap
 swallowed it, which is why Quick Press worked in Ghostty but never in Zed or the palette itself.
 
+### Hyper layers
+
+A **layer** binds an action to two keys under one held ✦: ✦W opens the W layer, and H inside it fires.
+It is an ordinary `HotKeyBinding` — `.hyperLayer(leader:key:)`, two keycodes — so anything bindable can
+live in a layer, it backs up and syncs to `settings.json` (`hyper+w then h`) with the rest, and the
+recorder records it: hold ✦, press the leader, then either let go (a plain ✦W combo) or press a second
+key (a layer). `HotKeyManager.hyperLayers` derives the leader → key → action table from the bindings,
+and `AppCore` pushes its keycodes into the tap's configuration — **emptied while a recorder is open**,
+so a layer's keys reach the recorder instead of firing.
+
+`HyperKeyRewriter` makes every layer decision on the tap thread. A leader under a held Hyper is
+swallowed and opens its layer; a bound key inside it is swallowed and fires; an unbound key inside a
+layer is swallowed too, rather than leaking out as a ✦ chord. The layer **stays open** until ✦ is
+released, so ✦ W H L tiles twice in one hold, and a held layer key repeats like a held volume key.
+Every swallowed press has its release swallowed as well, even when ✦ lets go first, so no app sees a
+keyUp without its keyDown, and its autorepeat after that release is swallowed too rather than typed.
+With Include Shift off, ✦⇧ is a chord of its own, so a leader pressed with ⇧ stays that ✦⇧ combo.
+A key that is a leader is no longer a ✦ combo, which is why
+`conflictOwner` treats a ✦W combo and a W layer as holding the same chord.
+
+The tap reports `.entered`, `.fired` and `.exited` the way it reports Quick Press, through a `Task`
+onto main. `HyperLayerHUDController` lists the layer after a fixed 250 ms, so a reader who knows the
+keys never sees it flash, and closes it on `.exited` — which a revived or suspended tap also sends,
+since a disabled tap may have lost the release.
+
 ### ✦ is the notation, not a preference
 
 Any combo whose modifiers are a superset of the chord renders with the Hyper set replaced by a single
@@ -278,11 +303,33 @@ system never waits on them to deliver a keystroke, and everything they feed is m
 
 Like every keyboard tap it needs the **Accessibility** grant and never prompts for it. A one-second
 watchdog runs while a key is configured: it retries installation until the grant lands, notices
-revocation, and revives a tap the system disabled on timeout or user input, dropping any hold as it
-does (see [press tracking](#press-tracking)). On
-fast user switching another session owns the keyboard, so half-held state is dropped, rewriting
+revocation, and rebuilds a tap it finds disabled, dropping any hold as it does (see
+[press tracking](#press-tracking)). The callback already re-enables a timed-out tap, so one the
+watchdog still finds off is treated as dead: re-enabling an invalidated port is a silent no-op, and
+reviving in place left Hyper broken until relaunch.
+
+[Secure Input](#secure-input) is the other silent failure. On fast user switching another session owns the keyboard, so half-held state is dropped, rewriting
 stops and the watchdog stands down until this session is active again. The HID remap outlives the
 process, so `applicationWillTerminate` hands the key back to the system before exiting.
+
+### Secure Input
+
+While any app holds Secure Event Input — a password field, a password manager, Terminal's Secure
+Keyboard Entry, or one that never released it — macOS withholds keyDown/keyUp from every tap but still
+delivers `flagsChanged`. The Hyper key's own press is rewritten, but the letter after it arrives with
+only the physical modifier, so Hyper+key and every layer do nothing while the tap looks healthy; snippet
+keywords stop for the same reason. Modifier-only shortcuts still fire, since they trigger on
+`flagsChanged`, though a key or click that should cancel one is withheld too, as is the Globe key's
+key-down. Carbon combos are delivered above the taps.
+
+Nothing in a tap can work around it, so Bestcast says so instead. `SecureInputMonitor`
+(`Platform/`) polls `IsSecureEventInputEnabled` on the shared one-second watchdog, but only while
+`AppCore` reports a feature it would pause — an active Hyper tap, snippet listener or keystroke
+overlay — so an idle
+install never wakes for it. While it is on, a third menu-bar item appears on its own, whatever Show in
+menu bar says: a lock and the app `IOConsoleUsers`' `kCGSSessionSecureInputPID` names, with what is
+paused and Show / Quit for that app. Settings' Hyper Key section repeats it. That PID records the
+frontmost app when input went secure, which is not always the caller, so the copy says "reported by".
 
 ## Recorder
 

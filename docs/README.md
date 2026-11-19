@@ -30,6 +30,10 @@ open with an `## Invariants` section; read it before changing anything in that a
 [calculator](features/calculator.md) ·
 [calendar](features/calendar.md) ·
 [camera](features/camera.md) ·
+[screen capture](features/screen-capture.md) ·
+[click by keyboard](features/keyboard-click.md) ·
+[keystroke overlay](features/keystroke-overlay.md) ·
+[app audio](features/app-audio.md) ·
 [emoji](features/emoji.md) ·
 [dictionary](features/dictionary.md) ·
 [file search](features/file-search.md) ·
@@ -39,6 +43,7 @@ open with an `## Invariants` section; read it before changing anything in that a
 [quicklinks](features/quicklinks.md) ·
 [Apple Shortcuts](features/apple-shortcuts.md) ·
 [hotkeys](features/hotkeys.md) ·
+[input sources](features/input-sources.md) ·
 [navigation](features/navigation.md) ·
 [window management](features/window-management.md) ·
 [window layouts](features/window-layouts.md) ·

@@ -34,6 +34,8 @@ enum SettingsFileSchema {
         case .popToRootTimeout: return bind(settings, \.popToRootTimeout)
         case .escapeKeyBehavior: return bind(settings, \.escapeKeyBehavior)
         case .autoSwitchInputSource: return bind(settings, \.autoSwitchInputSourceID)
+        case .appInputSourceRules: return bind(settings, \.appInputSourceRules)
+        case .appInputSourceFallback: return bind(settings, \.appInputSourceFallback)
         case .supportReminders: return bind(settings, \.supportRemindersEnabled)
         case .appearance: return bind(settings, \.appearance)
         case .interfaceSize: return bind(settings, \.interfaceSize)
@@ -44,6 +46,9 @@ enum SettingsFileSchema {
         case .hyperKey: return bind(settings, \.hyperKey)
         case .hyperKeyIncludesShift: return bind(settings, \.hyperKeyIncludesShift)
         case .hyperKeyQuickPress: return bind(settings, \.hyperKeyQuickPress)
+        case .keystrokeOverlaySize: return bind(settings, \.keystrokeOverlaySize)
+        case .keystrokeOverlayFilter: return bind(settings, \.keystrokeOverlayFilter)
+        case .appAudioInMenuBar: return bind(settings, \.appAudioInMenuBar)
         case .calcNumberStyle: return bind(settings, \.calcNumberStyle)
         case .launcherShowsSuggestions: return bind(settings, \.launcherShowsSuggestions)
         case .rootSearchSensitivity: return bind(settings, \.rootSearchSensitivity)
@@ -141,6 +146,21 @@ extension ClipboardDefaultAction: SettingsFileRawValue {}
 extension EmojiSkinTone: SettingsFileRawValue {}
 extension EmojiGridColumns: SettingsFileRawValue {}
 extension JoinWindow: SettingsFileRawValue {}
+extension AppInputSourceFallback: SettingsFileRawValue {}
+extension KeystrokeOverlaySize: SettingsFileRawValue {}
+extension KeystrokeFilter: SettingsFileRawValue {}
+
+/// `{"app": bundle ID, "source": input source ID}`, so the file reads as the pane's rows do.
+extension AppInputSourceRule: SettingsFileValue {
+    init?(settingsJSON: SettingsFileJSON) {
+        guard settingsJSON.members?.count == 2, let app = settingsJSON["app"]?.string,
+            let source = settingsJSON["source"]?.string
+        else { return nil }
+        self.init(bundleID: app, sourceID: source)
+    }
+
+    var settingsJSON: SettingsFileJSON { .object(["app": .string(bundleID), "source": .string(sourceID)]) }
+}
 
 extension ClipboardRetention: SettingsFileToken {
     var settingsToken: SettingsFileJSON {

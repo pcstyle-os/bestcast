@@ -152,6 +152,9 @@ enum SettingsSearchCatalog {
             .generalAppearance, "Drag to reposition",
             keywords: ["move", "position", "window"]),
         .init(
+            .generalInputSources, "Other apps",
+            keywords: ["keyboard", "layout", "language", "input source", "per app", "remember"]),
+        .init(
             .generalHyperKey, "Hyper Key",
             keywords: ["modifier", "remap", "caps lock", "capslock"]),
         .init(
@@ -160,6 +163,12 @@ enum SettingsSearchCatalog {
         .init(
             .generalHyperKey, "Include Shift (⇧)",
             keywords: ["modifier", "chord"]),
+        .init(
+            .generalAppAudio, "Mixer in menu bar",
+            keywords: ["volume", "mixer", "per app", "output", "mute", "sound", "audio"]),
+        .init(
+            .generalKeystrokes, "Show keystrokes",
+            keywords: ["screencast", "keycastr", "recording", "presentation", "overlay"]),
         .init(
             .generalCalculator, "Number format",
             keywords: ["decimal", "comma", "separator", "locale", "region", "thousands"]),

@@ -29,6 +29,11 @@ struct GeneralSettingsView: View {
         return "\(settings.hyperKey.title) sends \(hyperGlyphs), shown as ✦ in shortcuts."
     }
 
+    private func secureInputMessage(holder: String?) -> String {
+        let source = holder.map { " (reported by \($0))" } ?? ""
+        return "Secure Input is on\(source), so Hyper can't see keystrokes."
+    }
+
     var body: some View {
         @Bindable var settings = settings
         return Form {
@@ -80,6 +85,10 @@ struct GeneralSettingsView: View {
                 SettingsSectionHeader(.generalBehavior)
             }
 
+            if !inputSources.isEmpty {
+                InputSourcesSection(sources: inputSources)
+            }
+
             Section {
                 Picker(selection: $settings.appearance) {
                     ForEach(AppAppearance.allCases) { appearance in
@@ -128,6 +137,16 @@ struct GeneralSettingsView: View {
                     }
                 }
 
+                if hyperTap.status == .active, let holder = core.secureInput.holder {
+                    HStack(alignment: .center, spacing: Theme.Spacing.lg) {
+                        Image(systemName: "lock")
+                            .foregroundStyle(.orange)
+                            .frame(width: Theme.Size.settingsRowIcon)
+                        Text(secureInputMessage(holder: holder.name))
+                            .foregroundStyle(.orange)
+                    }
+                }
+
                 if settings.hyperKey.hasOriginalFunction {
                     Picker(selection: $settings.hyperKeyQuickPress) {
                         Text("Does Nothing").tag(HyperKeyQuickPress.none)
@@ -148,6 +167,44 @@ struct GeneralSettingsView: View {
                 .settingsEnabled(settings.hyperKey != .none)
             } header: {
                 SettingsSectionHeader(.generalHyperKey)
+            }
+
+            Section {
+                Toggle(isOn: $settings.keystrokeOverlayEnabled) {
+                    SettingsRowTitle(.generalKeystrokes, "Show keystrokes")
+                    Text("Every key you press, on screen, for recordings.")
+                }
+                Picker(selection: $settings.keystrokeOverlayFilter) {
+                    Text("All keys").tag(KeystrokeFilter.allKeys)
+                    Text("Shortcuts only").tag(KeystrokeFilter.shortcuts)
+                } label: {
+                    SettingsRowTitle(.generalKeystrokes, "Show")
+                }
+                Picker(selection: $settings.keystrokeOverlaySize) {
+                    Text("Small").tag(KeystrokeOverlaySize.small)
+                    Text("Medium").tag(KeystrokeOverlaySize.medium)
+                    Text("Large").tag(KeystrokeOverlaySize.large)
+                } label: {
+                    SettingsRowTitle(.generalKeystrokes, "Size")
+                }
+                .pickerStyle(.segmented)
+                LabeledContent {
+                    Button("Move…") { core.keystrokeOverlay.toggleMoving() }
+                } label: {
+                    SettingsRowTitle(.generalKeystrokes, "Position")
+                    Text("Drag it, then release to drop it.")
+                }
+            } header: {
+                SettingsSectionHeader(.generalKeystrokes)
+            }
+
+            Section {
+                Toggle(isOn: $settings.appAudioInMenuBar) {
+                    SettingsRowTitle(.generalAppAudio, "Mixer in menu bar")
+                    Text("Volume, mute and output for each app.")
+                }
+            } header: {
+                SettingsSectionHeader(.generalAppAudio)
             }
 
             Section {

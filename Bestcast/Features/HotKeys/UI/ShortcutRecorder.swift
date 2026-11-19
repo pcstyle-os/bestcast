@@ -109,6 +109,8 @@ struct ShortcutRecorder: View {
         case .doubleTap(let modifier): "Double-tap " + KeyCapChip.spokenChord([modifier.glyph])
         case .globe: "Globe"
         case .doubleGlobe: "Double-tap Globe"
+        case .hyperLayer:
+            "Hyper layer " + binding.keycaps.dropFirst().map { KeyCapChip.spokenChord([$0]) }.joined(separator: " then ")
         }
     }
 

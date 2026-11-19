@@ -390,6 +390,7 @@ enum Theme {
         static let markdownHeading3 = Font.headline
         static let code = Font.system(.callout, design: .monospaced)
         static let inlineCode = Font.body.monospaced()
+        static let clickHint = Font.system(.caption, design: .monospaced).weight(.bold)
         static let bar = Font.callout.weight(.medium)
         /// A staged chat attachment's name beside the search text; the NSFont measures the chip.
         static let chip = Font.callout

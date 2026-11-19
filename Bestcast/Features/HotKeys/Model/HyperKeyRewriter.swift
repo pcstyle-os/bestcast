@@ -8,6 +8,8 @@ struct HyperKeyRewriter: Sendable {
         var key: HyperKeyPhysicalKey = .none
         var includesShift = true
         var quickPress: HyperKeyQuickPress = .none
+        /// Leader keycode → the member keycodes its layer binds. docs/features/hotkeys.md#hyper-layers
+        var layers: [Int: Set<Int>] = [:]
     }
 
     /// What the tap does with the event; `asFlagsChanged` converts it in place.
@@ -22,14 +24,23 @@ struct HyperKeyRewriter: Sendable {
         let key: HyperKeyPhysicalKey
     }
 
+    /// A layer moving under a held Hyper; the caller acts on it off the tap, like a Quick Press.
+    enum LayerEvent: Equatable, Sendable {
+        case entered(leader: Int)
+        case fired(leader: Int, key: Int)
+        case exited
+    }
+
     struct Outcome: Equatable, Sendable {
         var decision: Decision
         /// Set by the release that ends a quick lone press; the caller fires it off the tap.
         var quickPress: QuickPress?
+        var layer: LayerEvent?
 
-        init(_ decision: Decision, quickPress: QuickPress? = nil) {
+        init(_ decision: Decision, quickPress: QuickPress? = nil, layer: LayerEvent? = nil) {
             self.decision = decision
             self.quickPress = quickPress
+            self.layer = layer
         }
     }
 
@@ -51,6 +62,9 @@ struct HyperKeyRewriter: Sendable {
     private(set) var isHolding = false
     private var holdStartedAt: ContinuousClock.Instant?
     private var otherKeyPressed = false
+    private(set) var activeLayer: Int?
+    /// Keys whose press a layer swallowed, so their release is swallowed too.
+    private var swallowedKeys: Set<Int> = []
 
     init(configuration: Configuration = Configuration()) {
         self.configuration = configuration
@@ -66,6 +80,8 @@ struct HyperKeyRewriter: Sendable {
         isHolding = false
         holdStartedAt = nil
         otherKeyPressed = false
+        activeLayer = nil
+        swallowedKeys = []
     }
 
     // MARK: - Event decisions
@@ -85,10 +101,49 @@ struct HyperKeyRewriter: Sendable {
         if key == .capsLock, keyCode == kVK_CapsLock, type == .flagsChanged {
             return decideModifierTransition(flagsRaw: flagsRaw, swapKeyCode: true, at: now)
         }
+        if type == .keyUp, swallowedKeys.remove(keyCode) != nil { return Outcome(.suppress) }
+        // A swallowed key still held after ✦ lets go repeats into nothing, not into typing.
+        if type == .keyDown, isAutorepeat, !isHolding, swallowedKeys.contains(keyCode) { return Outcome(.suppress) }
         guard isHolding else { return Outcome(.pass) }
         // Any other key or modifier going down while Hyper is held makes this a combo, not a tap.
         if type == .keyDown || type == .flagsChanged { otherKeyPressed = true }
+        if type == .keyDown, activeLayer != nil || isBareChord(flagsRaw),
+            let outcome = decideLayerKey(keyCode, isAutorepeat: isAutorepeat)
+        {
+            return outcome
+        }
         return Outcome(.rewrite(flags: hyperized(flagsRaw)))
+    }
+
+    /// docs/features/hotkeys.md#hyper-layers
+    private mutating func decideLayerKey(_ keyCode: Int, isAutorepeat: Bool) -> Outcome? {
+        let layers = configuration.layers
+        if let leader = activeLayer, layers[leader]?.contains(keyCode) == true {
+            swallowedKeys.insert(keyCode)
+            return Outcome(.suppress, layer: .fired(leader: leader, key: keyCode))
+        }
+        if layers[keyCode] != nil {
+            swallowedKeys.insert(keyCode)
+            guard activeLayer != keyCode, !isAutorepeat else { return Outcome(.suppress) }
+            activeLayer = keyCode
+            return Outcome(.suppress, layer: .entered(leader: keyCode))
+        }
+        // Inside a layer an unbound key does nothing, rather than leaking out as a ✦ chord.
+        guard activeLayer != nil else { return nil }
+        swallowedKeys.insert(keyCode)
+        return Outcome(.suppress)
+    }
+
+    /// With Include Shift off, ✦⇧ is its own chord, so a held ⇧ opens no layer.
+    private func isBareChord(_ flagsRaw: UInt64) -> Bool {
+        configuration.includesShift || (flagsRaw & ~strippedFlagsRaw) & CGEventFlags.maskShift.rawValue == 0
+    }
+
+    /// Leaves the layer as Hyper lets go; the swallowed releases may still be in flight.
+    private mutating func exitLayer() -> LayerEvent? {
+        guard activeLayer != nil else { return nil }
+        activeLayer = nil
+        return .exited
     }
 
     private mutating func decideHyperKeyEvent(
@@ -106,12 +161,13 @@ struct HyperKeyRewriter: Sendable {
                         flags: hyperized(flagsRaw), keyCode: Int64(kVK_Control),
                         asFlagsChanged: true))
             case .keyUp:
+                let layer = exitLayer()
                 let quickPress = isHolding ? endHold(at: now) : nil
                 return Outcome(
                     .rewrite(
                         flags: flagsRaw & ~strippedFlagsRaw, keyCode: Int64(kVK_Control),
                         asFlagsChanged: true),
-                    quickPress: quickPress)
+                    quickPress: quickPress, layer: layer)
             default:
                 return Outcome(.pass)
             }
@@ -136,9 +192,11 @@ struct HyperKeyRewriter: Sendable {
             if !isHolding { beginHold(at: now) }
             return Outcome(.rewrite(flags: hyperized(flagsRaw), keyCode: keyCode))
         }
+        let layer = exitLayer()
         let quickPress = isHolding ? endHold(at: now) : nil
         return Outcome(
-            .rewrite(flags: flagsRaw & ~strippedFlagsRaw, keyCode: keyCode), quickPress: quickPress)
+            .rewrite(flags: flagsRaw & ~strippedFlagsRaw, keyCode: keyCode), quickPress: quickPress,
+            layer: layer)
     }
 
     private enum Direction { case down, up }

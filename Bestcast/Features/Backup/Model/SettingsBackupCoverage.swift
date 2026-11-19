@@ -11,6 +11,9 @@ enum SettingsBackupCoverage {
         "hyperKey": .hyperKey,
         "hyperKeyIncludesShift": .hyperKeyIncludesShift,
         "hyperKeyQuickPress": .hyperKeyQuickPress,
+        "keystrokeOverlaySize": .keystrokeOverlaySize,
+        "keystrokeOverlayFilter": .keystrokeOverlayFilter,
+        "appAudioInMenuBar": .appAudioInMenuBar,
         "showInMenuBar": .showInMenuBar,
         "emojiSkinTone": .emojiSkinTone,
         "emojiGridColumns": .emojiGridColumns,
@@ -75,6 +78,12 @@ enum SettingsBackupCoverage {
             "Background OCR is an opt-in processing choice on this Mac; a backup must not enable it.",
         AppSettingsKey.snippetsEnabled.rawValue:
             "Doubles as keyword-expansion consent; an import must not enable keystroke listening.",
+        AppSettingsKey.keystrokeOverlayEnabled.rawValue:
+            "Doubles as consent to show every keystroke on screen; an import must not switch it on.",
+        AppSettingsKey.appAudioSettings.rawValue:
+            "Names output devices on this Mac, and an import must not start capturing an app's audio.",
+        AppSettingsKey.keystrokeOverlayAnchor.rawValue:
+            "Machine-local geometry: a point on a display this Mac has, and no other one.",
         AppSettingsKey.snippetAIPlaceholders.rawValue:
             "Lets a keyword send its {ai} prompts to a model; an import must not start that.",
         AppSettingsKey.extensionPackageManager.rawValue:
@@ -94,6 +103,10 @@ enum SettingsBackupCoverage {
             "Machine-local geometry: every entry names a display this Mac has, and no other one.",
         AppSettingsKey.autoSwitchInputSource.rawValue:
             "Names a keyboard input source installed on this Mac; another Mac may not have it.",
+        AppSettingsKey.appInputSourceRules.rawValue:
+            "Names keyboard input sources installed on this Mac; another Mac may not have them.",
+        AppSettingsKey.appInputSourceFallback.rawValue:
+            "Remembers sources per app on this Mac, so it travels no better than the rules beside it.",
         AppSettingsKey.meetingBrowser.rawValue:
             "Names a browser installed on this Mac; another Mac may not have it.",
         AppSettingsKey.calendarEnabled.rawValue:

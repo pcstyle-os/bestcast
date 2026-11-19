@@ -114,7 +114,8 @@ New long-lived state belongs on `AppCore`, wired in `start()`. Do not create a c
 Extensions reach other features through one narrow seam: `App/AppCore+ExtensionServices.swift`
 conforms to `ExtensionBestcastServices`, and the `@bestcast/api` bridge sees that protocol, never `AppCore`.
 
-Clipboard text recognition is the one feature that leaves the process. `AppCore` owns the indexer;
+Text and code recognition — clipboard text and Capture Text from Screen — is the one job that leaves
+the process. `AppCore` owns the indexer;
 the stateless `ClipboardTextWorker` runs one bundled `ClipboardTextHelper` per item, from
 `Contents/Helpers`, and reaps it before returning. Vision's and PDFKit's allocations therefore belong
 to a process that exits, and the helper — which has no database, clipboard or settings access — is
@@ -130,9 +131,11 @@ change, clears it when extensions are switched off, and wires the snippet closur
 
 ## Entry points and windows
 
-`BestcastApp` (`@main`) declares only two `MenuBarExtra` scenes — Bestcast's own item and the
-calendar's, each inserted by one preference and independent of the other; everything else visible is
-driven imperatively from AppKit. Extension menu extras are dynamic `NSStatusItem`s owned entirely by
+`BestcastApp` (`@main`) declares only four `MenuBarExtra` scenes — Bestcast's own item, the
+calendar's and the App Audio mixer, each inserted by one preference and independent of the others, and
+a Secure Input warning that `SecureInputMonitor` alone inserts
+([hotkeys.md](features/hotkeys.md#secure-input)); everything else visible is driven imperatively from
+AppKit. Extension menu extras are dynamic `NSStatusItem`s owned entirely by
 `Features/Extensions/`, through `ExtensionManager`, with no scene or lifecycle wiring in the core.
 
 - **Command palette** — a borderless floating `NSPanel` (`Palette/PalettePanel.swift`) hosting SwiftUI
@@ -172,8 +175,9 @@ driven imperatively from AppKit. Extension menu extras are dynamic `NSStatusItem
   join and doubles as auto join's confirmation; `CameraCoordinator`, owned by `AppCore`, is the
   standalone `Open Camera` command. See [features/camera.md](features/camera.md) and
   [features/calendar.md](features/calendar.md).
-- **HUDs** are separate, because a dialog asks and a HUD reports: `MessageHUDController` (the pill) and
-  `VolumeHUDController` (the level box), both over a shared `HUDPresenter` that owns the
+- **HUDs** are separate, because a dialog asks and a HUD reports: `MessageHUDController` (the pill),
+  `VolumeHUDController` (the level box) and `HyperLayerHUDController` (the open
+  [Hyper layer](features/hotkeys.md#hyper-layers)'s keys), all over a shared `HUDPresenter` that owns the
   one-at-a-time, auto-dismiss and fade policy. See [ui.md](ui.md#dialogs--hud).
 
 `NSAlert` is never used, and that is load-bearing. Appearance is a setting: `AppCore.applyAppearance()`

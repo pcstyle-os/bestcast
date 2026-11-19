@@ -265,6 +265,13 @@ run palette-tab-test       Bestcast/Palette/PaletteMode.swift \
                            Bestcast/Features/Quicklinks/Model/Quicklink.swift \
                            Bestcast/Features/Quicklinks/Model/QuicklinkDestination.swift \
                            Bestcast/Features/CustomCommands/Model/CustomCommand.swift
+run screen-capture-test    Bestcast/Features/ScreenCapture/Model/ScreenCaptureReading.swift
+run keyboard-click-test    Bestcast/Features/KeyboardClick/Model/ClickTarget.swift \
+                           Bestcast/Features/KeyboardClick/Model/ClickHints.swift
+run keystroke-overlay-test Bestcast/Features/Keystrokes/Model/KeystrokeFeed.swift
+run app-audio-test         Bestcast/Features/AppAudio/Model/AppAudioMix.swift \
+                           Bestcast/Features/AppAudio/Model/AudioSampleRing.swift
+run input-source-test      Bestcast/Features/InputSources/Model/AppInputSourcePolicy.swift
 run fallback-test          Bestcast/Features/Launcher/Model/Fallback.swift \
                            Bestcast/Features/Launcher/Model/CommandID.swift \
                            Bestcast/Features/HotKeys/Model/HotKeyAction.swift \

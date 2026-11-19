@@ -27,9 +27,11 @@ final class AppCore {
     let textInjector: TextInjector
     let hotKeys = HotKeyManager()
     let hyperKeyTap = HyperKeyTap()
+    let secureInput = SecureInputMonitor()
     let windowMover = WindowMover()
     let spaceSwitcher = SpaceSwitcher()
     let inputSourceSwitcher = InputSourceSwitcher()
+    private let appInputSources = AppInputSourceController()
     let settings: AppSettings
     /// Mirrors settings into settings.json; nil while the Backup pane's switch is off.
     @ObservationIgnored private var settingsFile: SettingsFileRepository?
@@ -195,6 +197,10 @@ final class AppCore {
         settings: settings, appIndex: appIndex, session: windowSwitch, palette: palette,
         paletteCoordinator: paletteCoordinator, core: self)
     @ObservationIgnored private(set) lazy var cameraCoordinator = CameraCoordinator(core: self)
+    @ObservationIgnored private(set) lazy var screenCaptureCoordinator = ScreenCaptureCoordinator(core: self)
+    @ObservationIgnored private(set) lazy var keyboardClickCoordinator = KeyboardClickCoordinator(core: self)
+    @ObservationIgnored private(set) lazy var keystrokeOverlay = KeystrokeOverlayController(settings: settings)
+    let appAudio = AppAudioRouter()
     @ObservationIgnored private(set) lazy var dictionaryCoordinator = DictionaryCoordinator(
         paletteCoordinator: paletteCoordinator)
     @ObservationIgnored private(set) lazy var updateCoordinator = UpdateCoordinator(
@@ -228,6 +234,7 @@ final class AppCore {
 
     @ObservationIgnored private lazy var windowController = PaletteWindowController(core: self)
     @ObservationIgnored private lazy var messageHUD = MessageHUDController(settings: settings)
+    @ObservationIgnored private lazy var hyperLayerHUD = HyperLayerHUDController(settings: settings)
     private(set) var isShowingDialog = false
     var isDimmingPaletteForDialog: Bool { isShowingDialog && windowController.isVisible }
     /// Every confirmation, report and prompt; it also stops a held hotkey stacking them.
@@ -374,6 +381,7 @@ final class AppCore {
             supportReminders.start()
 
             hyperKeyTap.healthTicker = healthTicker
+            secureInput.healthTicker = healthTicker
             hotKeys.modifierTapMonitor.healthTicker = healthTicker
             snippetListener.healthTicker = healthTicker
 
@@ -444,6 +452,32 @@ final class AppCore {
                 aiPresetIDs: Set(aiSettings.quickAIPresets.map(\.id)))
             // Keeps running while Carbon pauses: the recorder needs its rewritten flags.
             hyperKeyTap.start(settings: settings)
+            keystrokeOverlay.onTapRefused = { [weak self] in
+                self?.showMessage("Keystrokes need Accessibility access", tone: .danger)
+                Permissions.ensureAccessibility()
+            }
+            track({ _ = $0.keystrokeOverlayEnabled; _ = $0.keystrokeOverlaySize }) { $0.keystrokeOverlay.apply() }
+            keystrokeOverlay.apply()
+            appAudio.onFailure = { [weak self] _ in
+                self?.showMessage("Couldn’t take over that app’s audio", tone: .danger)
+            }
+            track({ _ = $0.appAudioSettings }) { $0.appAudio.apply($0.settings.appAudioSettings) }
+            // A relaunched app's helpers only join its row once the app itself is known to run.
+            track(runningApps, { _ = $0.runningBundleIDs }) { $0.appAudio.apply($0.settings.appAudioSettings) }
+            appAudio.apply(settings.appAudioSettings)
+            hyperKeyTap.onLayerEvent = { [weak self] event in self?.handleHyperLayer(event) }
+            track(hotKeys, { _ = $0.hyperLayers; _ = $0.recordingAction }) { $0.applyHyperLayers() }
+            applyHyperLayers()
+            track(self, {
+                _ = $0.hyperKeyTap.status; _ = $0.snippetListener.status; _ = $0.settings.keystrokeOverlayEnabled
+            }) {
+                $0.applySecureInputWatch()
+            }
+            applySecureInputWatch()
+            track({ _ = $0.appInputSourceRules; _ = $0.appInputSourceFallback }) {
+                $0.applyAppInputSources()
+            }
+            applyAppInputSources()
 
             snippetsStore.onSnapshot = { [weak self] snapshot in
                 guard let self else { return }
@@ -601,6 +635,8 @@ final class AppCore {
         clipboardInsightIndexer?.stop()
         // Caps Lock first: its remap is the one teardown that outlives the process.
         hyperKeyTap.prepareForTermination()
+        // A tap mutes its app's own output, so it must not outlive the process that replays it.
+        appAudio.stopAll()
         windowLayoutCoordinator.prepareForTermination()
         roomCoordinator.prepareForTermination()
         inputSourceSwitcher.endSession()
@@ -864,6 +900,43 @@ final class AppCore {
         defer { chatsRunTheirOwnTools = runsOwnTools }
         guard let previous = chatsRunTheirOwnTools, previous != runsOwnTools else { return }
         mcpCoordinator.applyEnabled()
+    }
+
+    private func applyAppInputSources() {
+        appInputSources.apply(
+            rules: settings.appInputSourceRules, fallback: settings.appInputSourceFallback)
+    }
+
+    /// Secure Input withholds key presses, not modifier changes, so only these go quiet.
+    private func applySecureInputWatch() {
+        var paused: [String] = []
+        if hyperKeyTap.status == .active { paused.append("Hyper Key") }
+        if snippetListener.status == .active { paused.append("Snippet keywords") }
+        if settings.keystrokeOverlayEnabled { paused.append("Keystroke overlay") }
+        secureInput.watch(for: paused)
+    }
+
+    /// Off while recording, so a layer's keys reach the recorder instead of firing.
+    private func applyHyperLayers() {
+        let layers = hotKeys.recordingAction == nil ? hotKeys.hyperLayers : [:]
+        hyperKeyTap.setLayers(layers.mapValues { Set($0.keys) })
+    }
+
+    private func handleHyperLayer(_ event: HyperKeyRewriter.LayerEvent) {
+        switch event {
+        case .entered(let leader):
+            let items = (hotKeys.hyperLayers[leader] ?? [:])
+                .map { HyperLayerHUDController.Item(key: $0.key, name: hotKeys.displayName(of: $0.value)) }
+                .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            hyperLayerHUD.open(leader: leader, items: items)
+        case .fired(let leader, let key):
+            keystrokeOverlay.recordLayer(leader: leader, key: key)
+            guard let action = hotKeys.hyperLayers[leader]?[key] else { return }
+            hyperLayerHUD.flash(key: key)
+            hotKeys.perform(action)
+        case .exited:
+            hyperLayerHUD.close()
+        }
     }
 
     /// Without a Hyper key the chord means nothing, so a literal ⌃⌥⌘ combo is left as recorded.

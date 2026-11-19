@@ -214,6 +214,32 @@ final class LauncherCoordinator {
         case .openCamera:
             dismissPalette()
             Task { await core.cameraCoordinator.show() }
+        case .captureText:
+            dismissPalette()
+            core.screenCaptureCoordinator.captureText()
+        case .pickColor:
+            dismissPalette()
+            core.screenCaptureCoordinator.pickColor()
+        case .clickByKeyboard:
+            dismissPalette()
+            core.keyboardClickCoordinator.start(.hints)
+        case .clickByName:
+            dismissPalette()
+            core.keyboardClickCoordinator.start(.name)
+        case .scrollByKeyboard:
+            dismissPalette()
+            core.keyboardClickCoordinator.start(.scroll)
+        case .toggleKeystrokes:
+            dismissPalette()
+            core.settings.keystrokeOverlayEnabled.toggle()
+            core.showMessage(core.settings.keystrokeOverlayEnabled ? "Showing keystrokes" : "Keystrokes hidden")
+        case .moveKeystrokes:
+            dismissPalette()
+            core.keystrokeOverlay.toggleMoving()
+        case .toggleAppAudio:
+            dismissPalette()
+            core.settings.appAudioInMenuBar.toggle()
+            core.showMessage(core.settings.appAudioInMenuBar ? "App Audio in the menu bar" : "App Audio hidden")
         case .define:
             core.dictionaryCoordinator.show()
         case .openInBrowser, .runShellCommand, .askAI:
@@ -381,6 +407,11 @@ final class LauncherCoordinator {
             let action = entry?.hotKeyAction ?? CommandID(rawValue: key).map(HotKeyAction.command)
         else {
             core.showMessage("Nothing in Bestcast answers that link", tone: .danger)
+            return
+        }
+        // Showing every keystroke is consent given here, never by a link another app opens.
+        if action == .command(.toggleKeystrokes), !core.settings.keystrokeOverlayEnabled {
+            core.showMessage("Turn on the keystroke overlay in Bestcast first", tone: .danger)
             return
         }
         if !core.hotKeys.perform(action) {

@@ -182,6 +182,39 @@ final class AppSettings {
         }
     }
 
+    /// Doubles as consent to listen to every keystroke. See docs/features/keystroke-overlay.md.
+    var keystrokeOverlayEnabled: Bool {
+        didSet { defaults.set(keystrokeOverlayEnabled, forKey: Key.keystrokeOverlayEnabled.rawValue) }
+    }
+
+    var keystrokeOverlaySize: KeystrokeOverlaySize {
+        didSet { defaults.set(keystrokeOverlaySize.rawValue, forKey: Key.keystrokeOverlaySize.rawValue) }
+    }
+
+    var keystrokeOverlayFilter: KeystrokeFilter {
+        didSet { defaults.set(keystrokeOverlayFilter.rawValue, forKey: Key.keystrokeOverlayFilter.rawValue) }
+    }
+
+    /// Per-app volume, mute and output, by bundle ID. See docs/features/app-audio.md.
+    var appAudioSettings: [String: AppAudioSetting] {
+        didSet {
+            let data = try? JSONEncoder().encode(appAudioSettings)
+            defaults.set(data, forKey: Key.appAudioSettings.rawValue)
+        }
+    }
+
+    var appAudioInMenuBar: Bool {
+        didSet { defaults.set(appAudioInMenuBar, forKey: Key.appAudioInMenuBar.rawValue) }
+    }
+
+    /// The overlay's bottom-centre in global screen points; nil until it is first dragged.
+    var keystrokeOverlayAnchor: CGPoint? {
+        didSet {
+            let value = keystrokeOverlayAnchor.map { [Double($0.x), Double($0.y)] }
+            defaults.set(value, forKey: Key.keystrokeOverlayAnchor.rawValue)
+        }
+    }
+
     /// Preferred skin tone applied to modifier-capable emoji at render and copy time.
     var emojiSkinTone: EmojiSkinTone {
         didSet { defaults.set(emojiSkinTone.rawValue, forKey: Key.emojiSkinTone.rawValue) }
@@ -251,6 +284,20 @@ final class AppSettings {
                 return
             }
             defaults.set(autoSwitchInputSourceID, forKey: Key.autoSwitchInputSource.rawValue)
+        }
+    }
+
+    /// Apps pinned to a keyboard input source. See docs/features/input-sources.md.
+    var appInputSourceRules: [AppInputSourceRule] {
+        didSet {
+            let data = try? JSONEncoder().encode(appInputSourceRules)
+            defaults.set(data, forKey: Key.appInputSourceRules.rawValue)
+        }
+    }
+
+    var appInputSourceFallback: AppInputSourceFallback {
+        didSet {
+            defaults.set(appInputSourceFallback.rawValue, forKey: Key.appInputSourceFallback.rawValue)
         }
     }
 
@@ -625,6 +672,20 @@ final class AppSettings {
             defaults.string(forKey: Key.hyperKeyQuickPress.rawValue)
             .flatMap(HyperKeyQuickPress.init)
             ?? .none
+        keystrokeOverlayEnabled = defaults.bool(forKey: Key.keystrokeOverlayEnabled.rawValue)
+        keystrokeOverlaySize =
+            defaults.string(forKey: Key.keystrokeOverlaySize.rawValue).flatMap(KeystrokeOverlaySize.init)
+            ?? .medium
+        keystrokeOverlayFilter =
+            defaults.string(forKey: Key.keystrokeOverlayFilter.rawValue).flatMap(KeystrokeFilter.init)
+            ?? .allKeys
+        appAudioSettings =
+            defaults.data(forKey: Key.appAudioSettings.rawValue)
+            .flatMap { try? JSONDecoder().decode([String: AppAudioSetting].self, from: $0) } ?? [:]
+        appAudioInMenuBar = defaults.bool(forKey: Key.appAudioInMenuBar.rawValue)
+        keystrokeOverlayAnchor =
+            (defaults.array(forKey: Key.keystrokeOverlayAnchor.rawValue) as? [Double])
+            .flatMap { $0.count == 2 ? CGPoint(x: $0[0], y: $0[1]) : nil }
         emojiSkinTone =
             defaults.string(forKey: Key.emojiSkinTone.rawValue).flatMap(EmojiSkinTone.init) ?? .none
         emojiGridColumns =
@@ -662,6 +723,12 @@ final class AppSettings {
             defaults.object(forKey: Key.openOnCursorScreen.rawValue) == nil
             || defaults.bool(forKey: Key.openOnCursorScreen.rawValue)
         autoSwitchInputSourceID = defaults.string(forKey: Key.autoSwitchInputSource.rawValue)
+        appInputSourceRules =
+            defaults.data(forKey: Key.appInputSourceRules.rawValue)
+            .flatMap { try? JSONDecoder().decode([AppInputSourceRule].self, from: $0) } ?? []
+        appInputSourceFallback =
+            defaults.string(forKey: Key.appInputSourceFallback.rawValue)
+            .flatMap(AppInputSourceFallback.init) ?? .keep
         paletteDraggable = defaults.bool(forKey: Key.paletteDraggable.rawValue)
         palettePositions =
             defaults.dictionary(forKey: Key.palettePosition.rawValue)
