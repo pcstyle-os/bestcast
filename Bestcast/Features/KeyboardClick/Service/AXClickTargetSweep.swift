@@ -25,9 +25,10 @@ nonisolated enum AXClickTargetSweep {
         AXUIElementSetMessagingTimeout(application, timeout)
         guard
             let window = element(application, kAXFocusedWindowAttribute)
-                ?? element(application, kAXMainWindowAttribute),
-            let windowFrame = details(of: window).frame
+                ?? element(application, kAXMainWindowAttribute)
         else { return nil }
+        AXUIElementSetMessagingTimeout(window, timeout)
+        guard let windowFrame = details(of: window).frame else { return nil }
         let deadline = ContinuousClock.now + budget
         var targets: [ClickTarget] = []
         // Each node carries the nearest clickable ancestor, so a nameless row takes its text's name.

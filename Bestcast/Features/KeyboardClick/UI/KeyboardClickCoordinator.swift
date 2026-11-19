@@ -106,7 +106,9 @@ final class KeyboardClickCoordinator {
                 return
             }
             guard let text = event.characters, !text.isEmpty,
-                !text.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+                !text.unicodeScalars.contains(where: {
+                    CharacterSet.controlCharacters.contains($0) || $0.properties.generalCategory == .privateUse
+                })
             else { return }
             state.typed += text
         }

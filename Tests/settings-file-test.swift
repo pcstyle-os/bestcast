@@ -57,7 +57,7 @@ struct SettingsFileTest {
             "calendar.autoJoinMeetings", "calendar.cameraPreview", "quickActions.enabled",
             "ai.mcpEnabled", "mcp.enabled", "clipboard.textSearchEnabled", "ai.passiveModel",
             "ai.passiveSelectionSuggestions", "ai.passiveClipboard", "snippets.aiPlaceholders",
-            "ai.scheduledCommands", "ai.integrations",
+            "ai.scheduledCommands", "ai.integrations", "general.keystrokeOverlayEnabled",
         ]
         check(
             "no capability grant has a settings.json key",

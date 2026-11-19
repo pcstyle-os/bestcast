@@ -94,6 +94,14 @@ struct KeystrokeOverlayTests {
         aging.prune(at: at(3.6))
         check("and the feed empties", aging.items.isEmpty && aging.nextExpiry == nil)
 
+        var held = KeystrokeFeed()
+        held.record(letter("o"), at: at(0), filter: .allKeys)
+        held.record(letter("k"), at: at(0.1), filter: .allKeys)
+        for i in 0..<30 { held.record(space, at: at(0.2 + Double(i) * 0.03), filter: .allKeys) }
+        check(
+            "a held space never scrolls the words out into a blank pill",
+            contents(held) == [.text("ok ")])
+
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
     }

@@ -37,7 +37,11 @@ final class AppInputSourceController {
 
     /// Our own windows are skipped, so Settings never takes the place of the app behind it.
     private func didActivate(_ bundleID: String?) {
-        guard let bundleID, bundleID != Bundle.main.bundleIdentifier else { return }
+        guard let bundleID else {
+            front = nil
+            return
+        }
+        guard bundleID != Bundle.main.bundleIdentifier else { return }
         let before = policy.remembered
         let target = policy.activate(
             bundleID, leaving: front, current: InputSourceSwitcher.currentSourceID())

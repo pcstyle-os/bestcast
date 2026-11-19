@@ -200,7 +200,7 @@ struct KeystrokeOverlayView: View {
             case .text(let run):
                 Text(run)
             case .keys(let keycaps, let count):
-                Text(keycaps.joined(separator: keycaps.last?.count ?? 0 > 1 ? " " : ""))
+                Text(keycaps.joined(separator: keycaps.contains { $0.count > 1 } ? " " : ""))
                 if count > 1 {
                     Text("×\(count)")
                         .font(.system(size: points * 0.7, weight: .medium, design: .rounded))

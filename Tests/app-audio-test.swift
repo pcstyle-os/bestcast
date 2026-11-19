@@ -38,6 +38,10 @@ struct AppAudioTests {
             "a lookalike prefix is not an owner",
             AppAudioGrouping.owner(of: "com.google.ChromeRemote", among: apps) == "com.google.ChromeRemote")
         check(
+            "a running app is its own owner, not a shorter app's helper",
+            AppAudioGrouping.owner(of: "com.google.Chrome.canary", among: apps.union(["com.google.Chrome.canary"]))
+                == "com.google.Chrome.canary")
+        check(
             "an unknown process stands alone",
             AppAudioGrouping.owner(of: "com.apple.WebKit.GPU", among: apps) == "com.apple.WebKit.GPU")
 

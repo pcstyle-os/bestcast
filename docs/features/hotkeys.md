@@ -318,8 +318,9 @@ While any app holds Secure Event Input — a password field, a password manager,
 Keyboard Entry, or one that never released it — macOS withholds keyDown/keyUp from every tap but still
 delivers `flagsChanged`. The Hyper key's own press is rewritten, but the letter after it arrives with
 only the physical modifier, so Hyper+key and every layer do nothing while the tap looks healthy; snippet
-keywords stop for the same reason. Modifier-only shortcuts keep working, since they read only
-`flagsChanged`, and Carbon combos are delivered above the taps.
+keywords stop for the same reason. Modifier-only shortcuts still fire, since they trigger on
+`flagsChanged`, though a key or click that should cancel one is withheld too, as is the Globe key's
+key-down. Carbon combos are delivered above the taps.
 
 Nothing in a tap can work around it, so Bestcast says so instead. `SecureInputMonitor`
 (`Platform/`) polls `IsSecureEventInputEnabled` on the shared one-second watchdog, but only while

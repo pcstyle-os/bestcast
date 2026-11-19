@@ -7,7 +7,7 @@ App Audio Mixer**.
 ## Invariants
 
 - **An untouched app is never tapped.** Only a setting below 100%, muted, or pinned to another output
-  installs anything, and a mixer nobody has touched installs no listener either.
+  installs anything, and a mixer nobody has touched installs no listener until it is first opened.
 - **Taps are built and torn down only on `AppAudioEngine`'s serial queue.** Creating or stopping an I/O
   proc from main, or inside a property listener, deadlocks against the HAL and can wedge `coreaudiod`;
   listeners only queue work, never call the HAL themselves.

@@ -907,7 +907,7 @@ final class AppCore {
             rules: settings.appInputSourceRules, fallback: settings.appInputSourceFallback)
     }
 
-    /// Secure Input withholds key presses, not modifier changes, so only these two go quiet.
+    /// Secure Input withholds key presses, not modifier changes, so only these go quiet.
     private func applySecureInputWatch() {
         var paused: [String] = []
         if hyperKeyTap.status == .active { paused.append("Hyper Key") }

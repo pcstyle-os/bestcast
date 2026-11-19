@@ -33,7 +33,7 @@ read as one line, left to right. At most 400 targets are kept.
 ## Hints
 
 `ClickHints.labels` gives each target the shortest label from `asdfghjklqweruio` that keeps the set
-prefix-free: up to 16 targets take one home-row letter each, and only as many letters become prefixes
+prefix-free: up to 16 targets take one letter each, home row first, and only as many letters become prefixes
 as the count needs. Typing a letter dims it in every tag that still matches and hides the rest; a
 letter no label continues is ignored, Delete takes one back and Escape closes.
 

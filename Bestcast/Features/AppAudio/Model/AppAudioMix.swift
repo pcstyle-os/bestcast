@@ -33,6 +33,7 @@ struct AudioProcessInfo: Equatable, Sendable {
 enum AppAudioGrouping {
     /// A helper (`com.google.Chrome.helper`) belongs to the app whose bundle ID prefixes its own.
     static func owner(of processBundleID: String, among apps: Set<String>) -> String {
+        if apps.contains(processBundleID) { return processBundleID }
         var candidate = processBundleID
         while let dot = candidate.lastIndex(of: ".") {
             candidate = String(candidate[..<dot])

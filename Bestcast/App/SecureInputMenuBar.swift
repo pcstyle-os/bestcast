@@ -9,7 +9,7 @@ struct SecureInputMenuBarLabel: View {
             Image(systemName: "lock.fill")
             if let name = holder?.name { Text(name) }
         }
-        .accessibilityLabel("Secure Input is on")
+        .accessibilityLabel(holder?.name.map { "Secure Input is on, reported by \($0)" } ?? "Secure Input is on")
     }
 }
 

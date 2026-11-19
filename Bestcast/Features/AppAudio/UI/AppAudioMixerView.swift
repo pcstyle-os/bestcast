@@ -64,6 +64,7 @@ struct AppAudioMixerView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(muted ? "Unmute \(name)" : "Mute \(name)")
                     Slider(value: setting.volume, in: 0...1)
+                        .accessibilityLabel("\(name) volume")
                     Text(muted ? "Muted" : "\(Int((setting.wrappedValue.volume * 100).rounded()))%")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)

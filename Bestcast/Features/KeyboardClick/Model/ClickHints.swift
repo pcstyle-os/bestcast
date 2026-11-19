@@ -50,7 +50,7 @@ enum ClickHints {
     }
 }
 
-/// How far a scroll key moves the content, positive down and right.
+/// How far a scroll key scrolls the view, positive down and right.
 enum KeyboardScroll {
     static let step: CGFloat = 80
 

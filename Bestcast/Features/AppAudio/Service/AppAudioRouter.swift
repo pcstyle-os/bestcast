@@ -83,6 +83,8 @@ nonisolated final class AppAudioEngine: @unchecked Sendable {
     private var reported: Set<String> = []
     private var listening = false
     private var askingMicrophone = false
+    /// Set on quit, so an update already queued cannot tap an app again behind it.
+    private var stopped = false
 
     init(publish: @escaping @Sendable (Snapshot) -> Void, fail: @escaping @Sendable (OSStatus) -> Void) {
         self.publish = publish
@@ -117,12 +119,14 @@ nonisolated final class AppAudioEngine: @unchecked Sendable {
     /// Synchronous, so quitting waits until every app plays on its own output again.
     func stopAll() {
         queue.sync { [self] in
+            stopped = true
             for tap in taps.values { tap.stop() }
             taps = [:]
         }
     }
 
     private func update() {
+        guard !stopped else { return }
         listen()
         let outputs = CoreAudioReads.devices().compactMap { device -> AppAudioRouter.Output? in
             guard CoreAudioReads.hasOutput(device), let uid = CoreAudioReads.uid(of: device),

@@ -57,7 +57,10 @@ struct KeystrokeFeed: Equatable, Sendable {
         let last = items.indices.last.flatMap { now.timeIntervalSince(items[$0].updated) <= Self.runGap ? $0 : nil }
         if let typed = press.typed {
             if let last, case .text(let run) = items[last].content {
-                items[last].content = .text(String((run + typed).suffix(Self.maximumRun)))
+                // Repeated blanks collapse, so a held space never scrolls the words out of the pill.
+                if !(typed.allSatisfy(\.isWhitespace) && run.last?.isWhitespace == true) {
+                    items[last].content = .text(String((run + typed).suffix(Self.maximumRun)))
+                }
                 items[last].updated = now
                 return
             }

@@ -16,7 +16,8 @@ Overlay or with **Toggle Keystroke Overlay**; **Move Keystroke Overlay** lets yo
 
 ## What it shows
 
-Plain typing runs into one pill, its last 24 characters, until a pause over a second. A combo is its
+Plain typing runs into one pill, its last 24 characters, until a pause over a second; repeated
+blanks collapse to one, so a held space never scrolls the words away. A combo is its
 keycaps — `KeyShortcut.keycaps`, so the Hyper chord collapses to ✦ — and a repeat within that second
 counts up (⌘K ×3). At most four pills show; each leaves two seconds after its last press. **Shortcuts
 only** keeps presses holding ⌘, ⌃, ⌥ or ✦, and function keys.

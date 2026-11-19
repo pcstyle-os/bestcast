@@ -339,6 +339,7 @@ final class HyperKeyTap: HealthCheckable {
     }
 
     private func tearDownTap() {
+        if tapThread != nil { onLayerEvent?(.exited) }
         tapThread?.stop()
         tapThread = nil
     }
