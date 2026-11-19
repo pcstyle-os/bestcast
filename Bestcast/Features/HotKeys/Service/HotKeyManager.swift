@@ -39,6 +39,9 @@ final class HotKeyManager {
         }
     }
 
+    /// Leader → key → action for every layer binding; `AppCore` pushes the keys to the Hyper tap.
+    private(set) var hyperLayers: [Int: [Int: HotKeyAction]] = [:]
+
     let modifierTapMonitor = ModifierTapMonitor()
     /// Live state of the open recorder, read by its callout.
     let capture = ShortcutCaptureSession()
@@ -93,6 +96,7 @@ final class HotKeyManager {
         }
         modifierTapMonitor.start()
         syncModifierTaps()
+        syncHyperLayers()
     }
 
     /// Never pruned at launch: not-installed-yet and gone are indistinguishable there.
@@ -224,6 +228,7 @@ final class HotKeyManager {
         if previous?.usesModifierTapMonitor == true || binding?.usesModifierTapMonitor == true {
             syncModifierTaps()
         }
+        if previous?.isHyperLayer == true || binding?.isHyperLayer == true { syncHyperLayers() }
     }
 
     /// Include Shift redefines the chord, and a stored combo has the old one baked in.
@@ -241,11 +246,21 @@ final class HotKeyManager {
 
     /// What else holds `binding`, or nil. Whole-binding comparison covers every kind alike.
     func conflictOwner(of binding: HotKeyBinding, excluding action: HotKeyAction) -> String? {
-        for candidate in candidateActions
-        where candidate != action && self.binding(for: candidate) == binding {
-            return displayName(of: candidate)
+        for candidate in candidateActions where candidate != action {
+            guard let held = self.binding(for: candidate) else { continue }
+            if held == binding || Self.leaderShadows(held, binding) || Self.leaderShadows(binding, held) {
+                return displayName(of: candidate)
+            }
         }
         return nil
+    }
+
+    /// The tap swallows a layer's leader, so a bare ✦ combo on that key would never fire.
+    private static func leaderShadows(_ layer: HotKeyBinding, _ other: HotKeyBinding) -> Bool {
+        guard case .hyperLayer(let leader, _) = layer, let shortcut = other.shortcut,
+            let hyper = KeyShortcut.displayedHyperChord()
+        else { return false }
+        return shortcut.carbonKeyCode == leader && shortcut.modifierFlags == hyper
     }
 
     /// Every action that could hold a binding: the search space for conflicts and the map.
@@ -312,6 +327,15 @@ final class HotKeyManager {
         center.register(id: action.defaultsKey, shortcut: shortcut) { [weak self] in
             _ = self?.perform(action)
         }
+    }
+
+    private func syncHyperLayers() {
+        var layers: [Int: [Int: HotKeyAction]] = [:]
+        for action in candidateActions {
+            guard case .hyperLayer(let leader, let key)? = binding(for: action) else { continue }
+            layers[leader, default: [:]][key] = action
+        }
+        if layers != hyperLayers { hyperLayers = layers }
     }
 
     /// Rebuilt wholesale, so the map can't drift from what is on disk.

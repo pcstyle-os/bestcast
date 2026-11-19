@@ -75,6 +75,7 @@ struct DoubleTapDetectorTests {
         hyperSynthetics()
         hyperCancelledHold()
         hyperSharedKey()
+        hyperLayers()
 
         print("\(passes) passed, \(failures) failed")
         if failures > 0 { exit(1) }
@@ -115,6 +116,10 @@ struct DoubleTapDetectorTests {
         roundTrips(.doubleGlobe, as: "double-tap globe", plain)
         roundTrips(combo(kVK_ANSI_K, hyperModifiers), as: "hyper+k", hyper)
         roundTrips(combo(kVK_ANSI_K, controlKey | optionKey | cmdKey), as: "ctrl+option+cmd+k", hyper)
+        roundTrips(.hyperLayer(leader: kVK_ANSI_K, key: kVK_ANSI_1), as: "hyper+k then 1", hyper)
+        expect(plain.binding(from: "hyper+k then 1") == nil, "without a Hyper key there are no layers")
+        expect(hyper.binding(from: "cmd+k then 1") == nil, "a layer's leader is the bare Hyper chord")
+        expect(hyper.binding(from: "hyper+k then k") == nil, "a layer key differs from its leader")
 
         expect(
             plain.binding(from: " Command+Shift+K ") == combo(kVK_ANSI_K, shiftKey | cmdKey),
@@ -808,6 +813,60 @@ struct DoubleTapDetectorTests {
             "Include Shift moving mid-hold keeps the hold and drops ⇧ from the chord")
         moved.rewriter.configure(.init(key: .rightCommand, includesShift: false, quickPress: .none))
         expect(!moved.rewriter.isHolding, "choosing another key drops the hold")
+    }
+
+    static func hyperLayers() {
+        let suppress = HyperKeyRewriter.Outcome(.suppress)
+        func layered(_ key: HyperKeyPhysicalKey, quickPress: HyperKeyQuickPress = .none) -> HyperKeys {
+            var keys = HyperKeys(key, quickPress: quickPress)
+            keys.rewriter.configure(
+                .init(key: key, quickPress: quickPress, layers: [kVK_ANSI_W: [kVK_ANSI_H, kVK_ANSI_L]]))
+            return keys
+        }
+
+        var keys = layered(.rightOption)
+        expect(keys.key(kVK_ANSI_W, at: 0) == .init(.pass), "a leader typed with Hyper up is a plain key")
+        _ = keys.modifier(flags: rightOptionDown, at: 10)
+        expect(
+            keys.key(kVK_ANSI_W, at: 20) == .init(.suppress, layer: .entered(leader: kVK_ANSI_W)),
+            "✦ then a leader opens its layer and never reaches the app")
+        expect(keys.key(kVK_ANSI_W, at: 40, autorepeat: true) == suppress, "a held leader reopens nothing")
+        expect(keys.key(kVK_ANSI_W, type: .keyUp, at: 60) == suppress, "the leader's release is swallowed")
+        expect(
+            keys.key(kVK_ANSI_H, at: 80) == .init(.suppress, layer: .fired(leader: kVK_ANSI_W, key: kVK_ANSI_H)),
+            "a bound key inside the layer fires")
+        expect(
+            keys.key(kVK_ANSI_H, at: 120, autorepeat: true)
+                == .init(.suppress, layer: .fired(leader: kVK_ANSI_W, key: kVK_ANSI_H)),
+            "holding a layer key repeats it, like a held volume key")
+        expect(keys.key(kVK_ANSI_K, at: 140) == suppress, "an unbound key inside a layer does nothing")
+        expect(
+            keys.key(kVK_ANSI_L, at: 160) == .init(.suppress, layer: .fired(leader: kVK_ANSI_W, key: kVK_ANSI_L)),
+            "the layer stays open after an action")
+        expect(
+            keys.modifier(flags: nonCoalesced, at: 200) == .init(.rewrite(flags: nonCoalesced), layer: .exited),
+            "letting go of ✦ closes the layer")
+        expect(keys.key(kVK_ANSI_L, type: .keyUp, at: 220) == suppress, "a release landing after ✦ is swallowed")
+        expect(keys.key(kVK_ANSI_K, type: .keyUp, at: 230) == suppress, "so is the unbound key's")
+        expect(keys.key(kVK_ANSI_H, at: 240) == .init(.pass), "outside a layer its keys type normally")
+
+        var plain = layered(.rightOption)
+        _ = plain.modifier(flags: rightOptionDown, at: 0)
+        expect(
+            plain.key(kVK_ANSI_H, flags: nonCoalesced, at: 20) == rewrite(nonCoalesced | hyperWithShift),
+            "a layer key pressed with no layer open is still a ✦ chord")
+
+        var caps = layered(.capsLock, quickPress: .escape)
+        _ = caps.key(kVK_F18, at: 0)
+        _ = caps.key(kVK_ANSI_W, at: 20)
+        let release = caps.key(kVK_F18, type: .keyUp, at: 60)
+        expect(release.layer == .exited && release.quickPress == nil, "using a layer is not a Quick Press")
+
+        var dropped = layered(.rightOption)
+        _ = dropped.modifier(flags: rightOptionDown, at: 0)
+        _ = dropped.key(kVK_ANSI_W, at: 20)
+        dropped.rewriter.cancelHold()
+        expect(dropped.rewriter.activeLayer == nil, "a revived tap drops the open layer with the hold")
     }
 }
 

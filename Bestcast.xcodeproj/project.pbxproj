@@ -92,6 +92,7 @@
 		178F1C2E46BABCB77EA7569D /* NoteMarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B86DAA9A7B3F174E5446D3A7 /* NoteMarkdownParser.swift */; };
 		17957268A59057977DA4C5FC /* MenuSnapshotPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7FE76AFF27D0E6B6B22076 /* MenuSnapshotPolicy.swift */; };
 		17ADA90698C48B3BDB89744B /* NotesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA25D103BEFC1825A7BA65E8 /* NotesRepository.swift */; };
+		17DAF8753DBDD05086201533 /* HyperLayerHUDController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7CB6299C67A5AB278461AA1 /* HyperLayerHUDController.swift */; };
 		1872949A6197E692E8E659DB /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0A30648B0BED9FF1436F13 /* AISettingsView.swift */; };
 		191860C48E658CE5F1D11AA8 /* RelaunchRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22FCA912A7C88AFF16F11C8F /* RelaunchRunner.swift */; };
 		1996D5FD3852471BF98D5F6E /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA24553E0537D0BB334DA79 /* Theme.swift */; };
@@ -1505,6 +1506,7 @@
 		B748E429D7B4D2867AD56A5D /* ExtensionToolSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionToolSession.swift; sourceTree = "<group>"; };
 		B763C0F72A6567C516DD05F2 /* QuickActionSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionSettingsStore.swift; sourceTree = "<group>"; };
 		B77F112EB6FAE28A661E0547 /* ExtensionActionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionActionsPanel.swift; sourceTree = "<group>"; };
+		B7CB6299C67A5AB278461AA1 /* HyperLayerHUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HyperLayerHUDController.swift; sourceTree = "<group>"; };
 		B86DAA9A7B3F174E5446D3A7 /* NoteMarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMarkdownParser.swift; sourceTree = "<group>"; };
 		B87B42193B05CDB35C9CF8E7 /* SnippetsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsStore.swift; sourceTree = "<group>"; };
 		BA7BA4A6E95AE46D5CA871CE /* WindowSwitchScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSwitchScreen.swift; sourceTree = "<group>"; };
@@ -2397,6 +2399,7 @@
 			children = (
 				567D9E2A14D913B387416105 /* HUDPanel.swift */,
 				E2E0E142CD8F9DE7DAA7A17F /* HUDPresenter.swift */,
+				B7CB6299C67A5AB278461AA1 /* HyperLayerHUDController.swift */,
 				8B23556B009D9152D9AC6695 /* MessageHUDController.swift */,
 				5CD8EF9528E3674DFEEE99D4 /* MessageHUDView.swift */,
 				62DAC09B7F0309FF96099C30 /* VolumeHUDController.swift */,
@@ -4288,6 +4291,7 @@
 				8B87B21D203A85D237FB8EB1 /* HyperKey.swift in Sources */,
 				494040E156CCFB756F9ED899 /* HyperKeyRewriter.swift in Sources */,
 				FC546C2AE2019D6420F7F429 /* HyperKeyTap.swift in Sources */,
+				17DAF8753DBDD05086201533 /* HyperLayerHUDController.swift in Sources */,
 				704BFF999D8B4CCF4ADAD949 /* IconCache.swift in Sources */,
 				A7A6A82926E659CD4DC03366 /* IconStyleMonitor.swift in Sources */,
 				6BE1A737163F2FCC8B7764E4 /* ImageThumbnail.swift in Sources */,

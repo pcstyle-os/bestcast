@@ -73,6 +73,9 @@ struct ShortcutCaptureReadout: View {
         if let conflict = capture.conflict {
             return State(caps: conflict.binding.keycaps, label: conflict.owner, tint: .orange)
         }
+        if let leader = capture.pendingLeader {
+            return State(caps: leader.keycaps, label: "Release, or press a key for a layer")
+        }
         if capture.awaitingSecondGlobe {
             let secondPress = capture.heldGlobe
             return State(

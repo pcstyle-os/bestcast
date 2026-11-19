@@ -31,6 +31,8 @@ struct HotKeySpelling: Sendable {
         case .doubleTap(let modifier): "double-tap " + Self.name(of: modifier)
         case .globe: "globe"
         case .doubleGlobe: "double-tap globe"
+        case .hyperLayer(let leader, let key):
+            "\(Self.hyperName)+\(keyName(for: leader))\(Self.layerSeparator)\(keyName(for: key))"
         }
     }
 
@@ -38,6 +40,15 @@ struct HotKeySpelling: Sendable {
     func binding(from text: String) -> HotKeyBinding? {
         let spelled = text.trimmingCharacters(in: .whitespaces).lowercased()
         if spelled == "globe" { return .globe }
+        if let range = spelled.range(of: Self.layerSeparator) {
+            guard hyperModifiers != nil,
+                let leader = shortcut(from: String(spelled[..<range.lowerBound])),
+                leader.carbonModifiers == hyperModifiers,
+                let key = keyCode(named: spelled[range.upperBound...].trimmingCharacters(in: .whitespaces)),
+                key != leader.carbonKeyCode
+            else { return nil }
+            return .hyperLayer(leader: leader.carbonKeyCode, key: key)
+        }
         if spelled.hasPrefix(Self.doubleTapPrefix) {
             let modifier = String(spelled.dropFirst(Self.doubleTapPrefix.count))
             if modifier == "globe" { return .doubleGlobe }
@@ -104,6 +115,7 @@ struct HotKeySpelling: Sendable {
 
     private static let hyperName = "hyper"
     private static let doubleTapPrefix = "double-tap "
+    private static let layerSeparator = " then "
     private static let rawKeyPrefix = "key-"
     private static let keyCodes = 0..<128
 

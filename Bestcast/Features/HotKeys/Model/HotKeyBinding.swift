@@ -6,6 +6,8 @@ enum HotKeyBinding: Hashable, Sendable, Codable {
     case doubleTap(DoubleTapModifier)
     case globe
     case doubleGlobe
+    /// Hold ✦, press `leader`, then `key`: a keycode pair. docs/features/hotkeys.md#hyper-layers
+    case hyperLayer(leader: Int, key: Int)
 
     /// One string per keycap, so every display site renders all bindings through one path.
     @MainActor var keycaps: [String] {
@@ -14,6 +16,10 @@ enum HotKeyBinding: Hashable, Sendable, Codable {
         case .doubleTap(let modifier): modifier.keycaps
         case .globe: ["🌐︎"]
         case .doubleGlobe: ["🌐︎", "🌐︎"]
+        case .hyperLayer(let leader, let key):
+            [HyperKeyPhysicalKey.hyperGlyph] + [leader, key].flatMap {
+                KeyShortcut(carbonKeyCode: $0, carbonModifiers: 0).keycaps
+            }
         }
     }
 
@@ -22,9 +28,14 @@ enum HotKeyBinding: Hashable, Sendable, Codable {
         return nil
     }
 
+    var isHyperLayer: Bool {
+        if case .hyperLayer = self { return true }
+        return false
+    }
+
     var usesModifierTapMonitor: Bool {
         switch self {
-        case .combo: false
+        case .combo, .hyperLayer: false
         case .doubleTap, .globe, .doubleGlobe: true
         }
     }

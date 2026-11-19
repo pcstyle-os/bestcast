@@ -228,6 +228,7 @@ final class AppCore {
 
     @ObservationIgnored private lazy var windowController = PaletteWindowController(core: self)
     @ObservationIgnored private lazy var messageHUD = MessageHUDController(settings: settings)
+    @ObservationIgnored private lazy var hyperLayerHUD = HyperLayerHUDController(settings: settings)
     private(set) var isShowingDialog = false
     var isDimmingPaletteForDialog: Bool { isShowingDialog && windowController.isVisible }
     /// Every confirmation, report and prompt; it also stops a held hotkey stacking them.
@@ -444,6 +445,9 @@ final class AppCore {
                 aiPresetIDs: Set(aiSettings.quickAIPresets.map(\.id)))
             // Keeps running while Carbon pauses: the recorder needs its rewritten flags.
             hyperKeyTap.start(settings: settings)
+            hyperKeyTap.onLayerEvent = { [weak self] event in self?.handleHyperLayer(event) }
+            track(hotKeys, { _ = $0.hyperLayers; _ = $0.recordingAction }) { $0.applyHyperLayers() }
+            applyHyperLayers()
 
             snippetsStore.onSnapshot = { [weak self] snapshot in
                 guard let self else { return }
@@ -864,6 +868,28 @@ final class AppCore {
         defer { chatsRunTheirOwnTools = runsOwnTools }
         guard let previous = chatsRunTheirOwnTools, previous != runsOwnTools else { return }
         mcpCoordinator.applyEnabled()
+    }
+
+    /// Off while recording, so a layer's keys reach the recorder instead of firing.
+    private func applyHyperLayers() {
+        let layers = hotKeys.recordingAction == nil ? hotKeys.hyperLayers : [:]
+        hyperKeyTap.setLayers(layers.mapValues { Set($0.keys) })
+    }
+
+    private func handleHyperLayer(_ event: HyperKeyRewriter.LayerEvent) {
+        switch event {
+        case .entered(let leader):
+            let items = (hotKeys.hyperLayers[leader] ?? [:])
+                .map { HyperLayerHUDController.Item(key: $0.key, name: hotKeys.displayName(of: $0.value)) }
+                .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            hyperLayerHUD.open(leader: leader, items: items)
+        case .fired(let leader, let key):
+            guard let action = hotKeys.hyperLayers[leader]?[key] else { return }
+            hyperLayerHUD.flash(key: key)
+            hotKeys.perform(action)
+        case .exited:
+            hyperLayerHUD.close()
+        }
     }
 
     /// Without a Hyper key the chord means nothing, so a literal ⌃⌥⌘ combo is left as recorded.

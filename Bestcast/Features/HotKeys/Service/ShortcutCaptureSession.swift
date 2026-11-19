@@ -15,6 +15,8 @@ final class ShortcutCaptureSession {
     private(set) var heldGlobe = false
     private(set) var awaitingSecondGlobe = false
     private(set) var conflict: Conflict?
+    /// A bare ✦ combo held open: releasing ✦ records it, a second key makes it a layer's leader.
+    private(set) var pendingLeader: KeyShortcut?
 
     private static let conflictDwell: Duration = .seconds(1.5)
 
@@ -107,6 +109,7 @@ final class ShortcutCaptureSession {
         conflictReset = nil
         cancelGlobeCommit()
         conflict = nil
+        pendingLeader = nil
         heldModifiers = []
         heldGlobe = false
         detector.reset()
@@ -150,6 +153,18 @@ final class ShortcutCaptureSession {
             hotKeys.recordingAction = nil
             return
         }
+        if let hyper = KeyShortcut.displayedHyperChord(), flags.isSuperset(of: hyper) {
+            if let leader = pendingLeader {
+                guard keyCode != leader.carbonKeyCode else { return }
+                pendingLeader = nil
+                commit(.hyperLayer(leader: leader.carbonKeyCode, key: keyCode), action: action, hotKeys: hotKeys)
+                return
+            }
+            if flags.subtracting(.function) == hyper, !KeyShortcut.isFunctionKey(keyCode) {
+                pendingLeader = KeyShortcut(keyCode: keyCode, modifierFlags: flags)
+                return
+            }
+        }
         // Not a bindable combo (e.g. a bare letter): swallow it and keep recording.
         guard let shortcut = KeyShortcut(keyCode: keyCode, modifierFlags: flags) else { return }
         commit(.combo(shortcut), action: action, hotKeys: hotKeys)
@@ -160,6 +175,13 @@ final class ShortcutCaptureSession {
         hasOtherModifiers: Bool, at timestamp: TimeInterval,
         action: HotKeyAction, hotKeys: HotKeyManager
     ) {
+        if let leader = pendingLeader, let hyper = KeyShortcut.displayedHyperChord(),
+            !flags.isSuperset(of: hyper)
+        {
+            pendingLeader = nil
+            commit(.combo(leader), action: action, hotKeys: hotKeys)
+            return
+        }
         if !isGlobeKey { cancelGlobeCommit() }
         if let gesture = globeDetector.handle(
             isGlobeKey: isGlobeKey, functionDown: functionDown,

@@ -29,6 +29,7 @@ private func hyperKeyEventTapCallback(
         type: type, keyCode: keyCode, flagsRaw: event.flags.rawValue,
         isAutorepeat: isAutorepeat, isSynthetic: isSynthetic)
     if let quickPress = outcome.quickPress { tapThread.onQuickPress(quickPress) }
+    if let layer = outcome.layer { tapThread.onLayer(layer) }
     switch outcome.decision {
     case .pass:
         return Unmanaged.passUnretained(event)
@@ -91,23 +92,28 @@ private struct HyperKeyTapHandles: @unchecked Sendable {
 /// The tap on its own thread, so a busy main actor never delays a keystroke. See hotkeys.md.
 private final class HyperKeyTapThread: Sendable {
     let onQuickPress: @Sendable (HyperKeyRewriter.QuickPress) -> Void
+    let onLayer: @Sendable (HyperKeyRewriter.LayerEvent) -> Void
     private let rewriter: Mutex<HyperKeyRewriter>
     private let handles = Mutex<HyperKeyTapHandles?>(nil)
 
     private init(
         configuration: HyperKeyRewriter.Configuration,
-        onQuickPress: @escaping @Sendable (HyperKeyRewriter.QuickPress) -> Void
+        onQuickPress: @escaping @Sendable (HyperKeyRewriter.QuickPress) -> Void,
+        onLayer: @escaping @Sendable (HyperKeyRewriter.LayerEvent) -> Void
     ) {
         rewriter = Mutex(HyperKeyRewriter(configuration: configuration))
         self.onQuickPress = onQuickPress
+        self.onLayer = onLayer
     }
 
     /// Nil when the tap can't be created, which in practice means no Accessibility grant.
     static func start(
         configuration: HyperKeyRewriter.Configuration,
-        onQuickPress: @escaping @Sendable (HyperKeyRewriter.QuickPress) -> Void
+        onQuickPress: @escaping @Sendable (HyperKeyRewriter.QuickPress) -> Void,
+        onLayer: @escaping @Sendable (HyperKeyRewriter.LayerEvent) -> Void
     ) -> HyperKeyTapThread? {
-        let tapThread = HyperKeyTapThread(configuration: configuration, onQuickPress: onQuickPress)
+        let tapThread = HyperKeyTapThread(
+            configuration: configuration, onQuickPress: onQuickPress, onLayer: onLayer)
         let mask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
@@ -166,11 +172,13 @@ private final class HyperKeyTapThread: Sendable {
     /// Re-enables a tap the system disabled; a hold spanning the gap may have lost its release.
     func revive() {
         rewriter.withLock { $0.cancelHold() }
+        onLayer(.exited)
         handles.withLock { if let port = $0?.port { CGEvent.tapEnable(tap: port, enable: true) } }
     }
 
     func suspend() {
         rewriter.withLock { $0.cancelHold() }
+        onLayer(.exited)
         handles.withLock { if let port = $0?.port { CGEvent.tapEnable(tap: port, enable: false) } }
     }
 
@@ -211,6 +219,9 @@ final class HyperKeyTap: HealthCheckable {
     @ObservationIgnored private var hidConnect: io_connect_t = IO_OBJECT_NULL
 
     @ObservationIgnored weak var healthTicker: HealthTicker?
+    /// Where layer events land on main; `HyperLayerCoordinator` owns what they do.
+    @ObservationIgnored var onLayerEvent: ((HyperKeyRewriter.LayerEvent) -> Void)?
+    @ObservationIgnored private var layers: [Int: Set<Int>] = [:]
 
     /// Mirror of the Hyper settings; the tap thread holds its own copy, pushed on every change.
     @ObservationIgnored private var configuration = HyperKeyRewriter.Configuration()
@@ -268,7 +279,7 @@ final class HyperKeyTap: HealthCheckable {
         guard let settings else { return }
         let newConfiguration = HyperKeyRewriter.Configuration(
             key: settings.hyperKey, includesShift: settings.hyperKeyIncludesShift,
-            quickPress: settings.hyperKeyQuickPress)
+            quickPress: settings.hyperKeyQuickPress, layers: layers)
         guard newConfiguration != configuration else { return }
         let oldKey = key
         configuration = newConfiguration
@@ -282,6 +293,13 @@ final class HyperKeyTap: HealthCheckable {
             CapsLockRemap.setEnabled(false)
         }
         syncTapPresence()
+    }
+
+    /// Leader keycode → member keycodes; empty while the recorder needs every key to reach it.
+    func setLayers(_ layers: [Int: Set<Int>]) {
+        guard layers != self.layers else { return }
+        self.layers = layers
+        applySettings()
     }
 
     /// The HID remap outlives the process, so hand the key back before exiting.
@@ -309,6 +327,9 @@ final class HyperKeyTap: HealthCheckable {
                 configuration: configuration,
                 onQuickPress: { [weak self] quickPress in
                     Task { @MainActor in self?.fireQuickPress(quickPress) }
+                },
+                onLayer: { [weak self] event in
+                    Task { @MainActor in self?.onLayerEvent?(event) }
                 })
         else {
             // A modifying tap needs Accessibility; the health timer retries until granted.

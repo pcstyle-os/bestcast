@@ -124,7 +124,7 @@ Where a number has a special case, the case is a word:
 
 `[fn+][ctrl+][option+][shift+][cmd+]key`, written in that order and read in any; `control`, `opt`,
 `alt` and `command` also read. While a Hyper key is set, its chord is written `hyper+key`, as the app
-shows ✦. The key is the lowercase character this Mac's keyboard types, or a name: `space`, `return`,
+shows ✦, and a [Hyper layer](hotkeys.md#hyper-layers) is `hyper+leader then key`. The key is the lowercase character this Mac's keyboard types, or a name: `space`, `return`,
 `enter`, `tab`, `delete`, `forward-delete`, `escape`, `left`, `right`, `up`, `down`, `home`, `end`,
 `page-up`, `page-down`, `help`, `f1`–`f20`, `keypad-0`…; any other key is `key-<code>`. `cmd++` is the
 plus key. Keyless bindings are `double-tap ctrl|option|shift|cmd`, `globe` and `double-tap globe`. The

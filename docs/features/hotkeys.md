@@ -234,6 +234,29 @@ that ended the hold is still in flight a runloop turn later — so the Escape we
 Terminals read the raw `0x1B` and did not care; a focused field editor and any exact-match keymap
 swallowed it, which is why Quick Press worked in Ghostty but never in Zed or the palette itself.
 
+### Hyper layers
+
+A **layer** binds an action to two keys under one held ✦: ✦W opens the W layer, and H inside it fires.
+It is an ordinary `HotKeyBinding` — `.hyperLayer(leader:key:)`, two keycodes — so anything bindable can
+live in a layer, it backs up and syncs to `settings.json` (`hyper+w then h`) with the rest, and the
+recorder records it: hold ✦, press the leader, then either let go (a plain ✦W combo) or press a second
+key (a layer). `HotKeyManager.hyperLayers` derives the leader → key → action table from the bindings,
+and `AppCore` pushes its keycodes into the tap's configuration — **emptied while a recorder is open**,
+so a layer's keys reach the recorder instead of firing.
+
+`HyperKeyRewriter` makes every layer decision on the tap thread. A leader under a held Hyper is
+swallowed and opens its layer; a bound key inside it is swallowed and fires; an unbound key inside a
+layer is swallowed too, rather than leaking out as a ✦ chord. The layer **stays open** until ✦ is
+released, so ✦ W H L tiles twice in one hold, and a held layer key repeats like a held volume key.
+Every swallowed press has its release swallowed as well, even when ✦ lets go first, so no app sees a
+keyUp without its keyDown. A key that is a leader is no longer a ✦ combo, which is why
+`conflictOwner` treats a ✦W combo and a W layer as holding the same chord.
+
+The tap reports `.entered`, `.fired` and `.exited` the way it reports Quick Press, through a `Task`
+onto main. `HyperLayerHUDController` lists the layer after a fixed 250 ms, so a reader who knows the
+keys never sees it flash, and closes it on `.exited` — which a revived or suspended tap also sends,
+since a disabled tap may have lost the release.
+
 ### ✦ is the notation, not a preference
 
 Any combo whose modifiers are a superset of the chord renders with the Hyper set replaced by a single
