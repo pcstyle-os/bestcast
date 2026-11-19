@@ -29,6 +29,11 @@ struct GeneralSettingsView: View {
         return "\(settings.hyperKey.title) sends \(hyperGlyphs), shown as ✦ in shortcuts."
     }
 
+    private func secureInputMessage(holder: String?) -> String {
+        let source = holder.map { " (reported by \($0))" } ?? ""
+        return "Secure Input is on\(source), so Hyper can't see keystrokes."
+    }
+
     var body: some View {
         @Bindable var settings = settings
         return Form {
@@ -125,6 +130,16 @@ struct GeneralSettingsView: View {
                             .foregroundStyle(.orange)
                         Spacer(minLength: Theme.Spacing.lg)
                         Button("Grant Access…") { Permissions.openAccessibilitySettings() }
+                    }
+                }
+
+                if case .blockedBySecureInput(let holder) = hyperTap.status {
+                    HStack(alignment: .center, spacing: Theme.Spacing.lg) {
+                        Image(systemName: "lock")
+                            .foregroundStyle(.orange)
+                            .frame(width: Theme.Size.settingsRowIcon)
+                        Text(secureInputMessage(holder: holder))
+                            .foregroundStyle(.orange)
                     }
                 }
 

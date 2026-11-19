@@ -278,8 +278,18 @@ system never waits on them to deliver a keystroke, and everything they feed is m
 
 Like every keyboard tap it needs the **Accessibility** grant and never prompts for it. A one-second
 watchdog runs while a key is configured: it retries installation until the grant lands, notices
-revocation, and revives a tap the system disabled on timeout or user input, dropping any hold as it
-does (see [press tracking](#press-tracking)). On
+revocation, and rebuilds a tap it finds disabled, dropping any hold as it does (see
+[press tracking](#press-tracking)). The callback already re-enables a timed-out tap, so one the
+watchdog still finds off is treated as dead: re-enabling an invalidated port is a silent no-op, and
+reviving in place left Hyper broken until relaunch.
+
+**Secure Event Input** is the other silent failure. While any app holds it — a password field, a
+password manager, Terminal's Secure Keyboard Entry, or one that never released it — macOS withholds
+keyDown/keyUp from every tap but still delivers `flagsChanged`. The Hyper key's own press is rewritten,
+but the letter after it arrives with only the physical modifier, so Hyper+key does nothing while the tap
+looks healthy. Nothing in a tap can work around it, so the watchdog reports it as
+`.blockedBySecureInput` and Settings names the app from `IOConsoleUsers`' `kCGSSessionSecureInputPID`,
+which records the frontmost app when input went secure — a hint, not proof. On
 fast user switching another session owns the keyboard, so half-held state is dropped, rewriting
 stops and the watchdog stands down until this session is active again. The HID remap outlives the
 process, so `applicationWillTerminate` hands the key back to the system before exiting.
